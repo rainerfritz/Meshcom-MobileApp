@@ -1,0 +1,7 @@
+{
+  "name": "Meshcom",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "react-vite"
+}
