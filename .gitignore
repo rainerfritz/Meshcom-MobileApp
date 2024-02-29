@@ -12,6 +12,7 @@
 /dist
 /android
 /ios
+/ios/App
 
 # misc
 .DS_Store
