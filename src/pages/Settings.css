@@ -1,0 +1,171 @@
+#spacer-top {
+    height: 3%;
+     width: auto;
+ }
+ #spacer-between {
+    height: 5%;
+     width: auto;
+ }
+ #page{
+    padding-top: 3%;
+   height: 100%;
+    width: 97%;
+
+ }
+ #spacer-buttons {
+    height: 3%;
+     width: auto;
+ }
+ #settings_button {
+    margin-left: 5%;
+ }
+ #node-info{
+    margin-left: 5%;
+    font-size: 1.2em;
+
+ }
+ #settings_text{
+    size: 1.2em;
+ }
+
+#wifi_setting_block{
+   margin-left: 5%;
+
+}
+
+#aprs_settings{
+   margin-left: 5%;
+}
+
+#wifi-text{
+   font-size: 1.2em;
+   font-weight: bold;
+}
+
+
+#spacer-advTop {
+   height: 15px;
+    width: auto;
+}
+
+#advIcon{
+   font-size: 1.5em;
+}
+.dropdown_arrow{
+   margin-left: 2%;
+   font-size: 1.1em;
+   padding-bottom: 15px;
+}
+.dropdown_arrow_header{
+   text-align: left;
+   width: auto;
+   display: flex;
+   justify-content: left;
+   align-items: center;
+   text-align: center;
+}
+.settings_panel{
+   margin-left: 3%;
+   padding-left: 3%;
+   background-color: #404544;
+   color: white;
+   border-radius: 5px;
+   padding-bottom: 5px;
+   padding-top: 5px;
+}
+.sp_header{
+   padding-top: 3px;
+   margin-top: 10px;
+   font-size: 1.7em;
+   font-weight: bold;
+   color: #9fd6fd;
+}
+.settings_cont{
+   display: flex;
+   flex-wrap: wrap;
+   align-content: space-between;
+   flex-basis: 50%;
+   font-size: 1.15em;
+   margin-top: 10px;
+   padding-bottom: 7px;
+}
+.cont_right{
+   margin-left: 10%;
+   
+}
+.cont_left{
+   width: 40%;
+}
+.set_val{
+   padding-top: 2px;
+}
+.setting_wrapper{
+   margin-left: 3%;
+   padding-left: 3%;
+   padding-right: 3%;
+   background-color: #404544;
+   color: white;
+   border-radius: 5px;
+   padding-bottom: 8px;
+   padding-top: 8px;
+}
+.settings_btns{
+   display: flex;
+   flex-grow: 3;
+   margin-left: 3%;
+}
+.settings_btns_r{
+   width: 45%;
+   margin-left: auto;
+}
+.settings_btns_r > div{
+   padding-bottom: 3px;
+}
+.settings_btns_l > div{
+   padding-bottom: 3px;
+}
+.settings_btns_l{
+   width: 45%;
+}
+#bat_perc_txt{
+   font-size: 0.75em;
+   padding-bottom: 5px;
+}
+#bat_volt_txt{
+   padding-bottom: 3px;
+}
+#app_v{
+   font-size: 0.8em;
+}
+.ionrange_box{
+   width: 90%;
+   margin-left: 6%;
+}
+ ion-range {
+   --bar-background: #a2d2ff;
+   --bar-background-active: #bde0fe;
+   --bar-height: 7px;
+   --bar-border-radius: 8px;
+   --knob-background: #3051c7;
+   --knob-size: 35px;
+   --pin-background: #afd7ff;
+   --pin-color: #fff;
+ }
+
+ ion-action-sheet.settings-actionsheet {
+   /*--button-background-selected: #cdcdcd;
+   --button-color: #bdbdbd;
+   --color: #fff; */
+   --height: 80%;
+   /* role: "destructive" button iOS styling override */
+   /*--ion-color-danger: #000000;*/
+ }
+ #setting_bottom{
+   height: 10px;
+ }
+ .mt-3{
+   margin-top: 3px;
+ }
+ .mb-3{
+   margin-bottom: 3px;
+ }

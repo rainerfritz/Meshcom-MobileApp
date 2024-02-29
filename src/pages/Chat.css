@@ -1,0 +1,145 @@
+#spacer-between {
+    height: 5%;
+    width: auto;
+}
+
+#msg-item {
+    height: 4%;
+    width: auto;
+}
+
+#spacer-top {
+    height: 3%;
+    width: auto;
+}
+
+#msg-box {
+    display: flex;
+    flex-grow: 1;
+    flex-direction: column;
+    overflow-y: auto;
+    padding-top: 3%;
+    margin-left: 1%;
+    margin-right: 1%;
+    
+}
+
+.send-text {
+    padding-bottom: 3%;
+    padding-top: 3%;
+    height: auto;
+    display: flex;
+    flex-wrap: wrap;
+}
+.send_btn{
+    margin-left: auto;
+    padding-right: 3%;
+    margin-top: auto;
+    margin-bottom: 3%;
+}
+.input_bar{
+    width: 65%;
+}
+.dm_btn{
+    padding-left: 3%;
+    margin-top: auto;
+    margin-bottom: 3%;
+}
+
+ion-input.custominput{
+    height: 65px;
+    font-size: 1.1em;
+    --padding-end: 7px;
+}
+.other-message {
+    float: left;
+    padding: 5px;
+    margin-bottom: 8px;
+    width: fit-content;
+    max-width: 90%;
+    background-color: #404544;
+    border: solid 1px #393939;
+    border-radius: 6px;
+    color: #fff;
+    text-align: start;
+}
+
+.own-message {
+    float: right;
+    padding: 5px;
+    margin-left: auto;
+    margin-bottom: 8px;
+    max-width: 90%;
+    width: fit-content;
+    background-color: #0b443e;
+    border: solid 1px #0d4f48;
+    border-radius: 6px;
+    color: #fff;
+    text-align: start;
+}
+
+.dm-message {
+    float: left;
+    padding: 5px;
+    margin-bottom: 8px;
+    max-width: 90%;
+    width: fit-content;
+    background-color: #0b3944;
+    border: solid 1px #0d434f;
+    border-radius: 6px;
+    color: #fff;
+    text-align: start;
+}
+
+#msg-spacer {
+    width: auto;
+    height: 8px;
+}
+
+#button-spacer {
+    height: 5%;
+}
+
+#msg-time {
+    font-size: 0.7em;
+    color: rgb(230, 230, 230);
+}
+
+#msg-via {
+    font-size: 0.8em;
+    color: rgb(230, 230, 230);
+}
+#msg-dm {
+    font-size: 0.8em;
+    color: rgb(152, 228, 255);
+}
+
+#from-call {
+    font-size: 0.9em;
+    color: #9fd6fd;
+}
+
+#msg-text {
+    font-size: 1.1em;
+    padding-bottom: 3px;
+}
+
+#chkIcon {
+    height: 1em;
+    float: right;
+    color: #1fe5d1;
+
+}
+
+.sendTextContent {
+    height: 100%;
+}
+
+#spacer-txtbox{
+    height: 3px;
+    width: auto;
+
+}
+#bottom{
+    width: auto;
+}

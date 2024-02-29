@@ -1,0 +1,26 @@
+ion-card {
+    --background: #404544;
+    --color: #fff;
+  }
+  
+  ion-card-title {
+    --color: #9fd6fd;
+  }
+.mhcont{
+  display: flex;
+  flex-wrap: wrap;
+  align-content: space-between;
+}
+.rowcont{
+    display: flex;
+    flex-wrap: wrap;
+    align-content: space-between;
+    align-items: center;
+    font-size: 1.1em;
+}
+.value{
+    padding-left: 5px;
+}
+.value_r{
+  padding-left: 15px;
+}

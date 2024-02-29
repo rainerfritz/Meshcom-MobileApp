@@ -1,0 +1,39 @@
+.info-box{
+    width: 92%;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: space-between;
+    flex-basis: 50%;
+    background-color: #404544;
+    color: white;
+    border-radius: 5px;
+    margin-bottom: 8px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 5px;
+    justify-content: space-around
+}
+
+.iBox{
+    font-size: 1.08em;
+    margin: 5px;
+}
+
+.value_cont {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: space-between;
+    flex-basis: 30%;
+
+}
+
+.lbox {
+    font-size: 1.08em;
+    margin: 5px;
+
+}
+
+.font-size108 {
+    font-size: 1.08em;
+    margin-left: 5px;
+}
