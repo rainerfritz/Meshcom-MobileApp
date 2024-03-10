@@ -46,7 +46,7 @@ export function useBLE() {
         console.log("BLE Hook Device ID: " + devid_ble.current);
     }
 
-
+    
     // message queue
     const msg_queue = useRef<string[]>([]);
     const dequeue_active = useRef<boolean>(false);
@@ -131,8 +131,6 @@ export function useBLE() {
     }
 
     
-
-
     return {
 
         sendSTRtoNode,

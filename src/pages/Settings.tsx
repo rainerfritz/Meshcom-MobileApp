@@ -59,8 +59,6 @@ const Tab2: React.FC = () => {
 
   // NodeInfos
   const nodeInfo:InfoData = useStoreState(NodeInfoStore, getNodeInfoStore);
-
-
   
 
   // remember which setting changed to send it to node
@@ -186,19 +184,6 @@ const Tab2: React.FC = () => {
 
 
 
-  // aprs symbol change
-  /*useEffect(()=>{
-
-    // remove quotation marks from value
-    const corr_aprs_sym = aprs_char_s.slice(1,2);
-    aprs_sym_char.current = corr_aprs_sym;
-    console.log("APRS Symbol changed to: " + aprs_sym_char.current);
-    aprsSym_changed.current = true;
-
-  }, [aprs_char_s]);*/  
-
-
-
 
   // when config has changed update aprs symbols
   useEffect(()=>{
@@ -250,19 +235,6 @@ const Tab2: React.FC = () => {
 
     // set onewire pin number from config
     owPinNr.current = config_s.onewire_pin;
-    // if client is RAK4631 set MAX_PIN_NUM to 7
-    if(hw_type === "RAK4631") { 
-      MAX_PIN_NUM = 7;
-
-      if(owPinNr.current > MAX_PIN_NUM) {
-        owPinNr.current = 4;
-        // show alert card
-        setAlHeader("Wrong Onewire Pin Number from Client!");
-        setAlMsg("Setting Pin to 4!");
-        setShAlertCard(true);
-      }
-    }
-
     // set node utc offset from config
     console.log("Node UTC Offset: " + config_s.node_utc_offset);
     node_utc_offset.current = config_s.node_utc_offset;
@@ -271,14 +243,8 @@ const Tab2: React.FC = () => {
       s.gpsData.UTCOFF = config_s.node_utc_offset;
     });*/
 
-
   }, [config_s]);
 
-
-  /*useEffect(()=>{
-    console.log("Settings - NodeInfo has changed");
-    console.log("Callsign: " + nodeInfo.CALL);
-  }, [nodeInfo]);*/
 
 
   // if we have an unconfigured node we send the position from phone to node
@@ -286,8 +252,9 @@ const Tab2: React.FC = () => {
     if(shouldConf && config_s.callSign === "XX0XXX-00" || config_s.callSign === "" && ble_connected){
       console.log("Settings - Unconfigured Node!");
       // give the node a default location from phone
-      if( config_s.lat === 0 && config_s.lon === 0 && config_s.alt === 0){
-        setCurrentPosGPS(false);
+      if(config_s.lat === 0 && config_s.lon === 0){
+        console.log("Settings - Setting Initial Position from Phone");
+        setCurrentPosGPS(true);
       }
     }
   }, [shouldConf]);
@@ -529,7 +496,6 @@ const Tab2: React.FC = () => {
 
   // start automatik pos to node if phone sends pos is on
   useEffect(() =>{
-
     if(shGpsSlider){
       console.log("Phone sends Position activated");
       scrollToBottom();
@@ -539,7 +505,6 @@ const Tab2: React.FC = () => {
     } else {
       setRunTimer(false);
     }
-
   },[shGpsSlider]);
 
 
@@ -547,36 +512,27 @@ const Tab2: React.FC = () => {
   useEffect(() => {
 
     if(lastEmittedValue){
-
       console.log("Slider set to: " + lastEmittedValue);
       const newTime = +lastEmittedValue!.toString();
       setIntTime(newTime * msecToMinuteFactor); 
-
     }
-    
   }, [lastEmittedValue]);
 
 
   // Phone Pos Interval
   useEffect(() => {
-
     console.log("intTime set to: " + intTime);
 
     if (runTimer) {
-
       const interval = setInterval(async () => {
         console.log("Pos TX Ticker ");
-
         // send it phone without saving to nodes flash
         setCurrentPosGPS(false);
-
       }, intTime);
 
       return () => {
         console.log("Clearing Interval");
-
         // should we save the last position??
-
         clearInterval(interval)};
     }
   }, [intTime, runTimer]);
@@ -597,7 +553,6 @@ const Tab2: React.FC = () => {
 
     const ssidWifi = ssidInputRef.current!.value;
     const pwdWifi = wifipwdInputRef.current!.value;
-    
     
     if(ssidWifi && pwdWifi){
 
@@ -1133,9 +1088,7 @@ const Tab2: React.FC = () => {
 
   // tx power setting handler
   useEffect(() => {
-
     if(txpower_slider){
-
       console.log("Tx-Power (dBm): " + txpower_slider);
 
       const newTxPower = +txpower_slider!.toString();
@@ -1158,7 +1111,6 @@ const Tab2: React.FC = () => {
 
     // check if value from input is not undefined or null
     if (owPinInputRef.current!.value !== undefined && owPinInputRef.current!.value !== null) {
-
       const pin_str = owPinInputRef.current!.value.toString();
       const pin_nr = +pin_str;
 
@@ -1215,7 +1167,6 @@ const Tab2: React.FC = () => {
   const freqPresetChanged = (event: string) => {
 
     console.log("Freq Preset changed");
-
     const freq_preset = +event;
     console.log("Freq Preset: " + freq_preset);
 
@@ -1230,7 +1181,6 @@ const Tab2: React.FC = () => {
   const bwPresetChanged = (event: string) => {
 
     console.log("BW Preset changed");
-
     const bw_preset = +event;
     console.log("BW Preset: " + bw_preset);
 
@@ -1294,28 +1244,16 @@ const Tab2: React.FC = () => {
               <div>{config_s.callSign}</div>
             </div>
 
-            
-
             <div className='settings_cont'>
-              <div className='cont_left'>
-                <div className='set_val'>QRG:</div>
-                <div className='set_val'>{config_s.frequency} MHz</div>
-              </div>
-              <div className='cont_right'>
-                <div className='set_val'>TX Pwr: {tx_pwr.current} dBm</div>
-              </div>
+              <div className='set_val'>QRG: {config_s.frequency} MHz</div>
+              <div className='set_val'>TX Pwr: {tx_pwr.current} dBm</div>
             </div>
             <div className='settings_cont'>
-              <div className='cont_left_full'>
-                <div>APRS Symbol: {config_s.aprs_symbol}</div>
-                <div>APRS Comment: {aprs_cmt_store}</div>
-              </div>
+              <div>APRS Symbol: {config_s.aprs_symbol}</div>
+              <div>APRS Comment: {aprs_cmt_store}</div>
             </div>
-
             <div className='settings_cont'>
-              <div className='cont_left_full'>
-                <div>Wifi SSID: {config_s.wifi_ssid}</div>
-              </div>
+              <div>Wifi SSID: {config_s.wifi_ssid}</div>
             </div>
           </div>
 

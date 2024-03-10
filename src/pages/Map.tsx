@@ -77,6 +77,7 @@ const NodeMap = () => {
   // for BLE usage we need the device ID and the BLE connected state
   const devID = useStoreState(DevIDStore, getDevID);
   const ble_connected = BLEconnStore.useState(s => s.ble_connected);
+  const setCenterNewConn = useRef<boolean>(false);
 
   // when we are not in tracking mode and the app is active in this window, we want to update own position in map
   // update info page with interval when page is active
@@ -88,7 +89,7 @@ const NodeMap = () => {
   const [track_map_btn, setTrackMapBtn] = useState<boolean>(false);
 
   // for updating we need access to BLE
-  const {addMsgQueue, updateDevID, updateBLEConnected} = useBLE();
+  const {updateDevID, updateBLEConnected, sendTxtCmdNode} = useBLE();
 
 
 
@@ -96,7 +97,6 @@ const NodeMap = () => {
   // prevent default zoom and center when map enters. we want to center on node position
   // insert the full list of positions into the search array, user should see the full list first
   useIonViewDidEnter (()=>{
-
     console.log("Map window did enter");
 
     // update the BLE hook
@@ -123,10 +123,14 @@ const NodeMap = () => {
     }, 1000);
     
     // start the update timer
-    console.log("Map Tab - Track: " + track_map.current);
+    console.log("Map Tab - Track Map: " + track_map.current);
+    console.log("Map Tab - BLE Connected: " + ble_connected);
+    console.log("Map Tab - App Active: " + app_active_s);
+    console.log("Map Tab - GPS Active: " + currConfig.gps_on);
+    console.log("Map Tab - Track Active: " + track_active.current);
     if(track_map.current && ble_connected && app_active_s && currConfig.gps_on === true && !track_active.current) {
       // initial pos update to set the pointer
-      addMsgQueue("--pos");
+      sendTxtCmdNode("--pos");
       console.log('Map Tab: Starting Update Timer View entered');
       startUpdtTimer();
     }
@@ -151,7 +155,7 @@ const NodeMap = () => {
       clearUpdtTimer();
     }
     if (app_active_s ) {
-      if(window_active.current && !track_active.current && ble_connected && currConfig.gps_on === true && track_map) {
+      if(window_active.current && !track_active.current && ble_connected && currConfig.gps_on === true && track_map.current) {
         console.log('Map Tab: Starting Update Timer App comes to foreground');
         startUpdtTimer();
       }
@@ -185,9 +189,8 @@ const NodeMap = () => {
       // only update if BLE is connected
       if (ble_connected) {
         // add command to queue
-        addMsgQueue("--pos");
+        sendTxtCmdNode("--pos");
       }
-      
     }, updateInterval);
     return () => {
       console.log('Map Tab: Clearing Update Timer in cleanup');
@@ -209,7 +212,7 @@ const NodeMap = () => {
     if (track_map.current && ble_connected && app_active_s && currConfig.gps_on === true) {
       console.log('Map Tab: Starting Update Timer Track Map');
       setTrackMapBtn(true);
-      addMsgQueue("--pos");
+      sendTxtCmdNode("--pos");
       startUpdtTimer();
     } else {
       setTrackMapBtn(false);
@@ -233,33 +236,71 @@ const NodeMap = () => {
     }
   }
 
-  // TODO nodCurrPOS is Configuration Object, weired naming - center map on node configuration pos
+  // sets parameters when config changes and sets center accordingly
   useEffect(() => {
 
     if(currConfig){
 
       console.log("MAP: Config changed");
-
-      if(track_map.current){
-        setCenterconnNode();
-      }
+      console.log("Map Tab: Config Call: " + currConfig.callSign);
+      console.log("Map Tab: Config Track: " + currConfig.track_on);
+      console.log("Map Tab: Config GPS: " + currConfig.gps_on);
 
       //update own callsign and delete mheards
       if(currConfig.callSign !== curr_nodecall.current) {
         curr_nodecall.current = currConfig.callSign;
+        // update center map when new connection happened in useffect lat lon
+        setCenterNewConn.current = true;
         // set initial mheard callsigns for pin colors
         mheard_calls.current = [];
         line_datas.current = [];
         mheard_calls.current = getMHcalls();
       }
 
+      console.log("Map Tab: Track Map Config: " + currConfig.track_on);
       if(currConfig.track_on === true){
         track_active.current = true;
       } else {
         track_active.current = false;
       }
+
+      if(currConfig.gps_on === true && !track_active.current && ble_connected && app_active_s) {
+        console.log("Map Tab: Setting Track Map on")
+        track_map.current = true;
+        setTrackMapBtn(true);
+      }
+
+      if(currConfig.gps_on === false && track_map.current){
+        console.log("Map Tab: Setting Track Map off")
+        track_map.current = false;
+        setTrackMapBtn(false);
+      }
+
+      console.log("Map Tab: Track Active current: " + track_active.current);
+
     }
-  }, [currConfig]);
+  }, [currConfig.callSign, currConfig.track_on, currConfig.gps_on]);
+
+
+
+  // trigger if config lat or lon changes
+  useEffect(() => {
+    console.log("Map Tab - Config Lat Lon changed")
+    if(currConfig){
+      console.log("Map Tab: Config Lat: " + currConfig.lat + " Lon: " + currConfig.lon);
+      // update center map when new connection happened
+      if(setCenterNewConn.current && currConfig.callSign !== "XX"){
+        console.log("Map Tab: Setting Center on Map after new connection");
+        setCenterconnNode();
+        setCenterNewConn.current = false;
+      }
+      if(!track_active.current && track_map.current && ble_connected && app_active_s && currConfig.gps_on === true){
+        console.log("Map Tab: Setting Center on Map");
+        setCenterconnNode();
+      }
+    }
+  }, [currConfig.lat, currConfig.lon]);
+
 
 
   // add nodes as markers to map

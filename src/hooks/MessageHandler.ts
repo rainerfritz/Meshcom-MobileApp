@@ -34,7 +34,7 @@ import RedirectChatStore from '../store/RedirectChat';
 import {aprs_char_table, aprs_pri_symbols, aprs_sec_symbols} from '../store/AprsSymbols';
 import {hwtable} from '../store/HwTable';
 import {modtable} from '../store/ModTable';
-import { format, compareAsc } from "date-fns";
+import { format, compareAsc, isAfter, fromUnixTime } from "date-fns";
 import GpsDataStore from '../store/GpsData';
 import WxDataStore from '../store/WxData';
 import AprsCmtStore from '../store/AprsCmtStore';
@@ -47,6 +47,8 @@ import PosiStore from '../store/PosiStore';
 import ConfigObject from '../utils/ConfigObject';
 import DatabaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
+import BleConfigFinish from '../store/BLEConfFin';
+import UpdateFW from '../store/UpdtFW';
 
 
 export function useMSG() {
@@ -60,12 +62,11 @@ export function useMSG() {
     // If you introduce a new message flag, add it to phoncommands.cpp in the sendToPhone() function in the node firmware!
 
     // Position we store from POS JSON from Node. Needed for mheard distance etc.
-    const latitude_ref = useRef<number>(0.0);
+    /*const latitude_ref = useRef<number>(0.0);
     const longitude_ref = useRef<number>(0.0);
-    const altitude_ref = useRef<number>(0);
+    const altitude_ref = useRef<number>(0);*/
     const node_call_ref = useRef<string>("");
-    const cached_posis = useRef<PosType[]>([]);
-
+    const POS_DECIMALS = 4;
 
 
     const parseMsg = async (msg:DataView) => {
@@ -84,7 +85,7 @@ export function useMSG() {
         console.log("Timestamp Now: " + now_timestamp);
 
         const date_now = format(now_obj, "yyyy-MM-dd");
-        const time = format(now_obj, "HH:mm:ss");
+        let time = format(now_obj, "HH:mm:ss");
         console.log("Date - Time: " + date_now + " - " + time);
 
 
@@ -113,7 +114,7 @@ export function useMSG() {
                 let dm_callsign_start = 0;  // start position of DM call in message
                 let dm_callsign = "";
                 let dm_call_arr: number[] = [];     // buffer for DM callsign
-
+                let timestamp_node = 0;
                 
                 // if txt or pos msg extract callsign
                 let call_arr: number[] = [];
@@ -201,6 +202,17 @@ export function useMSG() {
 
                         console.log("Route Calls: " + via_str);
 
+                        // the last 4 bytes are the unix timestamp from node
+                        const unix_time = msg.getUint32(msg_len - 5, false) * 1000; // convert to ms
+                        console.log("Node Unix Time: " + unix_time);
+                        const node_time = format(unix_time, "HH:mm:ss");
+                        const node_date = format(unix_time, "yyyy-MM-dd");
+                        console.log("Node Date: " + node_date);
+                        console.log("Node Time: " + node_time);
+                        // we only take the time if it is after 2023-01-01 (node default time is 2023-01-01 00:00:00)
+                        if(isAfter(unix_time, new Date(2024,1,1))){
+                            timestamp_node = unix_time;
+                        }
                     }
 
                     // get the destination callsign if we have a direct message. After destCallsign we have a : stop there
@@ -504,19 +516,20 @@ export function useMSG() {
 
                             default: console.log("CMD Message Ack not known!");
                         }
-
                         if(!show_msg) return;
-
                     }
-
 
                     // if the message is a DM remove {number at end
                     if(msg_text_.includes("{")){
-
                         const signindex = msg_text_.indexOf("{");
                         const slicedTxt = msg_text_.slice(0, signindex);
                         msg_text_ = slicedTxt;
+                    }
 
+                    // set the time if it is a valid time
+                    if(timestamp_node !== 0){
+                        now_timestamp = timestamp_node;
+                        time = format(timestamp_node, "HH:mm:ss");
                     }
 
                     // add it to DB
@@ -536,8 +549,6 @@ export function useMSG() {
                         }
 
                         return (newMsgDB);
-
-
                     }
                 }
 
@@ -829,7 +840,7 @@ export function useMSG() {
                     }
                     
                     // check for valid lat lon value
-                    if (lat_degree_final !== 0 && lon_degree_final !== 0) {
+                    if (lat_degree_final !== 0.0 && lon_degree_final !== 0.0) {
 
                         //add update pos in DB
                         const newPosDB: PosType = {
@@ -964,12 +975,12 @@ export function useMSG() {
                 // get Latitude from node (float 4 bytes)
                 let lat_from_node = msg.getFloat64(lat_offset, true);
                 lat_from_node = Math.round(lat_from_node * 10000) / 10000;
-                console.log("Latitude from Node: " + lat_from_node.toFixed(4));
+                console.log("Latitude from Node: " + lat_from_node.toFixed(POS_DECIMALS));
 
                 // get longitude from node
                 let lon_from_node = msg.getFloat64(lon_offset, true);
                 lon_from_node = Math.round(lon_from_node * 10000) / 10000;
-                console.log("Longitude from Node: " + lon_from_node.toFixed(4));
+                console.log("Longitude from Node: " + lon_from_node.toFixed(POS_DECIMALS));
 
                 // get altitude from node
                 const alt_from_node = msg.getInt32(alt_offset, true);
@@ -1086,6 +1097,11 @@ export function useMSG() {
                     const hw_type_ = msg.getUint8(offSetHwModFWvers);
                     const mod_id_ = msg.getUint8(offSetHwModFWvers + 1);
                     const fw_vers_ = msg.getUint8(offSetHwModFWvers + 2);
+                    // show firmware update alert for versions older than 4.30
+                    if (fw_vers_ < 30) {
+                        console.log("MHandler: Firmware Update Alert!");
+                        UpdateFW.update(s => {s.updatefw = true});
+                    }
                     tx_pwr_ = msg.getInt8(offSetHwModFWvers + 3);
                     frequency_ = msg.getFloat32(offSetHwModFWvers + 4, true);
                     frequency_ = Math.round(frequency_ * 10000) / 10000;
@@ -1233,9 +1249,9 @@ export function useMSG() {
                 // show set baseconfig alert on unset node
                 if(newConfig.callSign === "" || newConfig.callSign === "XX0XXX-00"){
 
-                    ShouldConfStore.update(s => {
+                    /*ShouldConfStore.update(s => {
                         s.shouldConf = true;
-                    });
+                    });*/
 
                 } 
 
@@ -1364,55 +1380,8 @@ export function useMSG() {
                 const hw_str = hwtable[hw_type];
                 console.log("HW String: " + hw_str);
 
-
-
                 // check if we have a position to this callsign to calc distance as the crow flies (in km)
                 let distance = 0;
-                let pos_:any = null;
-                let ownpos_:any = null;
-                let config_:any = null;
-
-                // Calculate distance from own position to heard station
-                /*await getPos(call_str).then((pos: PosType | null) => {
-
-                    if (pos !== null) {
-
-                        pos_ = pos;
-                    }
-                });
-
-                await getConf().then((config: ConfType) => {
-
-                    if (config.callSign !== "XX0XXX-00") {
-
-                        config_ = config;
-                    }
-                });
-
-                await getPos(config_.callSign).then((ownpos: PosType | null) => {
-
-                    if (ownpos !== null && pos_ !== null && config_ !== null) {
-
-                        let radlat1 = Math.PI * pos_.lat / 180;
-                        let radlat2 = Math.PI * ownpos.lat / 180;
-                        let theta = pos_.lon - ownpos.lon;
-                        let radtheta = Math.PI * theta / 180;
-                        distance = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
-                        if (distance > 1) {
-                            distance = 1;
-                        }
-                        distance = Math.acos(distance);
-                        distance = distance * 180 / Math.PI;
-                        distance = distance * 60 * 1.1515;
-                        distance = distance * 1.609344;
-
-                        distance = Math.round(distance * 100) / 100;
-
-                        console.log("Distance from " + ownpos.callSign + " to " + pos_.callSign + " is: " + distance + "km");
-
-                    }
-                });*/
-
 
                 // we add own nodecall when writing to DB
                 let newMheard:MheardType = {
@@ -1559,9 +1528,9 @@ export function useMSG() {
                                 //console.log("UTC Offset: " + utc_offset);
 
                                 // set the position in the references
-                                latitude_ref.current = lat;
+                                /*latitude_ref.current = lat;
                                 longitude_ref.current = lon;
-                                altitude_ref.current = alt;
+                                altitude_ref.current = alt;*/
 
 
                                 // if default date is 2023-01-01 we have no valid date, set phone date
@@ -1573,38 +1542,54 @@ export function useMSG() {
 
                                 // update config store
                                 ConfigStore.update(s => {
-                                    //s.config.gps_on = gps_data.GPSON;
-                                    //s.config.track_on = gps_data.TRACKON;
-                                    s.config.lat = +gps_data.LAT.toFixed(4);
-                                    s.config.lon = +gps_data.LON.toFixed(4);
+                                    s.config.lat = +gps_data.LAT.toFixed(POS_DECIMALS);
+                                    s.config.lon = +gps_data.LON.toFixed(POS_DECIMALS);
                                     s.config.alt = gps_data.ALT;
-                                    //s.config.node_utc_offset = +gps_data.UTCOFF.toFixed(1);
-                                });
-
-                                GpsDataStore.update(s => {
-                                    s.gpsData = gps_data;
                                 });
 
                                 //update own position in the positions DB
                                 console.log("MHANDLER: Update Own Position in DB Callsign: " + node_call_ref.current)
                                 let db_pos = null;
                                 db_pos = await DatabaseService.getPos(node_call_ref.current).then((pos: PosType | null) => {
-                                    if (pos !== null) {
+                                    if (pos !== null && pos !== undefined) {
                                         console.log("MHANDLER: Own Position found in DB: " + JSON.stringify(pos));
                                         return pos;
                                     } else {
-                                        return null;
+                                        console.log("MHandler: Own Position not found in DB! Adding Raw Position!")
+                                        const newOwnPos: PosType = {
+                                            timestamp: now_timestamp,
+                                            callSign: node_call_ref.current,
+                                            lat: +gps_data.LAT.toFixed(POS_DECIMALS),
+                                            lon: +gps_data.LON.toFixed(POS_DECIMALS),
+                                            alt: gps_data.ALT,
+                                            bat: "0",
+                                            hw: "0",
+                                            pressure: 0,
+                                            temperature: 0,
+                                            humidity: 0,
+                                            qnh: 0,
+                                            comment: " ",
+                                            temp_2: 0,
+                                            co2: 0,
+                                            alt_press: 0,
+                                            gas_res: 0
+                                        }
+                                        return newOwnPos;
                                     }
                                 });
                                 
-                                if(db_pos !== null){
+                                if(db_pos !== null && db_pos !== undefined){
                                     console.log("MHANDLER: Update Position in DB");
-                                    db_pos.lat = gps_data.LAT;
-                                    db_pos.lon = gps_data.LON;
+                                    db_pos.lat = +gps_data.LAT.toFixed(POS_DECIMALS);
+                                    db_pos.lon = +gps_data.LON.toFixed(POS_DECIMALS);
                                     db_pos.alt = gps_data.ALT;
 
                                     await DatabaseService.writePos(db_pos);
                                 }
+
+                                GpsDataStore.update(s => {
+                                    s.gpsData = gps_data;
+                                });
 
                                 break;
                             }
@@ -1661,7 +1646,6 @@ export function useMSG() {
                                 // needed for connect Page
                                 ConfigObject.setConf(info_data);
 
-
                                 const callsign = info_data.CALL;
                                 console.log("Node Callsign: " + callsign);
                                 // update callsign ref
@@ -1669,12 +1653,10 @@ export function useMSG() {
 
                                 // show set baseconfig alert on unset node
                                 if (callsign === "" || callsign === "XX0XXX-00") {
-
                                     console.log("Mhandler - Callsign not set!");
-                                    /*ShouldConfStore.update(s => {
+                                    ShouldConfStore.update(s => {
                                         s.shouldConf = true;
-                                    });*/
-
+                                    });
                                 }
 
                                 const fw_vers = info_data.FWVER;
@@ -1687,8 +1669,6 @@ export function useMSG() {
                                 });
 
                                 console.log("APRS Comment: " + aprs_cmt);
-
-
 
                                 // ID is currently not used
                                 const id = info_data.ID;
@@ -1874,48 +1854,6 @@ export function useMSG() {
                                     break;
                                 }
 
-                                // calculate distance from node to mheard station
-                                let distance = 0;
-                                let pos_:PosType | null = null;
-                                // check if we have a pos in the cached posis, otherwise get it from DB
-                                /*console.log("Get Pos from Cached at " + Date.now());
-                                cached_posis.current.forEach(element => {
-                                    if(element.callSign === mheard.CALL){
-                                        pos_ = element;
-                                    }
-                                });
-                                console.log("Calculating Distance at " + Date.now());
-
-                                if(pos_ === null){
-                                    console.log("Get Pos from DB at " + Date.now());
-                                    pos_ = await getPos(mheard.CALL).then((pos: PosType | null) => {
-                                        if (pos !== null)
-                                            cached_posis.current.push(pos);
-                                        return pos;
-                                    });
-                                    console.log("Calculating Distance at " + Date.now());
-                                }
-
-                                if (latitude_ref.current !== 0 && longitude_ref.current !== 0 && pos_ !== null) {
-
-                                    let radlat1 = Math.PI * pos_.lat / 180;
-                                    let radlat2 = Math.PI * latitude_ref.current / 180;
-                                    let theta = pos_.lon - longitude_ref.current;
-                                    let radtheta = Math.PI * theta / 180;
-                                    distance = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
-                                    if (distance > 1) {
-                                        distance = 1;
-                                    }
-                                    distance = Math.acos(distance);
-                                    distance = distance * 180 / Math.PI;
-                                    distance = distance * 60 * 1.1515;
-                                    distance = distance * 1.609344;
-
-                                    distance = Math.round(distance * 100) / 100;
-
-                                    console.log("Distance from " + node_call_ref.current + " to " + pos_.callSign + " is: " + distance + "km");
-                                }*/
-
                                 if(mheard.DATE === "2023-01-01"){
                                     mheard.DATE = date_now;
                                     mheard.TIME = time;
@@ -1934,6 +1872,16 @@ export function useMSG() {
                                 }
 
                                 return (new_mheard);
+                            }
+
+                            case "CONFFIN": {
+                                console.log("Config Finished received!");
+                                // set the config finished flag in the store
+                                BleConfigFinish.update(s => {
+                                    s.BleConfFin = true;
+                                });
+                                
+                                break;
                             }
                         }
                         break;

@@ -9,6 +9,7 @@ import PosiStore from "../store/PosiStore";
 import MsgStore from "../store/MsgStore";
 import RedirectChatStore from "../store/RedirectChat";
 import { format, compareAsc, sub } from "date-fns";
+import { Capacitor } from "@capacitor/core";
 
 
 
@@ -24,6 +25,12 @@ class DatabaseService {
 
     static async initializeDatabase() {
         try {
+            /*const platform = Capacitor.getPlatform();
+            console.log('DB Platform:', platform);
+            if (platform === 'ios') this.dbName = 'meshcom';
+            if (platform === 'android') this.dbName = 'meshcom.db';
+            console.log('DB Name:', this.dbName);*/
+            
             if (!DatabaseService.connection) {
                 const sqlite = new SQLiteConnection(CapacitorSQLite);
                 DatabaseService.connection = sqlite as SQLiteConnection; // Cast to SQLiteConnection
@@ -122,9 +129,11 @@ class DatabaseService {
 
                 // update the store with txt messages
                 const txtMsgs = await DatabaseService.getTextMessages();
+                const escTxtMsgs = DatabaseService.escapeQuotesInArr(txtMsgs);
+
                 if (txtMsgs.length > 0) {
                     MsgStore.update(s => {
-                        s.msgArr = txtMsgs;
+                        s.msgArr = escTxtMsgs;
                     });
                 }
 
@@ -137,7 +146,6 @@ class DatabaseService {
                 }
 
                 DatabaseService.isInit = true;
-
             }
         } catch (error) {
             console.error('Error initializing database:', error);
@@ -149,7 +157,7 @@ class DatabaseService {
         if (DatabaseService.db) {
             console.log('DB Getting text messages');
             try {
-                const res = await DatabaseService.db.query('SELECT * FROM TextMessages;');
+                const res = await DatabaseService.db.query('SELECT * FROM TextMessages ORDER BY timestamp ASC;');
                 if (res.values) {
                     //console.log('TextMessages:', res.values);
                     return res.values;
@@ -165,6 +173,8 @@ class DatabaseService {
 
     // writeTxtMsg to the TextMessages table
     static async writeTxtMsg(msg: MsgType) {
+        msg.msgTXT = DatabaseService.escapeQuotes(msg.msgTXT);
+
         if (DatabaseService.db) {
             // check first if we have that message alredy in the database
             const res = await DatabaseService.db.query(`SELECT * FROM TextMessages WHERE msgNr = ${msg.msgNr} AND fromCall = '${msg.fromCall}' AND msgTXT = '${msg.msgTXT}'`);
@@ -180,14 +190,32 @@ class DatabaseService {
                 const values = [id, msg.timestamp, msg.msgNr, msg.msgTime, msg.fromCall, msg.toCall, msg.msgTXT, msg.via, msg.ack, msg.isDM, msg.notify];
                 const ret = await DatabaseService.db.run(query_str, values);
                 console.log('DB writeTxtMsg ret:', ret.changes?.values);
+                // read back all messages
+                const txtMsgs = await DatabaseService.getTextMessages();
+                const escTxtMsgs = DatabaseService.escapeQuotesInArr(txtMsgs);
                 // update the store
                 MsgStore.update(s => {
-                    s.msgArr.push(msg);
+                    s.msgArr = escTxtMsgs;
                 });
             } catch (error) {
                 console.error('Error writing text message:', error);
             }
+        } else {
+            console.error('Error writing text message. Database not open.');
         }
+    }
+
+    // escape single and double quotes in a single message
+    static escapeQuotes(str: string) {
+        return str.replace(/'/g, "''").replace(/"/g, '""');
+    }
+
+    // replace single and double quotes in the whole array of messages for diplaying
+    static escapeQuotesInArr(arr: MsgType[]) {
+        for (let i = 0; i < arr.length; i++) {
+            arr[i].msgTXT = arr[i].msgTXT.replace(/''/g, "'").replace(/""/g, '"');
+        }
+        return arr;
     }
 
     // Acknowledge Text Message
@@ -223,9 +251,10 @@ class DatabaseService {
                             console.log('DB ackTxtMsg ret:', ret.changes);
                             // read back all messages
                             const txtMsgs = await DatabaseService.getTextMessages();
+                            const escTxtMsgs = DatabaseService.escapeQuotesInArr(txtMsgs);
                             if (txtMsgs.length > 0) {
                                 MsgStore.update(s => {
-                                    s.msgArr = txtMsgs;
+                                    s.msgArr = escTxtMsgs;
                                 });
                             }
                         }
@@ -234,6 +263,8 @@ class DatabaseService {
             } catch (error) {
                 console.error('Error acknowledging text message:', error);
             }
+        } else {
+            console.error('Error acknowledging text message. Database not open.');
         }
     }
 
@@ -244,7 +275,7 @@ class DatabaseService {
             try {
                 const res = await DatabaseService.db.query('SELECT * FROM Positions;');
                 if (res.values) {
-                    console.log('Positions:', res.values);
+                    //console.log('Positions:', res.values);
                     return res.values;
                 }
             } catch (error) {
@@ -299,6 +330,8 @@ class DatabaseService {
             } catch (error) {
                 console.error('Error writing position:', error);
             }
+        } else {
+            console.error('Error writing position. Database connection not open.');
         }
     }
 
@@ -319,12 +352,57 @@ class DatabaseService {
                         s.posArr = positions;
                     });
                 }
-                    
-                // update the store
-
             } catch (error) {
                 console.error('Error updating position:', error);
             }
+        } else {
+            console.error('Error updating position. Database connection not open.');
+        }
+    }
+
+
+    // check if we have db connection and db is open
+    static async checkDbConn() {
+        // check if we have connection
+        const conn = await DatabaseService.connection?.isConnection(DatabaseService.dbName, false);
+        if (conn?.result) {
+            console.log('DB - checking Connection:', conn);
+        } else {
+            console.error('Database connection not open');
+            // create a new connection
+            try {
+                console.log('Creating new connection');
+                const sqlite = new SQLiteConnection(CapacitorSQLite);
+                DatabaseService.connection = sqlite as SQLiteConnection; // Cast to SQLiteConnection
+                await DatabaseService.connection.createConnection(DatabaseService.dbName, false, 'no-encryption', 1, false);
+            } catch (error) {
+                console.error('Error creating new connection:', error);
+            }
+        }
+        // check if db is open
+        if (DatabaseService.db) {
+            const res = await DatabaseService.db.isDBOpen();
+            if (res.result) {
+                console.log('Database is open');
+            } else {
+                console.error('Database is not open');
+                // open the database
+                try {
+                    console.log('Opening database');
+                    await DatabaseService.db.open();
+                    // check if db is open
+                    const res = await DatabaseService.db.isDBOpen();
+                    if (res.result) {
+                        console.log('Database is open');
+                    } else {
+                        console.error('Database is not open');
+                    }
+                } catch (error) {
+                    console.error('Error opening database:', error);
+                }
+            }
+        } else {
+            console.error('Database connection not open');
         }
     }
 
@@ -379,6 +457,8 @@ class DatabaseService {
             } catch (error) {
                 console.error('Error setting reconState:', error);
             }
+        } else {
+            console.error('Error setting reconState. Database not open.');
         }
     }
 
@@ -388,9 +468,14 @@ class DatabaseService {
             console.log('DB Clearing TextMessages');
             try {
                 await DatabaseService.db.execute('DELETE FROM TextMessages;');
+                MsgStore.update(s => {
+                    s.msgArr = [];
+                });
             } catch (error) {
                 console.error('Error clearing TextMessages:', error);
             }
+        } else {
+            console.error('Error clearing TextMessages. Database not open.');
         }
     }
 
@@ -403,6 +488,8 @@ class DatabaseService {
             } catch (error) {
                 console.error('Error clearing Positions:', error);
             }
+        } else {
+            console.error('Error clearing Positions. Database not open.');
         }
     }
 
@@ -417,13 +504,17 @@ class DatabaseService {
         console.log('Max timestamp txt:', format(max_timestamp_txt, 'yyyy-MM-dd HH:mm:ss'));
         console.log('Max timestamp pos:', format(max_timestamp_pos, 'yyyy-MM-dd HH:mm:ss'));
         // delete all messages older than max_timestamp_txt
-        const sql_str = `DELETE FROM TextMessages WHERE timestamp < ${max_timestamp_txt.getTime()}`;
-        const ret_txt = await DatabaseService.db?.execute(sql_str);
-        console.log('DB housekeeping TextMessages ret:', ret_txt?.changes?.values);
-        // delete all positions older than max_timestamp_pos
-        const sql_str_pos = `DELETE FROM Positions WHERE timestamp < ${max_timestamp_pos.getTime()}`;
-        const ret_pos = await DatabaseService.db?.execute(sql_str_pos);
-        console.log('DB housekeeping Positions ret:', ret_pos?.changes?.values);
+        if (DatabaseService.db) {
+            const sql_str = `DELETE FROM TextMessages WHERE timestamp < ${max_timestamp_txt.getTime()}`;
+            const ret_txt = await DatabaseService.db?.execute(sql_str);
+            console.log('DB housekeeping TextMessages ret:', ret_txt?.changes?.values);
+            // delete all positions older than max_timestamp_pos
+            const sql_str_pos = `DELETE FROM Positions WHERE timestamp < ${max_timestamp_pos.getTime()}`;
+            const ret_pos = await DatabaseService.db?.execute(sql_str_pos);
+            console.log('DB housekeeping Positions ret:', ret_pos?.changes?.values);
+        } else {
+            console.error('Error housekeeping. Database not open.');
+        }
     }
 }
 

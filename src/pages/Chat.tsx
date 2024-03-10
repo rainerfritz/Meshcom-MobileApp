@@ -18,7 +18,9 @@ import type { OverlayEventDetail } from '@ionic/core';
 import AppActiveState  from '../store/AppActive';
 import {MsgTxtLink} from '../components/MsgTxtLink';
 import ConfigObject from '../utils/ConfigObject';
-
+import BLEconnStore from '../store/BLEconnected';
+import {getBLEconnStore} from '../store/Selectors';
+import DatabaseService from '../DBservices/DataBaseService';
 
 
 
@@ -30,7 +32,7 @@ const Tab3: React.FC = () => {
   const MIN_CHAR_CALLSIGN = 3;
 
 
-  const {sendDV, addMsgQueue, updateDevID} = useBLE();
+  const {sendDV, updateDevID, sendTxtCmdNode} = useBLE();
 
 
   // devid from store
@@ -44,6 +46,9 @@ const Tab3: React.FC = () => {
 
   // get current AppState
   const isAppActive = AppActiveState.useState(s => s.active);
+
+  // BLE connected from store
+  const ble_connected:boolean = useStoreState(BLEconnStore, getBLEconnStore);
 
   // reference to text input field
   const textInputRef = useRef<HTMLIonInputElement>(null);
@@ -89,7 +94,6 @@ const Tab3: React.FC = () => {
     //const devid = devID_s;
     //updateDevID(devid);
     scrollToBottom();
-    
   });
 
 
@@ -107,11 +111,13 @@ const Tab3: React.FC = () => {
   // actions when app goes or comes from background
   useEffect(() => {
     console.log("Chat App active: " + isAppActive);
+    // update BLE Hook
+    console.log("Chat - BLE Connected: " + ble_connected);
+    console.log("Chat - BLE DevID: " + devID_s);
     // scroll down if Chat screen gets active again
     if(isAppActive){
       scrollToBottom();
     } 
-
   }, [isAppActive]);
 
 
@@ -189,9 +195,7 @@ const Tab3: React.FC = () => {
             }
 
             console.log("CHAT Msg: " + final_msg_str);
-            
-            
-    
+
             let txt_enc = new TextEncoder(); // always utf-8
             const enc_txt_msg = txt_enc.encode(final_msg_str);
             console.log("UTF-8 Encoded Msg: " + enc_txt_msg);
@@ -231,7 +235,6 @@ const Tab3: React.FC = () => {
 
   // run once at mount - setup listeners and handle CSS id change of chatbox
   useEffect(() => {
-
     // check if keyboard hides
     Keyboard.addListener('keyboardDidHide', () => {
 
@@ -272,9 +275,7 @@ const Tab3: React.FC = () => {
   const hasNotifyPermission = async () => {
 
     if((await LocalNotifications.checkPermissions()).display === 'granted'){
-
       console.log("Local Notification are granted");
-
       canNotify.current = true;
 
       //create a channel for notify on adroid
@@ -297,11 +298,8 @@ const Tab3: React.FC = () => {
           console.log("sound " + ch.sound);
           console.log("visibility " + ch.visibility);
         }
-
       }
-
     } else {
-
       // TODO action when no permission for notifies is set
       console.log("No Notify Permission set!");
       
@@ -393,14 +391,12 @@ const Tab3: React.FC = () => {
     if(msg_.fromCall === config_s.callSign) return "own-message";
 
     if(msg_.fromCall !== config_s.callSign) {
-
       if(msg_.isDM) {
         return "dm-message"
       } else {
         return "other-message"
       }
     }
-
   }
 
 
@@ -408,10 +404,8 @@ const Tab3: React.FC = () => {
   let btnpresstime = 0;
 
   const handleButtonPress = () => {
-
     btnpresstime = Date.now();
     console.log("Long Press time start: " + btnpresstime);
-
   }
 
   // check how long clicked on a message to show options

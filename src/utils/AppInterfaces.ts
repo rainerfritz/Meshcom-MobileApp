@@ -204,3 +204,9 @@ export interface Mheard {
     SNR: number,
     DIST: number
 }
+
+// Config sent from Node Finish message
+// {"TYP":"CONFFIN"}
+export interface Conf {
+    TYP: string
+}

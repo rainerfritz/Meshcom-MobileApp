@@ -1,5 +1,5 @@
 import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, 
-  IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, useIonLoading, useIonViewWillEnter} from '@ionic/react';
+  IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, useIonLoading, useIonViewWillEnter, IonLoading} from '@ionic/react';
 
 import './Connect.css';
 
@@ -25,6 +25,8 @@ import DatabaseService from '../DBservices/DataBaseService';
 import ConfigObject from '../utils/ConfigObject';
 import MheardStaticStore from '../utils/MheardStaticStore';
 import MhStore from '../store/MheardStore';
+import BleConfigFinish from '../store/BLEConfFin';
+import UpdateFW from '../store/UpdtFW';
 
 
 export interface ScanRes {
@@ -79,6 +81,15 @@ const Tab1: React.FC = () => {
   // alert card params
   const [shDiscoCard, setShDiscoCard] = useState<boolean>(false);
 
+  // trigger when node finished sending config (Jsons plus Textmessages)
+  const nodeConfFin = BleConfigFinish.useState(s => s.BleConfFin);
+  // show loading indicator till we get the bleconfig finish state
+  const [shLoadConf, setShLoadConf] = useState<boolean>(false);
+  // trigger to update firmware if to old
+  const updtFW = UpdateFW.useState(s => s.updatefw);
+
+
+
   // reconnect BLE
   const MAX_RETRIES = 5;
   const RECON_TIME = 3000;
@@ -108,13 +119,10 @@ const Tab1: React.FC = () => {
   // get current AppState
   const isAppActive = AppActiveState.useState(s => s.active);
 
-  // DB functions
-  //const {getReconState, setReconState, initialized} = useSQLiteDB();
 
 
   // setup local notifications. we need to get permission from user/os first
   const getNotifyPermission = async () => {
-
     if((await LocalNotifications.requestPermissions()).display === 'granted'){
       console.log("Local Notification allowed");
     }
@@ -227,9 +235,9 @@ const Tab1: React.FC = () => {
     console.log("Scanning BLE Devices");
 
     // if we are in reconnect state ignore scanning
-    DatabaseService.getReconState().then((reconstate) => {
+    /*DatabaseService.getReconState().then((reconstate) => {
       if (reconstate) return;
-    });
+    });*/
 
     setShowProgrBar(true);
 
@@ -331,9 +339,7 @@ const Tab1: React.FC = () => {
             }
 
             scan_res.push(newScanRes);
-
             console.log("ScanRes Array Len: " + scan_res.length);
-
             localname_str = "";
           }
         }
@@ -371,6 +377,9 @@ const Tab1: React.FC = () => {
 
     // clear the timer if in reconnect
     if(timerID_ref.current !== null) clearTimeout(timerID_ref.current);
+
+    // check if the DB is open
+    await DatabaseService.checkDbConn();
 
     try {
       // if we are connected already to a device, disco that and connect new
@@ -414,17 +423,17 @@ const Tab1: React.FC = () => {
         (value) => {
           parseMsg(value).then((res) => {
             if (res !== undefined && 'msgTXT' in res) {
+              // escape all quotation marks
               console.log("Connect: Text Message: " + res.msgTXT);
               DatabaseService.writeTxtMsg(res);
             } 
             if (res !== undefined && 'temperature' in res) {
-                console.log("Connect: Pos Msg Temperature: " + res.temperature);
+                console.log("Connect: Pos Msg from: " + res.callSign);
                 DatabaseService.writePos(res);
             }
             if (res !== undefined && 'mh_nodecall' in res) {
               console.log("Connect: Mheard Node Call: " + res.mh_nodecall);
               res.mh_nodecall = ConfigObject.getConf().CALL;
-              console.log("Connect: Mheard: " + JSON.stringify(res));
               MheardStaticStore.setMhArr(res);
             }
 
@@ -440,6 +449,7 @@ const Tab1: React.FC = () => {
         recon_count.current = 0;
         dismissReconProgr();
         setShStopReconBtn(false);
+
         DatabaseService.setReconState(0);
 
         const newConnState = true;
@@ -454,6 +464,10 @@ const Tab1: React.FC = () => {
         DevIDStore.update(s => {
           s.devID = devID;
         });
+
+        // show the conf loading progess
+        if(isAppActive)
+          setShLoadConf(true);
         
         // finally we send a hello message to the client. It then starts sending data if any
         const len_hello = 4;
@@ -471,12 +485,6 @@ const Tab1: React.FC = () => {
         
         setShowProgrBar(false);
 
-        // redirect to chat
-        if(isAppActive){
-          history.push("/chat");
-        }
-
-
       }).catch((error) => {
         
         console.log("Error on Start Notifications!");
@@ -486,6 +494,10 @@ const Tab1: React.FC = () => {
         // initiate a new scan, so the user can click connect again without manual scan
         //getScan();
         dismissReconProgr();
+        // alert user
+        setAlHeader("Error on Connecting to Node!");
+        setAlMsg("Please reconnect to Node!");
+        setShAlertCard(true);
       });
 
       setShowProgrBar(false);
@@ -551,6 +563,11 @@ const Tab1: React.FC = () => {
           reconnectBLE(devID);
         }
       });
+
+      // when we land here post the error to the user
+      setAlHeader("Error Connecting to Node!");
+      setAlMsg(errmsg_str);
+      setShAlertCard(true);
     }
   }
 
@@ -568,17 +585,17 @@ const Tab1: React.FC = () => {
     // set Flag in BLE Hook
     updateBLEConnected(false);
 
+    // update BLE connected state in store
+    BLEconnStore.update(s => {
+      s.ble_connected = false;
+    });
+
     // reset config parameter in state
     ConfigStore.update(s => {
       s.config.callSign = "XX",
       s.config.lat = 48.2098,
       s.config.lon = 16.3708,
       s.config.alt = 0
-    });
-
-    // update BLE connected state in store
-    BLEconnStore.update(s => {
-      s.ble_connected = false;
     });
 
     // BLE disconnect was not manually triggered
@@ -599,6 +616,9 @@ const Tab1: React.FC = () => {
       }
     }
     manual_ble_disco.current = false;
+
+    // close DB connection
+    DatabaseService.closeConnection();
   }
 
 
@@ -627,7 +647,7 @@ const Tab1: React.FC = () => {
 
         console.log('Reconnect Timer, trying to reconnect');
 
-        DatabaseService.getReconState().then(async (reconstate)=>{
+        await DatabaseService.getReconState().then(async (reconstate)=>{
           if(reconstate) await connDev(devID);
         }).catch((error)=>{
           console.log("Error getting Recon State: " + error);
@@ -652,7 +672,8 @@ const Tab1: React.FC = () => {
   // redirect to config page if unset node
   const redirectConnect = () => {
     setShDiscoCard(false);
-    history.push("/connect");
+    if(isAppActive)
+      history.push("/connect");
   }
 
 
@@ -678,11 +699,44 @@ const Tab1: React.FC = () => {
 
   }
 
+  // BLE Config Fin state
+  useEffect(()=>{
 
-  // update progr bar
-  /*useEffect(()=>{
-    console.log("Porgress Bar")
-  }, [showProgrBar]);*/
+    if(nodeConfFin){
+      console.log("Node Config Finished!");
+      setShLoadConf(false);
+
+      // set state in store
+      BleConfigFinish.update(s => {
+        s.BleConfFin = false;
+      });
+
+      // redirect to chat
+      if(isAppActive){
+        history.push("/chat");
+      }
+    }
+  }, [nodeConfFin]);
+
+
+  // when the update firmware trigger fires we dismiss the ShLoadConf and fire the alertcard
+  useEffect(()=>{
+
+    if(updtFW){
+      console.log("Update Firmware Triggered!");
+      setShLoadConf(false);
+      setAlHeader("Firmware Update needed!");
+      setAlMsg("Please update the Firmware to 4.30 or newer!");
+      setShAlertCard(true);
+      // do a manual disconnect
+      doDisco(devID_s);
+
+      // set state in store
+      UpdateFW.update(s => {
+        s.updatefw = false;
+      });
+    }
+  }, [updtFW]);
 
 
   // redirect to config page if unset node
@@ -793,6 +847,13 @@ const Tab1: React.FC = () => {
             header={alHeader}
             message={alMsg}
             onDismiss={() => setShAlertCard(false)}
+          />
+
+          <IonLoading
+            isOpen={shLoadConf}
+            onDidDismiss={() => setShLoadConf(false)}
+            message={'Loading Config from node. Please wait...'}
+            duration={20000}  // Duration in milliseconds, adjust as needed
           />
 
           <div id="spacer-progress"></div>

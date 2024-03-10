@@ -43,26 +43,21 @@ import { useEffect } from 'react';
 import { App } from '@capacitor/app';
 
 import DataBaseService from './DBservices/DataBaseService';
-import MsgStore from './store/MsgStore';
-import PosiStore from './store/PosiStore';
+
 
 
 setupIonicReact();
 
 const Appl: React.FC = () => {
-
    // init DB
    const initDB = async () => {
     console.log('Initializing Database');
     await DataBaseService.initializeDatabase();
   }
 
-  
-
 
   // set initial app is axctive state and add event listener
   useEffect(() => {
-
     // init DB
     initDB();
 
@@ -82,6 +77,7 @@ const Appl: React.FC = () => {
     });
 
   }, []);
+
 
   return (
 

@@ -16,7 +16,7 @@ import WxDataStore from '../store/WxData';
 import { useEffect, useRef } from 'react';
 import SensorSettingsStore from '../store/SensorSettings';
 import BLEconnStore from '../store/BLEconnected';
-
+import ConfigObject from '../utils/ConfigObject';
 
 /*
 export interface WxData {
@@ -100,13 +100,15 @@ const Info: React.FC = () => {
     console.log('Info Tab: View entered');
     window_active.current = true;
     // update the BLE hook
-    console.log("Info Tab: BLE Device ID: " + devID);
-    updateDevID(devID);
+    console.log("Info Tab: BLE Device ID: " + ConfigObject.ble_dev_id);
+    updateDevID(ConfigObject.ble_dev_id);
     console.log("Info Tab: BLE Connected: " + ble_connected);
     updateBLEConnected(ble_connected);
     // start the update timer
     console.log('Info Tab: Starting Update Timer View entered');
-    startUpdtTimer();
+    // start the timer only if we have a configured node
+    if(config_s.callSign !== "" && config_s.callSign !== "XX0XXX-00")
+      startUpdtTimer();
     
   });
 
@@ -129,7 +131,9 @@ const Info: React.FC = () => {
     if (app_active_s) {
       if(window_active.current) {
         console.log('Info Tab: Starting Update Timer App comes to foreground');
-        startUpdtTimer();
+        // start the timer only if we have a configured node
+        if(config_s.callSign !== "" && config_s.callSign !== "XX0XXX-00")
+          startUpdtTimer();
       }
     }
   }, [app_active_s]);
@@ -228,16 +232,10 @@ const Info: React.FC = () => {
               <div className='lbox'>
                 <div>Fix: {gps_s.SFIX ? 'YES' : 'NO'}</div>
                 <div>HDOP: {gps_s.HDOP}</div>
-                <div>Rate: {gps_s.RATE}</div>
-                <div>Next: {gps_s.NEXT}</div>
-              </div>
-              <div className='lbox'>
-                <div>Dist: {gps_s.DIST}</div>
-                <div>Dirn: {gps_s.DIRn}</div>
-                <div>Diro: {gps_s.DIRo}</div>
+                <div>Next POS: {gps_s.NEXT}</div>
+                <div>UTC Offset: {config_s.node_utc_offset + " h"}</div>
               </div>
             </div>
-            <div className='font-size108'>UTC Offset: {config_s.node_utc_offset + " h"}</div>
             <div className='font-size108'>Date: {gps_s.DATE}</div>
           </IonCardContent>
         </IonCard>
@@ -249,15 +247,6 @@ const Info: React.FC = () => {
           <IonCardContent>
             <div className='value_cont'>
               <div className='lbox'>
-                <div>BME280: {SensorSettings_s.BME ? 'ON' : 'OFF'}</div>
-                <div>BMP280: {SensorSettings_s.BMP ? 'ON' : 'OFF'}</div>
-                <div>BME680: {SensorSettings_s[680] ? 'ON' : 'OFF'}</div>
-                <div>MCU811: {SensorSettings_s[811] ? 'ON' : 'OFF'}</div>
-                <div>LPS: {SensorSettings_s.LPS33 ? 'ON' : 'OFF'}</div>
-                <div>OneWire: {SensorSettings_s.OW ? 'ON' : 'OFF'}</div>
-                <div>OneWire PIN: {SensorSettings_s.OWPIN}</div>
-              </div>
-              <div className='lbox'>
                 <div>Temp: {wx_s.TEMP.toFixed(1)}°</div>
                 <div>TOUT: {wx_s.TOUT.toFixed(1)}°</div>
                 <div>Humidity: {wx_s.HUM.toFixed(1)} %</div>
@@ -266,6 +255,15 @@ const Info: React.FC = () => {
                 <div>Gas Res: {wx_s.GAS.toFixed(1)} kOhm</div>
                 <div>eCO2: {wx_s.CO2.toFixed(1)} ppm</div>
                 <div>Alt Press: {wx_s.ALT.toFixed(0)} m</div>
+              </div>
+              <div className='lbox'>
+                <div>BME280: {SensorSettings_s.BME ? 'ON' : 'OFF'}</div>
+                <div>BMP280: {SensorSettings_s.BMP ? 'ON' : 'OFF'}</div>
+                <div>BME680: {SensorSettings_s[680] ? 'ON' : 'OFF'}</div>
+                <div>MCU811: {SensorSettings_s[811] ? 'ON' : 'OFF'}</div>
+                <div>LPS: {SensorSettings_s.LPS33 ? 'ON' : 'OFF'}</div>
+                <div>OneWire: {SensorSettings_s.OW ? 'ON' : 'OFF'}</div>
+                <div>OneWire PIN: {SensorSettings_s.OWPIN}</div>
               </div>
             </div>
           </IonCardContent>
