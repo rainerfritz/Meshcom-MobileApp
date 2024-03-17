@@ -7,7 +7,6 @@ import {
 import { MsgType, PosType } from "../utils/AppInterfaces";
 import PosiStore from "../store/PosiStore";
 import MsgStore from "../store/MsgStore";
-import RedirectChatStore from "../store/RedirectChat";
 import { format, compareAsc, sub } from "date-fns";
 import { Capacitor } from "@capacitor/core";
 
@@ -19,18 +18,12 @@ class DatabaseService {
     static db: SQLiteDBConnection | null = null;
     static dbName = 'meshcom.db';
     static isInit = false;
-    static MAX_AGE_TXT_MSG = 3; // 3 days
+    static MAX_AGE_TXT_MSG = 5; // 5 days
     static MAX_AGE_POS = 7; // 7 days
     
 
     static async initializeDatabase() {
         try {
-            /*const platform = Capacitor.getPlatform();
-            console.log('DB Platform:', platform);
-            if (platform === 'ios') this.dbName = 'meshcom';
-            if (platform === 'android') this.dbName = 'meshcom.db';
-            console.log('DB Name:', this.dbName);*/
-            
             if (!DatabaseService.connection) {
                 const sqlite = new SQLiteConnection(CapacitorSQLite);
                 DatabaseService.connection = sqlite as SQLiteConnection; // Cast to SQLiteConnection
@@ -101,7 +94,7 @@ class DatabaseService {
                     });
                 }
 
-                if (DatabaseService.db) {
+                /*if (DatabaseService.db) {
                     console.log('Creating reconState table');
                     await DatabaseService.db.execute(`CREATE TABLE IF NOT EXISTS reconState (
                         id INTEGER PRIMARY KEY NOT NULL,
@@ -122,7 +115,7 @@ class DatabaseService {
 
                 } else {
                     console.error('Error creating tables. Database connection not open.');
-                }
+                }*/
 
                 // housekeeping
                 await DatabaseService.housekeeping();
@@ -421,7 +414,7 @@ class DatabaseService {
     }
 
     // return reconStateVal
-    static async getReconState() {
+    /*static async getReconState() {
         console.log('SQLite Connection:', DatabaseService.connection);
         console.log('SQLite DB:', DatabaseService.db);
 
@@ -460,7 +453,7 @@ class DatabaseService {
         } else {
             console.error('Error setting reconState. Database not open.');
         }
-    }
+    }*/
 
     // clear the TextMessages table
     static async clearTextMessages() {
@@ -501,15 +494,19 @@ class DatabaseService {
         const today = new Date();
         const max_timestamp_txt = sub(today, { days: DatabaseService.MAX_AGE_TXT_MSG });
         const max_timestamp_pos = sub(today, { days: DatabaseService.MAX_AGE_POS });
+        const max_timestamp_unix_txt =  max_timestamp_txt.getTime();
+        const max_timestamp_unix_pos =  max_timestamp_pos.getTime();
+        console.log('Max timestamp txt:', max_timestamp_unix_txt);
         console.log('Max timestamp txt:', format(max_timestamp_txt, 'yyyy-MM-dd HH:mm:ss'));
         console.log('Max timestamp pos:', format(max_timestamp_pos, 'yyyy-MM-dd HH:mm:ss'));
+
         // delete all messages older than max_timestamp_txt
         if (DatabaseService.db) {
-            const sql_str = `DELETE FROM TextMessages WHERE timestamp < ${max_timestamp_txt.getTime()}`;
+            const sql_str = `DELETE FROM TextMessages WHERE timestamp < ${max_timestamp_unix_txt};`;
             const ret_txt = await DatabaseService.db?.execute(sql_str);
             console.log('DB housekeeping TextMessages ret:', ret_txt?.changes?.values);
             // delete all positions older than max_timestamp_pos
-            const sql_str_pos = `DELETE FROM Positions WHERE timestamp < ${max_timestamp_pos.getTime()}`;
+            const sql_str_pos = `DELETE FROM Positions WHERE timestamp < ${max_timestamp_unix_pos};`;
             const ret_pos = await DatabaseService.db?.execute(sql_str_pos);
             console.log('DB housekeeping Positions ret:', ret_pos?.changes?.values);
         } else {

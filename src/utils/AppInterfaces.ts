@@ -156,11 +156,15 @@ export interface SensorSettings {
 }
 
 // wifi settings interface
-// {"TYP":"SW", "SSID":"string up to 30 chars?","PW":"also a long string"}
+// {"TYP":"SW", "SSID":"string up to 30 chars?","PW":"also a long string", "IP":"192.168.1.123", "GW":"192.168.1.1", "DNS":"192.168.1.1", "SUB":"255.255.255.0"}
 export interface WifiSettings {
     TYP: string,
     SSID: string,
-    PW: string
+    PW: string,
+    IP: string,
+    GW: string,
+    DNS: string,
+    SUB: string
 }
 
 // Node Settings interface

@@ -24,9 +24,10 @@ import BLEconnStore from '../store/BLEconnected';
 import DatabaseService from '../DBservices/DataBaseService';
 import ConfigObject from '../utils/ConfigObject';
 import MheardStaticStore from '../utils/MheardStaticStore';
-import MhStore from '../store/MheardStore';
 import BleConfigFinish from '../store/BLEConfFin';
 import UpdateFW from '../store/UpdtFW';
+import { usePhoneGps } from '../utils/PhoneGps';
+
 
 
 export interface ScanRes {
@@ -59,7 +60,8 @@ const Tab1: React.FC = () => {
   const [showProgrBar, setShowProgrBar] = useState<boolean>(false);
 
   // store device id
-  const devID_s = useStoreState(DevIDStore, getDevID);
+  //const devID_s = useStoreState(DevIDStore, getDevID);
+  const [devID_s, setDevIDs] = useState<string>("");
 
   //show set config Alert state
   const setConfAl = useStoreState(ShouldConfStore, getShouldConfStore);
@@ -88,22 +90,23 @@ const Tab1: React.FC = () => {
   // trigger to update firmware if to old
   const updtFW = UpdateFW.useState(s => s.updatefw);
 
-
-
   // reconnect BLE
-  const MAX_RETRIES = 5;
+  const MAX_RETRIES = 15;
   const RECON_TIME = 3000;
   const recon_count = useRef<number>(0);
   const recon_time = useRef<number>(RECON_TIME);
-  const [shReconProgr, dismissReconProgr] = useIonLoading();
+  const [shReconProgr, setShReconProgr] = useState<boolean>(false);
   const timerID_ref = useRef<any>(null);
   const [shStopReconBtn, setShStopReconBtn] = useState<boolean>(false);
-
+  const doReconnect = useRef<boolean>(false);
 
 
   // send and parse message functions
   const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected, addMsgQueue} = useBLE();
   const {parseMsg, convBARRtoStr} = useMSG();
+
+  // phonegps hook
+  const {getGpsLocation, setCurrPosGPS} = usePhoneGps();
 
   //const navigation = useIonRouter();
   const history = useHistory();
@@ -128,8 +131,6 @@ const Tab1: React.FC = () => {
     }
   }
 
-
-
   // clear notification method
   const clearNotifies = async () => {
     const pendingNotifies = await LocalNotifications.getPending();
@@ -140,7 +141,16 @@ const Tab1: React.FC = () => {
     }
   }
 
- 
+  // check on android if location services are enabled
+  const checkLocSettingAndroid = async () => {
+    console.log("Checking Location Services on Android");
+    const loc_enabled = await BleClient.isLocationEnabled();
+    if (!loc_enabled) {
+      console.log("Android Location Service disabled!");
+      // open Location settings in android
+      await BleClient.openLocationSettings();
+    }
+  }
 
   // on app mount we ask for local notification permission. Detect platform, DB init and clear old notifications
   useEffect(()=>{
@@ -180,6 +190,11 @@ const Tab1: React.FC = () => {
       s.platformState = pltfrm;
     });
 
+    if(pltfrm === "android"){
+      // check if location services are enabled
+      checkLocSettingAndroid();
+    }
+
   }, []);
 
 
@@ -199,7 +214,7 @@ const Tab1: React.FC = () => {
       console.log("Connect - App active: " + isAppActive);
       console.log("Recon Count: " + recon_count.current);
 
-      DataBaseService.getReconState().then((reconstate) => {
+      DatabaseService.getReconState().then((reconstate) => {
 
         console.log("ReconState in DB: " + reconstate);
 
@@ -369,16 +384,14 @@ const Tab1: React.FC = () => {
   const connDev = async (devID: string) => {
 
     console.log("Connecting DeviceID: " + devID);
-
     setShowProgrBar(true);
-
+    // set devId state here local
+    setDevIDs(devID);
     // set devID in ConfigObject
     ConfigObject.setBleDevId(devID);
-
     // clear the timer if in reconnect
     if(timerID_ref.current !== null) clearTimeout(timerID_ref.current);
-
-    // check if the DB is open
+    // check if the DB is open. Makes new connection and opens DB if not
     await DatabaseService.checkDbConn();
 
     try {
@@ -387,8 +400,45 @@ const Tab1: React.FC = () => {
         doDisco(devID);
       }
 
+      // make a disconnect before connecting when on android
+      if(pltfrm === "android"){
+        await BleClient.initialize();
+        await BleClient.disconnect(devID);
+      }
+
       //connect to device
-      await BleClient.connect(devID, (deviceId) => onDisconnect(deviceId));
+      await BleClient.connect(devID, (deviceId) => onDisconnect(deviceId)).then(() => {
+        console.log('Connect resolved successful with: ', devID);
+      }).catch((error) => {
+        console.error("Connect Error on connect attempt: " + error.message);
+        setShowProgrBar(false);
+        setShReconProgr(false);
+
+        const errmsg_str: string = error.message;
+
+        if (errmsg_str.includes("removed pairing")) {
+          console.log("Error Pairing: " + errmsg_str);
+          setShowProgrBar(false);
+          setShReconProgr(false);
+          setAlHeader("Error Pairing! Remove Node from BLE Devices after Erase/Flash");
+          setAlMsg(errmsg_str);
+          setShAlertCard(true);
+          return;
+        }
+        if(errmsg_str.includes("timeout")){
+
+          if(config_s.callSign === "XX0XXX-00"){
+  
+            console.log("Error Connecting: " + errmsg_str);
+            setShowProgrBar(false);
+            setShReconProgr(false);
+            setAlHeader("Error Connection! Remove Node from BLE Devices after Erase/Flash");
+            setAlMsg(errmsg_str);
+            setShAlertCard(true);
+            return;
+          }
+        }
+      });
 
       //get services of the device
       const services = await BleClient.getServices(devID);
@@ -402,15 +452,6 @@ const Tab1: React.FC = () => {
             console.log("Descriptor UUID:: " + c.uuid);
         }
       }
-
-      // on android check if we are bonded to the device
-      /*if(pltfrm === "android"){
-
-        const bonded = await BleClient.isBonded(devID);
-        console.log("Bonded: " + bonded);
-
-        await BleClient.createBond(devID);
-      }*/
 
       // start notfication service - uart rx
       // check if notifications enabling is successfull. If not we are not connected or pairing was not set
@@ -445,12 +486,11 @@ const Tab1: React.FC = () => {
         updateDevID(devID);
         
         // reset reconnect state and params
+        doReconnect.current = false;
         recon_time.current = RECON_TIME;
         recon_count.current = 0;
-        dismissReconProgr();
+        setShReconProgr(false);
         setShStopReconBtn(false);
-
-        DatabaseService.setReconState(0);
 
         const newConnState = true;
         setConnFlag(newConnState);
@@ -470,6 +510,7 @@ const Tab1: React.FC = () => {
           setShLoadConf(true);
         
         // finally we send a hello message to the client. It then starts sending data if any
+        console.log("Sending Hello Msg to Node!");
         const len_hello = 4;
         const call_buffer = new ArrayBuffer(len_hello);
         const view1 = new DataView(call_buffer);
@@ -477,7 +518,6 @@ const Tab1: React.FC = () => {
         view1.setUint8(1, 0x10);
         view1.setUint8(2, 0x20);
         view1.setUint8(3, 0x30);
-
         sendDV(view1, devID);
 
         // update BLE connected state in BLE Hook
@@ -493,7 +533,7 @@ const Tab1: React.FC = () => {
         doDisco(devID);
         // initiate a new scan, so the user can click connect again without manual scan
         //getScan();
-        dismissReconProgr();
+        setShReconProgr(false);
         // alert user
         setAlHeader("Error on Connecting to Node!");
         setAlMsg("Please reconnect to Node!");
@@ -512,7 +552,7 @@ const Tab1: React.FC = () => {
 
         console.log("Error Pairing: " + errmsg_str);
         setShowProgrBar(false);
-        dismissReconProgr();
+        setShReconProgr(false);
         setAlHeader("Error Pairing! Remove Node from BLE Devices after Erase/Flash");
         setAlMsg(errmsg_str);
         setShAlertCard(true);
@@ -525,7 +565,7 @@ const Tab1: React.FC = () => {
 
           console.log("Error Connecting: " + errmsg_str);
           setShowProgrBar(false);
-          dismissReconProgr();
+          setShReconProgr(false);
           setAlHeader("Error Connection! Remove Node from BLE Devices after Erase/Flash");
           setAlMsg(errmsg_str);
           setShAlertCard(true);
@@ -551,32 +591,24 @@ const Tab1: React.FC = () => {
       });
 
       setShowProgrBar(false);
-      dismissReconProgr();
+      setShReconProgr(false);
       
       // try to reconnect
-      console.log("Reconnecting to node!");
-
-      DatabaseService.getReconState().then((reconstate)=>{
-
-        if(reconstate === 1){
-          if(timerID_ref.current !== null) clearTimeout(timerID_ref.current);
-          reconnectBLE(devID);
-        }
-      });
+      if(doReconnect.current === true){
+        console.log("Reconnecting to node!");
+        reconnectBLE(devID);
+      }
 
       // when we land here post the error to the user
-      setAlHeader("Error Connecting to Node!");
+      /*setAlHeader("Error Connecting to Node!");
       setAlMsg(errmsg_str);
-      setShAlertCard(true);
+      setShAlertCard(true);*/
     }
   }
 
 
-  // disconnect callback
-  function onDisconnect(deviceId: string) {
-
-    // close DB connection
-    //DatabaseService.closeConnection();
+  // BLE disconnect callback
+  async function onDisconnect(deviceId: string) {
 
     console.log("Device disconnected callback");
     const newConnState = false;
@@ -598,27 +630,47 @@ const Tab1: React.FC = () => {
       s.config.alt = 0
     });
 
-    // BLE disconnect was not manually triggered
-    if(manual_ble_disco.current === false){
-      console.log("BLE client disconnected without Useraction!");
+    setShowProgrBar(false);
 
-      // initial reconnect trigger
-      if(connFlag === false){
-
-        console.log("Setting Recon Active true");
-
-        DatabaseService.setReconState(1);
-
-        if(isAppActive){
-          setShStopReconBtn(true);
-          reconnectBLE(deviceId);
+    // BLE disconnect was not manually triggered - Reconnect
+    if(manual_ble_disco.current === false && (recon_count.current <= MAX_RETRIES)){
+        console.log("BLE client disconnected without Useraction!");
+        // initial reconnect trigger
+        if(connFlag === false){
+          console.log("Setting Recon Active true");
+          if(isAppActive){
+            doReconnect.current = true;
+            setShStopReconBtn(true);
+            reconnectBLE(deviceId);
+          }
+          if(!isAppActive && pltfrm === "ios"){
+            doReconnect.current = true;
+            reconnectBLE(deviceId);
+          }
+          if(!isAppActive && pltfrm === "android"){
+            setAlHeader("Node Disconnected in Background!");
+            setAlMsg("Please reconnect to Node manually!");
+            setShAlertCard(true);
+            // reset recon button and recon progress
+            setShReconProgr(false);
+            setShStopReconBtn(false);
+            setShowProgrBar(false);
+            // set the flag to stop reconnect
+            doReconnect.current = false;
+            // close DB connection
+            await DatabaseService.closeConnection();
+          }
         }
-      }
+    } else {
+      // close DB connection
+      await DatabaseService.closeConnection();
     }
-    manual_ble_disco.current = false;
 
-    // close DB connection
-    DatabaseService.closeConnection();
+    manual_ble_disco.current = false;
+    // reset ble_conf_finish state
+    BleConfigFinish.update(s => {
+      s.BleConfFin = 0;
+    });
   }
 
 
@@ -626,7 +678,24 @@ const Tab1: React.FC = () => {
    * Reconnects to node if connection was lost
    * @param devID BLE device ID
    */
-  const reconnectBLE = (devID: string) => {
+  const reconnectBLE = async (devID: string) => {
+
+    if(recon_count.current > MAX_RETRIES){
+      console.log("Connect - Max Retries reached!");
+
+      setAlHeader("Max Retries Reconnecting reached!");
+      setAlMsg("Please reconnect to Node manually!");
+      setShAlertCard(true);
+      // reset recon button and recon progress
+      setShReconProgr(false);
+      setShStopReconBtn(false);
+      setShowProgrBar(false);
+      // set the flag to stop reconnect
+      doReconnect.current = false;
+      // close DB connection
+      await DatabaseService.closeConnection();
+      return;
+    }
     
     recon_count.current++;
     console.log("Reconnect Tries: " + recon_count.current);
@@ -636,37 +705,27 @@ const Tab1: React.FC = () => {
 
     if (connFlag === false) {
       // show progress wheel
-      shReconProgr({
-        message: 'Reconnecting to Node...',
-        duration: 5000,
-      });
+      setShReconProgr(true);
 
       console.log("Recon Timer starts with: " + (recon_time.current / 1000) + " sec.");
 
       timerID_ref.current = setTimeout(async () => {
-
         console.log('Reconnect Timer, trying to reconnect');
-
-        await DatabaseService.getReconState().then(async (reconstate)=>{
-          if(reconstate) await connDev(devID);
-        }).catch((error)=>{
-          console.log("Error getting Recon State: " + error);
-        });
+        await connDev(devID);
         //if(recon_active.current === true) await connDev(devID);
       }, recon_time.current);
 
       // widen time if connect was again unsuccessful
-      if(recon_time.current >= 60000){
-
-        if(recon_time.current >= 600000) recon_time.current = 600000;
-
+      if(recon_time.current >= 12000){
+        recon_time.current = 12000;
       } else {
-        recon_time.current = recon_time.current * 2;
+        recon_time.current = recon_time.current + RECON_TIME;
       }
       console.log("Reconect Time set to: " + (recon_time.current / 1000) + " sec.");
-      
     }
   }
+
+
 
 
   // redirect to config page if unset node
@@ -677,12 +736,16 @@ const Tab1: React.FC = () => {
   }
 
 
+
+
   // disconnect function
   const doDisco = async (devID: string) => {
 
     manual_ble_disco.current = true;
-    console.log("man disco state: " + manual_ble_disco.current);
+    console.log("Connect Tab - Manual disco state: " + manual_ble_disco.current);
 
+    const newConnState = false;
+    setConnFlag(newConnState);
     // update BLE connected state in BLE Hook
     updateBLEConnected(false);
 
@@ -691,37 +754,76 @@ const Tab1: React.FC = () => {
       s.ble_connected = false;
     });
 
-    await BleClient.stopNotifications(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_RXCHAR);
-    await BleClient.disconnect(devID);
-    const newConnState = false;
-    setConnFlag(newConnState);
-    console.log('Disconnected from device', devID);
-
+    try {
+      await BleClient.stopNotifications(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_RXCHAR).then(async () => {
+        await BleClient.disconnect(devID).then(() => {
+          console.log('Disconnected from device ', devID);
+        });
+      });
+    } catch (error: any) {
+      console.error("Error on Disconnect: " + error.message);
+      // reboot the node if the callsign is not set. BLE Authentication Error. 
+      if(config_s.callSign === "XX0XXX-00" || config_s.callSign === ""){
+        // alert the user
+        setAlHeader("Please set your Callsign!");
+        setAlMsg("Rebooting Node to set BLE authentication!");
+        setShAlertCard(true);
+        console.log("Rebooting Node!");
+        sendTxtCmdNode("--reboot");
+      }
+    }
   }
 
-  // BLE Config Fin state
-  useEffect(()=>{
 
-    if(nodeConfFin){
+
+
+  // BLE Config Fin state
+  useEffect(() => {
+    if (nodeConfFin > 0) {
       console.log("Node Config Finished!");
       setShLoadConf(false);
 
-      // set state in store
-      BleConfigFinish.update(s => {
-        s.BleConfFin = false;
+      // get the current position from GPS and send the position to the node if unconfigured
+      getGpsLocation().then((res) => {
+        console.log("Connect - GPS Location: " + res.lat + " " + res.lon + " " + res.alt);
+        if (config_s.callSign === "XX0XXX-00" || config_s.callSign === "") {
+          console.log("Connect - Unconfigured Node!");
+          // give the node a default location from phone
+          if (config_s.lat === 0 && config_s.lon === 0) {
+            console.log("Connect - Setting Initial Position from Phone");
+            setCurrPosGPS(true);
+            // delay to give the node time to save the position
+            setTimeout(() => { }, 2000);
+          }
+        }
+
+      }).catch((error) => {
+        console.log("Connect - GPS Error: " + error);
       });
 
+      // send a timestamp to phone via dataview. 4byte unix timestamp in seconds
+      const ts = Math.trunc(Date.now() / 1000);
+      console.log("Connect - sending Timestamp to Phone: " + ts);
+      const len_ts = 6;
+      const ts_buffer = new ArrayBuffer(len_ts);
+      const view1 = new DataView(ts_buffer);
+      view1.setUint8(0, len_ts);
+      view1.setUint8(1, 0x20);
+      view1.setInt32(2, ts, true);
+      sendDV(view1, devID_s);
+
       // redirect to chat
-      if(isAppActive){
+      if (isAppActive && !setConfAl) {
         history.push("/chat");
       }
     }
   }, [nodeConfFin]);
 
 
+
+
   // when the update firmware trigger fires we dismiss the ShLoadConf and fire the alertcard
   useEffect(()=>{
-
     if(updtFW){
       console.log("Update Firmware Triggered!");
       setShLoadConf(false);
@@ -729,7 +831,8 @@ const Tab1: React.FC = () => {
       setAlMsg("Please update the Firmware to 4.30 or newer!");
       setShAlertCard(true);
       // do a manual disconnect
-      doDisco(devID_s);
+      const devid = ConfigObject.getBleDevId();
+      doDisco(devid);
 
       // set state in store
       UpdateFW.update(s => {
@@ -737,6 +840,8 @@ const Tab1: React.FC = () => {
       });
     }
   }, [updtFW]);
+
+
 
 
   // redirect to config page if unset node
@@ -749,6 +854,8 @@ const Tab1: React.FC = () => {
     if(isAppActive)
       history.push("/settings");
   }
+
+
 
 
   // redirect to chat when config is set
@@ -768,33 +875,33 @@ const Tab1: React.FC = () => {
 
 
 
+
   // handle connect disconnect on the buttons
-  const handleBtn = (devIDBtn:string) => {
+  const handleBtn = async (devIDBtn:string) => {
 
     if(!connFlag) {
-      connDev(devIDBtn);
+      await connDev(devIDBtn);
     } else {
-      doDisco(devID_s);
-      if(devIDBtn !== devID_s){
-        connDev(devIDBtn);
-      }
+      await doDisco(devID_s).then(() => {
+        console.log("Disco done at handleBtn!");
+        if(devIDBtn !== devID_s){
+          setTimeout(async () => {
+            await connDev(devIDBtn);
+          }, 1500);
+        }
+      });
     }
   }
 
 
   // handle reset reconnect
   const handleReconActive = (state:boolean) => {
-
     console.log("Stop Recon Button pressed. State: " + state);
 
-    DatabaseService.setReconState(0);
-
     if(timerID_ref.current !== null) clearTimeout(timerID_ref.current);
-
-    dismissReconProgr();
+    setShReconProgr(false);
     setShowProgrBar(false);
     setShStopReconBtn(false);
-
   }
 
   
@@ -819,7 +926,7 @@ const Tab1: React.FC = () => {
             isOpen={setConfAl}
             onDidDismiss={() => redirectConfig()}
             header="Unconfigured Node!"
-            message="Please set Callsign and Position!"
+            message="Please set Callsign etc. and scroll to Save Settings button!"
             buttons={[
               {
                 text: "OK",
@@ -854,6 +961,13 @@ const Tab1: React.FC = () => {
             onDidDismiss={() => setShLoadConf(false)}
             message={'Loading Config from node. Please wait...'}
             duration={20000}  // Duration in milliseconds, adjust as needed
+          />
+
+          <IonLoading
+            isOpen={shReconProgr}
+            onDidDismiss={() => setShReconProgr(false)}
+            message={'Reconnecting to node. Please wait...'}
+            duration={3000}  // Duration in milliseconds, adjust as needed
           />
 
           <div id="spacer-progress"></div>

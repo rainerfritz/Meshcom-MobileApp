@@ -49,6 +49,7 @@ import DatabaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
 import BleConfigFinish from '../store/BLEConfFin';
 import UpdateFW from '../store/UpdtFW';
+import WifiSettingsStore from '../store/WifiSettings';
 
 
 export function useMSG() {
@@ -293,6 +294,7 @@ export function useMSG() {
 
                     // ignore the timestamp messages
                     if(msg_text_.startsWith("{CET}")){
+                        console.log("Discarding Timestamp Message from Lora Network Server!");
                         return
                     }
 
@@ -1505,12 +1507,6 @@ export function useMSG() {
                                 console.log("GPS Data received!");
                                 const gps_data: GpsData = JSON.parse(json_str);
 
-                                // check if one of the fields is undefined. 
-                                if (!checkJSON(gps_data)) {
-                                    console.log("ERROR: JSON Data incomplete!");
-                                    break;
-                                }
-
                                 // PRINT ALL GPS DATA
                                 const lat = gps_data.LAT;
                                 console.log("Lat: " + lat);
@@ -1599,17 +1595,9 @@ export function useMSG() {
                                 console.log("WX Data received!");
                                 const wx_data: WxData = JSON.parse(json_str);
 
-                                // check if one of the fields is undefined.
-                                if (!checkJSON(wx_data)) {
-                                    console.log("ERROR: JSON Data incomplete!");
-                                    break;
-                                }
-
                                 const temp = wx_data.TEMP;
                                 console.log("Temp: " + temp);
                                 console.log("TOUT: " + wx_data.TOUT);
-
-
 
                                 WxDataStore.update(s => {
                                     s.wxData = wx_data;
@@ -1630,12 +1618,6 @@ export function useMSG() {
 
                                 console.log("Info Data received!");
                                 const info_data: InfoData = JSON.parse(json_str);
-
-                                // check if one of the fields is undefined.
-                                if (!checkJSON(info_data)) {
-                                    console.log("ERROR: JSON Data incomplete!");
-                                    break;
-                                }
 
                                 // update Node Info Store
                                 NodeInfoStore.update(s => {
@@ -1742,11 +1724,20 @@ export function useMSG() {
 
                             case "SW": {
                                 console.log("Wifi Settings received!");
-                                //{"TYP":"SW", "SSID":"string up to 30 chars?","PW":"also a long string"}
+                                //{"TYP":"SW", "SSID":"string up to 30 chars?","PW":"also a long string", "IP":"192.168.1.123", "GW":"192.168.1.1", "DNS":"192.168.1.1", "SUB":"255.255.255.0"}
 
                                 const wifi_settings:WifiSettings = json_data;
 
                                 console.log("Wifi SSID: " + wifi_settings.SSID);
+                                console.log("Wifi IP: " + wifi_settings.IP);
+                                console.log("Wifi GW: " + wifi_settings.GW);
+                                console.log("Wifi DNS: " + wifi_settings.DNS);
+                                console.log("Wifi SUB: " + wifi_settings.SUB);
+
+                                // update config store
+                                WifiSettingsStore.update(s => {
+                                    s.wifiSettings = wifi_settings;
+                                });
 
                                 ConfigStore.update(s => {
                                     s.config.wifi_ssid = wifi_settings.SSID;
@@ -1878,7 +1869,7 @@ export function useMSG() {
                                 console.log("Config Finished received!");
                                 // set the config finished flag in the store
                                 BleConfigFinish.update(s => {
-                                    s.BleConfFin = true;
+                                    s.BleConfFin = Date.now();
                                 });
                                 
                                 break;

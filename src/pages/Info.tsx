@@ -252,7 +252,7 @@ const Info: React.FC = () => {
                 <div>Humidity: {wx_s.HUM.toFixed(1)} %</div>
                 <div>Press: {wx_s.PRES.toFixed(2)} hPa</div>
                 <div>QNH: {wx_s.QNH.toFixed(2)} hPa</div>
-                <div>Gas Res: {wx_s.GAS.toFixed(1)} kOhm</div>
+                <div>GasRes: {wx_s.GAS.toFixed(1)} k&Omega;</div>
                 <div>eCO2: {wx_s.CO2.toFixed(1)} ppm</div>
                 <div>Alt Press: {wx_s.ALT.toFixed(0)} m</div>
               </div>
@@ -263,7 +263,7 @@ const Info: React.FC = () => {
                 <div>MCU811: {SensorSettings_s[811] ? 'ON' : 'OFF'}</div>
                 <div>LPS: {SensorSettings_s.LPS33 ? 'ON' : 'OFF'}</div>
                 <div>OneWire: {SensorSettings_s.OW ? 'ON' : 'OFF'}</div>
-                <div>OneWire PIN: {SensorSettings_s.OWPIN}</div>
+                <div>OneWire Pin: {SensorSettings_s.OWPIN}</div>
               </div>
             </div>
           </IonCardContent>
@@ -271,12 +271,10 @@ const Info: React.FC = () => {
 
 
         <div className="info-box">
-
           <div>
             <div>Node FW: {config_s.fw_ver}</div>
             <div>App Version: 4.13</div>
           </div>
-
         </div>
 
       </IonContent>

@@ -38,3 +38,5 @@ export const getBLEconnStore = createSelector(getState, state => state.ble_conne
 export const getNodeInfoStore = createSelector(getState, state => state.infoData);
 
 export const getBleConfFinish = createSelector(getState, state => state.BleConfFin);
+
+export const getWifiSettings = createSelector(getState, state => state.wifiSettings);

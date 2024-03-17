@@ -7,7 +7,7 @@ import { Geolocation } from '@capacitor/geolocation';
 import './Settings.css';
 import { useStoreState } from 'pullstate';
 import { DevIDStore } from '../store';
-import { getDevID, getSensorSettings, getBLEconnStore, getConfigStore, getScanResult, getNodeInfoStore } from '../store/Selectors';
+import { getDevID, getSensorSettings, getBLEconnStore, getConfigStore, getScanResult, getNodeInfoStore, getBleConfFinish, getWifiSettings } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
 import { ConfType, InfoData, SensorSettings } from '../utils/AppInterfaces';
 import { RangeValue } from '@ionic/core';
@@ -23,7 +23,10 @@ import BLEconnStore from '../store/BLEconnected';
 import ShouldConfStore from '../store/ShouldConfNode';
 import DataBaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
-
+import BleConfigFinish from '../store/BLEConfFin';
+import AppActiveState from '../store/AppActive';
+import WifiSettingsStore from '../store/WifiSettings';
+import { WifiSettings } from '../utils/AppInterfaces';
 
 
 const Tab2: React.FC = () => {
@@ -51,15 +54,23 @@ const Tab2: React.FC = () => {
   // BLE connected from store
   const ble_connected:boolean = useStoreState(BLEconnStore, getBLEconnStore);
 
+  // wifii settings from store
+  const wifiSettings_s:WifiSettings = useStoreState(WifiSettingsStore, getWifiSettings);
+
   // sensor settings from store
-  const sensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, getSensorSettings);
+  //const sensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, getSensorSettings);
 
   // trigger if we have an unconfiuired node
-  const shouldConf = useStoreState(ShouldConfStore, s => s.shouldConf);
+  //const shouldConf = useStoreState(ShouldConfStore, s => s.shouldConf);
 
   // NodeInfos
-  const nodeInfo:InfoData = useStoreState(NodeInfoStore, getNodeInfoStore);
-  
+  //const nodeInfo:InfoData = useStoreState(NodeInfoStore, getNodeInfoStore);
+
+  // Trigger if BLE Config is finished
+  //const confFin = BleConfigFinish.useState(s => s.BleConfFin);
+  // get current AppState
+  //const isAppActive = AppActiveState.useState(s => s.active);
+
 
   // remember which setting changed to send it to node
   const call_changed = useRef<boolean>(false);
@@ -238,26 +249,9 @@ const Tab2: React.FC = () => {
     // set node utc offset from config
     console.log("Node UTC Offset: " + config_s.node_utc_offset);
     node_utc_offset.current = config_s.node_utc_offset;
-    // update gps store
-    /*GpsDataStore.update(s => {
-      s.gpsData.UTCOFF = config_s.node_utc_offset;
-    });*/
 
   }, [config_s]);
 
-
-
-  // if we have an unconfigured node we send the position from phone to node
-  useEffect(()=>{
-    if(shouldConf && config_s.callSign === "XX0XXX-00" || config_s.callSign === "" && ble_connected){
-      console.log("Settings - Unconfigured Node!");
-      // give the node a default location from phone
-      if(config_s.lat === 0 && config_s.lon === 0){
-        console.log("Settings - Setting Initial Position from Phone");
-        setCurrentPosGPS(true);
-      }
-    }
-  }, [shouldConf]);
 
 
 
@@ -274,6 +268,7 @@ const Tab2: React.FC = () => {
   * 
    * Msg ID:
    * 0x10 - Hello Message (followed by 0x20, 0x30)
+   * 0x20 - Timestamp from phone
    * 0x50 - Callsign
    * 0x55 - Wifi SSID and PW
    * 0x70 - Latitude
@@ -1253,7 +1248,9 @@ const Tab2: React.FC = () => {
               <div>APRS Comment: {aprs_cmt_store}</div>
             </div>
             <div className='settings_cont'>
-              <div>Wifi SSID: {config_s.wifi_ssid}</div>
+              <div>Wifi SSID: {wifiSettings_s.SSID}</div>
+              <div>Wifi IP: {wifiSettings_s.IP}</div>
+              <div>Wifi GW: {wifiSettings_s.GW}</div>
             </div>
           </div>
 
@@ -1459,36 +1456,7 @@ const Tab2: React.FC = () => {
             </div>
             {shAdvSetting ? <>
 
-              <div id="spacer-advTop" />
-
-              <div className='setting_wrapper'>
-              <IonText id="wifi-text">MeshCom Presets</IonText><br />
-              <div className='mt-3 mb-3'>Frequency:</div>
-              <IonItem>
-                <IonSelect aria-label="MeshCom Frequency" 
-                interface="action-sheet" 
-                placeholder="MeshCom Frequency" 
-                interfaceOptions={customActionSheetOptions}
-                value={config_s.frequency.toString()}
-                onIonChange={(ev)=>freqPresetChanged(ev.detail.value)}>
-                  <IonSelectOption value="433.175">EU 433.175 MHz</IonSelectOption>
-                  <IonSelectOption value="439.9125">UK 439.9125 MHz</IonSelectOption>
-                </IonSelect>
-              </IonItem>
-
-              <div className='mt-3 mb-3'>Bandwidth:</div>
-              <IonItem>
-                <IonSelect aria-label="MeshCom BW" 
-                interface="action-sheet" 
-                placeholder="MeshCom BW" 
-                interfaceOptions={customActionSheetOptions}
-                
-                onIonChange={(ev)=>bwPresetChanged(ev.detail.value)}>
-                  <IonSelectOption value="250">250 kHz</IonSelectOption>
-                  <IonSelectOption value="125">125 kHz</IonSelectOption>
-                </IonSelect>
-              </IonItem>
-              </div>
+              
 
               <div id="spacer-advTop" />
               <IonButton id="settings_button" fill='outline' slot='start' onClick={DataBaseService.clearPositions}>Clear received nodes </IonButton>

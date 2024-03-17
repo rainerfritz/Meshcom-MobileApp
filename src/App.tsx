@@ -60,11 +60,6 @@ const Appl: React.FC = () => {
   useEffect(() => {
     // init DB
     initDB();
-
-    AppActiveState.update(s => {
-      s.active = true;
-    });
-
     // check wether app is in background or not
     App.addListener('appStateChange', ({ isActive }) => {
       console.log('App state changed. Is active?', isActive);
@@ -72,10 +67,8 @@ const Appl: React.FC = () => {
       const newAppstate = isActive;
       AppActiveState.update(s => {
         s.active = newAppstate;
-
       });
     });
-
   }, []);
 
 

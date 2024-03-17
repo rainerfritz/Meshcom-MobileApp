@@ -1,7 +1,7 @@
 import {Store} from "pullstate";
 
 const AppActiveState = new Store({
-    active:false
+    active:true
 })
 
 export default AppActiveState

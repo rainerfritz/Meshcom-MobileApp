@@ -112,6 +112,7 @@ const NodeMap = () => {
       setZoom(14);
       firstrun.current = false;
       if(!track_active.current && ble_connected && app_active_s && currConfig.gps_on === true){
+        console.log("Map Tab: Setting Track Map on");
         track_map.current = true;
         setTrackMapBtn(true);
       }
