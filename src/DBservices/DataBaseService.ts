@@ -20,6 +20,7 @@ class DatabaseService {
     static isInit = false;
     static MAX_AGE_TXT_MSG = 5; // 5 days
     static MAX_AGE_POS = 7; // 7 days
+    static cached_positions: PosType[] = [];
     
 
     static async initializeDatabase() {
@@ -478,6 +479,10 @@ class DatabaseService {
             console.log('DB Clearing Positions');
             try {
                 await DatabaseService.db.execute('DELETE FROM Positions;');
+                // update the store
+                PosiStore.update(s => {
+                    s.posArr = [];
+                });
             } catch (error) {
                 console.error('Error clearing Positions:', error);
             }

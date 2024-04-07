@@ -50,14 +50,10 @@ import NodeInfoStore from '../store/NodeInfoStore';
 import BleConfigFinish from '../store/BLEConfFin';
 import UpdateFW from '../store/UpdtFW';
 import WifiSettingsStore from '../store/WifiSettings';
+import MheardStaticStore from '../utils/MheardStaticStore';
 
 
 export function useMSG() {
-
-    //const {addMSG, addPOS, addCONF, ackTxtMsg, addMheard, getPos, getConf} = useStorage();
-
-    // useSQLiteDB hook
-    //const { performSQLAction } = useSQLiteDB();
 
 
     // If you introduce a new message flag, add it to phoncommands.cpp in the sendToPhone() function in the node firmware!
@@ -638,9 +634,6 @@ export function useMSG() {
                             console.log("APRS Comment: " + aprs_cmt);
                         }
                     }
-
-                    
-
 
                     // Process LAT / LON and convert to Degree with Decimals
 
@@ -1536,6 +1529,9 @@ export function useMSG() {
                                     gps_data.DATE = DateTime_gps;
                                 }
 
+                                // set the static config object
+                                ConfigObject.setOwnPosition(gps_data);
+
                                 // update config store
                                 ConfigStore.update(s => {
                                     s.config.lat = +gps_data.LAT.toFixed(POS_DECIMALS);
@@ -1574,7 +1570,9 @@ export function useMSG() {
                                     }
                                 });
                                 
-                                if(db_pos !== null && db_pos !== undefined){
+                                const curr_call = ConfigObject.getConf().CALL;
+
+                                if(db_pos !== null && db_pos !== undefined && curr_call !== "" && curr_call !== "XX0XXX-00"){
                                     console.log("MHANDLER: Update Position in DB");
                                     db_pos.lat = +gps_data.LAT.toFixed(POS_DECIMALS);
                                     db_pos.lon = +gps_data.LON.toFixed(POS_DECIMALS);
@@ -1636,6 +1634,7 @@ export function useMSG() {
                                 // show set baseconfig alert on unset node
                                 if (callsign === "" || callsign === "XX0XXX-00") {
                                     console.log("Mhandler - Callsign not set!");
+                                    //redirect to settings tab
                                     ShouldConfStore.update(s => {
                                         s.shouldConf = true;
                                     });
@@ -1850,6 +1849,38 @@ export function useMSG() {
                                     mheard.TIME = time;
                                 }
 
+                                // if distance is not set from node, check if position is cached in MheardStaticStore and calc distance
+                                let calced_dist = 0;
+
+                                if(mheard.DIST === 0){
+                                    const cachedPos = MheardStaticStore.getCachedPos(mheard.CALL);
+                                    if(cachedPos.length === 1){
+                                        console.log("MHANDLER: Mheard Cached Position found for: " + mheard.CALL);
+                                        console.log("MHANDLER: Mheard Cached Pos: " + JSON.stringify(cachedPos));
+                                        // calculate distance
+                                        calced_dist = calcDistance(cachedPos[0]);
+                                        console.log("MHANDLER: Mheard Calced Distance: " + calced_dist);
+                                    }
+                                    if (cachedPos.length === 0){
+                                        console.log("MHANDLER: Mheard no Cached Position found for: " + mheard.CALL);
+                                        // get it from the DB
+                                        await DatabaseService.getPos(mheard.CALL).then((pos: PosType | null) => {
+                                            if (pos !== null && pos !== undefined) {
+                                                MheardStaticStore.setCachedPos(pos);
+                                                // calculate distance
+                                                calced_dist = calcDistance(pos);
+                                                console.log("MHANDLER: Mheard Calced Distance: " + calced_dist);
+                                            } else {
+                                                console.log("MHANDLER: Mheard Position not found in DB!");
+                                            }
+                                        });
+                                    }
+                                }
+
+                                if (calced_dist !== 0 && mheard.DIST === 0) {
+                                    mheard.DIST = calced_dist;
+                                }
+
                                 const new_mheard:MheardType = {
                                     mh_timestamp:now_timestamp,
                                     mh_nodecall:node_call_ref.current,
@@ -1939,7 +1970,36 @@ export function useMSG() {
         return true;
     }
 
+    // calculate the distance between two nodes if the node does not provide the distance
+    const calcDistance = (pos:PosType): number => {
 
+        // get the own position
+        const own_lat = ConfigObject.getOwnPosition().LAT;
+        const own_lon = ConfigObject.getOwnPosition().LON;
+
+        if (own_lat === 0 || own_lon === 0) {
+            console.log("MHANDLER: Own Position not set!");
+            return 0;
+        }
+
+        // calculate the distance
+        let radlat1 = Math.PI * pos.lat / 180;
+        let radlat2 = Math.PI * own_lat / 180;
+        let theta = pos.lon - own_lon;
+        let radtheta = Math.PI * theta / 180;
+        let distance = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
+        if (distance > 1) {
+            distance = 1;
+        }
+        distance = Math.acos(distance);
+        distance = distance * 180 / Math.PI;
+        distance = distance * 60 * 1.1515;
+        distance = distance * 1.609344;
+
+        distance = Math.round(distance * 100) / 100;
+
+        return distance;
+    }
 
     return {
         parseMsg,

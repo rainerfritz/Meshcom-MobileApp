@@ -18,6 +18,7 @@ import BLEconnStore from '../store/BLEconnected';
 import {useBLE} from '../hooks/BleHandler';
 import DatabaseService from '../DBservices/DataBaseService';
 import ConfigObject from '../utils/ConfigObject';
+import { testPosis } from '../utils/TestMsgsPosis';
 
 
 
@@ -38,6 +39,8 @@ const NodeMap = () => {
 
   // store coordinates of all nodes received
   const positions = PosiStore.useState(s => s.posArr);
+  // for testing insert Positions here
+  //const positions = testPosis;
 
   // show markers
   const [showMarkers, setShowMarkers] = useState<boolean>(false);
@@ -45,6 +48,7 @@ const NodeMap = () => {
   const markerColor = "#3578e5";
   const markerColor_mh = "green";
   const markerColor_own = "purple";
+  const markerColor_xcall = "#3ba6db";
 
 
   const [ showCurrentPointInfo, setShowCurrentPointInfo ] = useState(false);
@@ -475,13 +479,23 @@ const NodeMap = () => {
   const setMarkerColor = (pos_call:string):string => {
 
     let color = "";
+    pos_call = pos_call.toUpperCase();
+    const regex = /^OE[1-9]X[A-Z]{1,2}-\d{1,2}$/; // Austrian Club Station or Repeater site
 
     if(currConfig.callSign === pos_call) color = markerColor_own;
     else if (mheard_calls.current.includes(pos_call)) color = markerColor_mh;
+    else if (regex.test(pos_call)) color = markerColor_xcall;
     else color = markerColor;
 
     return color;
   }
+
+
+  // callback func for MapOverlay Component to close the Overlay after DM button is hit
+  const onCloseOverlay = () => {
+    setShowCurrentPointInfo(false);
+  }
+
 
 
   return (
@@ -529,17 +543,18 @@ const NodeMap = () => {
               <Marker
                 key={i}
                 onClick={e => handleShowMarkerInfo(e, i, pos.callSign, pos.lat, pos.lon, pos.alt, pos.bat, pos.hw, pos.pressure, pos.humidity, 
-                  pos.temperature, pos.qnh, pos.timestamp, pos.comment, pos.temp_2, pos.co2, pos.gas_res, pos.alt_press)}
+                  pos.temperature, pos.qnh, pos.timestamp, pos.comment, pos.temp_2, pos.co2, pos.gas_res, pos.alt_press )}
                 width={50}
                 anchor={[pos.lat, pos.lon]}
                 color={setMarkerColor(pos.callSign)} />
             )) : <></>}
 
             {showCurrentPointInfo &&
-              <Overlay anchor={[currentPoint.latitude, currentPoint.longitude]} offset={[110, 283]}>
+              <Overlay anchor={[currentPoint.latitude, currentPoint.longitude]} offset={[110, 340]}>
                 <MapOverlay callSign={markerInfo.call_} lat={markerInfo.lat_} lon={markerInfo.lon_} alt={markerInfo.alt_} bat={markerInfo.bat_}
                   hw={markerInfo.hw_} pressure={markerInfo.press_} humidity={markerInfo.hum_} temperature={markerInfo.temp_} qnh={markerInfo.qnh_} timestamp={markerInfo.timestamp_} 
-                  comment={markerInfo.comment_} temp_2={markerInfo.temp_2_} co2={markerInfo.co2_} gas_res={markerInfo.gas_res_} alt_press={markerInfo.alt_press_}/>
+                  comment={markerInfo.comment_} temp_2={markerInfo.temp_2_} co2={markerInfo.co2_} gas_res={markerInfo.gas_res_} alt_press={markerInfo.alt_press_}
+                  onCloseOverlay={onCloseOverlay}/>
               </Overlay>
             }
             

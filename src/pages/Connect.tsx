@@ -1,5 +1,5 @@
 import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, 
-  IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, useIonLoading, useIonViewWillEnter, IonLoading} from '@ionic/react';
+  IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, IonLoading} from '@ionic/react';
 
 import './Connect.css';
 
@@ -112,7 +112,7 @@ const Tab1: React.FC = () => {
   const history = useHistory();
 
   // platform detection
-  let pltfrm = "";
+  const pltfrm = useRef<string>("");
 
   // alertcard handling
   const [shAlertCard, setShAlertCard] = useState<boolean>(false);
@@ -152,6 +152,8 @@ const Tab1: React.FC = () => {
     }
   }
 
+  
+
   // on app mount we ask for local notification permission. Detect platform, DB init and clear old notifications
   useEffect(()=>{
 
@@ -162,35 +164,35 @@ const Tab1: React.FC = () => {
 
     if(isPlatform('ios')){
       console.log("Running on iOS");
-      pltfrm = "ios";
+      pltfrm.current = "ios";
     }
 
     if(isPlatform('android')){
       console.log("Running on Android");
-      pltfrm = "android";
+      pltfrm.current = "android";
     }
 
     if(isPlatform('pwa')){
       console.log("Running on pwa");
-      pltfrm = "pwa";
+      pltfrm.current = "pwa";
     }
 
     if(isPlatform('mobileweb')){
       console.log("Running on mobileweb");
-      pltfrm = "mobileweb";
+      pltfrm.current = "mobileweb";
     }
 
     if(isPlatform('desktop')){
       console.log("Running on desktop");
-      pltfrm = "desktop";
+      pltfrm.current = "desktop";
     }
 
     // update pullstate platform
     PlatformStore.update(s => {
-      s.platformState = pltfrm;
+      s.platformState = pltfrm.current;
     });
 
-    if(pltfrm === "android"){
+    if(pltfrm.current === "android"){
       // check if location services are enabled
       checkLocSettingAndroid();
     }
@@ -208,35 +210,15 @@ const Tab1: React.FC = () => {
 
 
   // actions when app goes or comes from background
-  /*useEffect(() => {
+  useEffect(() => {
 
-    if (didrun.current = true) {
+    if (didrun.current) {
       console.log("Connect - App active: " + isAppActive);
       console.log("Recon Count: " + recon_count.current);
 
-      DatabaseService.getReconState().then((reconstate) => {
-
-        console.log("ReconState in DB: " + reconstate);
-
-        if (reconstate === 1) {
-
-          console.log("Recon active, coming from Background");
-          console.log("Recon Timer: " + recon_time.current);
-          console.log("Recon Count: " + recon_count.current);
-          console.log("Connect Flag: " + connFlag);
-
-          if (connFlag === false) {
-            if (isAppActive) {
-              history.push("/connect");
-            }
-            reconnectBLE(devID_s);
-          }
-          //clearTimeout(chat_timer);
-        }
-      });
     }
 
-  }, [isAppActive]);*/
+  }, [isAppActive]);
 
 
 
@@ -259,10 +241,10 @@ const Tab1: React.FC = () => {
     let scan_res: ScanRes[] = [];
 
     try {
-      if (pltfrm === "android") {
+      if (pltfrm.current === "android") {
         await BleClient.initialize({ androidNeverForLocation: true });
       }
-      if (pltfrm === "ios") {
+      if (pltfrm.current === "ios") {
         await BleClient.initialize();
       }
 
@@ -274,7 +256,7 @@ const Tab1: React.FC = () => {
         // alert that BLE is not enabled - iOS comes with alert message, check android
         console.log("BLE not enabled on phone!");
 
-        if (pltfrm === "android") {
+        if (pltfrm.current === "android") {
           setAlHeader("Bluetooth is not enabled!");
           setAlMsg("Please enable BT");
           setShAlertCard(true);
@@ -282,7 +264,7 @@ const Tab1: React.FC = () => {
       }
 
       // on android we need to have location services enabled to work with BLE
-      if (pltfrm === "android") {
+      if (pltfrm.current === "android") {
         const loc_enabled = await BleClient.isLocationEnabled();
 
         if (!loc_enabled) {
@@ -374,7 +356,7 @@ const Tab1: React.FC = () => {
 
       }, 5000);
     } catch (error) {
-      console.log(error);
+      console.error(error);
     }
   }
 
@@ -401,7 +383,7 @@ const Tab1: React.FC = () => {
       }
 
       // make a disconnect before connecting when on android
-      if(pltfrm === "android"){
+      if(pltfrm.current === "android"){
         await BleClient.initialize();
         await BleClient.disconnect(devID);
       }
@@ -409,37 +391,8 @@ const Tab1: React.FC = () => {
       //connect to device
       await BleClient.connect(devID, (deviceId) => onDisconnect(deviceId)).then(() => {
         console.log('Connect resolved successful with: ', devID);
-      }).catch((error) => {
-        console.error("Connect Error on connect attempt: " + error.message);
-        setShowProgrBar(false);
-        setShReconProgr(false);
-
-        const errmsg_str: string = error.message;
-
-        if (errmsg_str.includes("removed pairing")) {
-          console.log("Error Pairing: " + errmsg_str);
-          setShowProgrBar(false);
-          setShReconProgr(false);
-          setAlHeader("Error Pairing! Remove Node from BLE Devices after Erase/Flash");
-          setAlMsg(errmsg_str);
-          setShAlertCard(true);
-          return;
-        }
-        if(errmsg_str.includes("timeout")){
-
-          if(config_s.callSign === "XX0XXX-00"){
-  
-            console.log("Error Connecting: " + errmsg_str);
-            setShowProgrBar(false);
-            setShReconProgr(false);
-            setAlHeader("Error Connection! Remove Node from BLE Devices after Erase/Flash");
-            setAlMsg(errmsg_str);
-            setShAlertCard(true);
-            return;
-          }
-        }
       });
-
+      
       //get services of the device
       const services = await BleClient.getServices(devID);
 
@@ -462,15 +415,15 @@ const Tab1: React.FC = () => {
         RAK_BLE_UART_SERVICE,
         RAK_BLE_UART_RXCHAR,
         (value) => {
-          parseMsg(value).then((res) => {
+          parseMsg(value).then(async (res) => {
             if (res !== undefined && 'msgTXT' in res) {
               // escape all quotation marks
               console.log("Connect: Text Message: " + res.msgTXT);
-              DatabaseService.writeTxtMsg(res);
+              await DatabaseService.writeTxtMsg(res);
             } 
             if (res !== undefined && 'temperature' in res) {
                 console.log("Connect: Pos Msg from: " + res.callSign);
-                DatabaseService.writePos(res);
+                await DatabaseService.writePos(res);
             }
             if (res !== undefined && 'mh_nodecall' in res) {
               console.log("Connect: Mheard Node Call: " + res.mh_nodecall);
@@ -594,10 +547,11 @@ const Tab1: React.FC = () => {
       setShReconProgr(false);
       
       // try to reconnect
-      if(doReconnect.current === true){
+      // !! DISABLED till new BLE Service and Reconnect is implemented
+      /*if(doReconnect.current === true){
         console.log("Reconnecting to node!");
         reconnectBLE(devID);
-      }
+      }*/
 
       // when we land here post the error to the user
       /*setAlHeader("Error Connecting to Node!");
@@ -616,6 +570,8 @@ const Tab1: React.FC = () => {
 
     // set Flag in BLE Hook
     updateBLEConnected(false);
+    // stop the load conf indicator (disco comes always at connect after fresh flash)
+    setShLoadConf(false);
 
     // update BLE connected state in store
     BLEconnStore.update(s => {
@@ -633,8 +589,13 @@ const Tab1: React.FC = () => {
     setShowProgrBar(false);
 
     // BLE disconnect was not manually triggered - Reconnect
-    if(manual_ble_disco.current === false && (recon_count.current <= MAX_RETRIES)){
+    // !! DISABLED till new BLE Service and Reconnect is implemented
+    /*if(manual_ble_disco.current === false && (recon_count.current <= MAX_RETRIES)){
         console.log("BLE client disconnected without Useraction!");
+        console.log("Reconnect Count: " + recon_count.current);
+        console.log("App Active: " + isAppActive);
+        console.log("Platform: " + pltfrm.current);
+
         // initial reconnect trigger
         if(connFlag === false){
           console.log("Setting Recon Active true");
@@ -643,11 +604,11 @@ const Tab1: React.FC = () => {
             setShStopReconBtn(true);
             reconnectBLE(deviceId);
           }
-          if(!isAppActive && pltfrm === "ios"){
+          if(!isAppActive && pltfrm.current === 'ios'){
             doReconnect.current = true;
             reconnectBLE(deviceId);
           }
-          if(!isAppActive && pltfrm === "android"){
+          if(!isAppActive && pltfrm.current ==='android'){
             setAlHeader("Node Disconnected in Background!");
             setAlMsg("Please reconnect to Node manually!");
             setShAlertCard(true);
@@ -664,13 +625,21 @@ const Tab1: React.FC = () => {
     } else {
       // close DB connection
       await DatabaseService.closeConnection();
-    }
+    }*/
 
-    manual_ble_disco.current = false;
+    await DatabaseService.closeConnection();
     // reset ble_conf_finish state
     BleConfigFinish.update(s => {
       s.BleConfFin = 0;
     });
+
+    // alert the user that it disconnected if not manually
+    if ( manual_ble_disco.current === false) {
+      setShDiscoCard(true);
+    }
+
+    // reset manual disco flag
+    manual_ble_disco.current = false;
   }
 
 
@@ -846,7 +815,6 @@ const Tab1: React.FC = () => {
 
   // redirect to config page if unset node
   const redirectConfig = () => {
-
     ShouldConfStore.update(s => {
       s.shouldConf = false;
     });
@@ -860,7 +828,6 @@ const Tab1: React.FC = () => {
 
   // redirect to chat when config is set
   useEffect(()=>{
-
     if (shRedirChat) {
       console.log("Redirecting to Chat");
 
@@ -878,7 +845,6 @@ const Tab1: React.FC = () => {
 
   // handle connect disconnect on the buttons
   const handleBtn = async (devIDBtn:string) => {
-
     if(!connFlag) {
       await connDev(devIDBtn);
     } else {
@@ -941,7 +907,7 @@ const Tab1: React.FC = () => {
             isOpen={shDiscoCard}
             onDidDismiss={() => redirectConnect()}
             header="BLE Disconnect"
-            message="Node disconnected!"
+            message="Node disconnected! Auto-Reconnect is disabled currently."
             buttons={[
               {
                 text: "OK"

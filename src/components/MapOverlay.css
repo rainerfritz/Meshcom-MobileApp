@@ -1,0 +1,13 @@
+
+.button-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-top: 10px;
+  
+}
+.button-container ion-button {
+  flex-basis: calc(35% - 5px);
+  margin-right: 7px;
+  margin-bottom: 10px;
+}

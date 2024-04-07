@@ -1,12 +1,16 @@
 import { MheardType } from "./AppInterfaces";
 import MhStore from "../store/MheardStore";
+import { PosType } from "./AppInterfaces";
+
 
 class MheardStaticStore {
 
     mhArr_s:MheardType [];
+    cachedPos:PosType [];
 
     constructor(){
         this.mhArr_s = [];
+        this.cachedPos = [];
     }
 
     getMhArr(){
@@ -55,6 +59,15 @@ class MheardStaticStore {
                 });
             });
         }
+    }
+
+    setCachedPos(pos:PosType){
+        this.cachedPos.push(pos);
+    }
+
+    getCachedPos(mh_callSign:string){
+        const filtered_pos = this.cachedPos.filter(pos => pos.callSign === mh_callSign);
+        return filtered_pos;
     }
 }
 

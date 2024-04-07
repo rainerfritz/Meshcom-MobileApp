@@ -661,13 +661,17 @@ const Tab2: React.FC = () => {
         } else {
 
           // check if we have a wifi pw set
-          if (config_s.wifi_pwd.length > 0 && config_s.wifi_pwd !== "none") {
-            cmd_ = "--gateway on";
+          if (config_s.hw !== "RAK4631") {
+            if (config_s.wifi_pwd.length > 0 && config_s.wifi_pwd !== "none") {
+              cmd_ = "--gateway on";
+            } else {
+              console.log("Wifi PW not set! GW Mode not possible!");
+              setAlHeader("Error!");
+              setAlMsg("Wifi Settings not configured!");
+              setShAlertCard(true);
+            }
           } else {
-            console.log("Wifi PW not set! GW Mode not possible!");
-            setAlHeader("Error!");
-            setAlMsg("Wifi Settings not configured!");
-            setShAlertCard(true);
+            cmd_ = "--gateway on";
           }
         }
         break;
@@ -1184,7 +1188,17 @@ const Tab2: React.FC = () => {
     }
   }
 
-
+  // handle clear positions - we want to get own position from node afterwords
+  const deletePositions = () => {
+    console.log("Delete Positions");
+    DataBaseService.clearPositions().then(() => {
+      console.log("Request own position from node");
+      // wait a bit and request own position from node
+      setTimeout(() => {
+        sendTxtCmdNode("--pos");
+      }, 1000);
+    });
+  }
 
 
 
@@ -1248,9 +1262,15 @@ const Tab2: React.FC = () => {
               <div>APRS Comment: {aprs_cmt_store}</div>
             </div>
             <div className='settings_cont'>
+              {config_s.hw != "RAK4631" ? <>
               <div>Wifi SSID: {wifiSettings_s.SSID}</div>
               <div>Wifi IP: {wifiSettings_s.IP}</div>
               <div>Wifi GW: {wifiSettings_s.GW}</div>
+              </>:<> 
+              <div>ETH IP: {wifiSettings_s.IP}</div>
+              <div>ETH GW: {wifiSettings_s.GW}</div>
+              </>}
+              
             </div>
           </div>
 
@@ -1459,7 +1479,7 @@ const Tab2: React.FC = () => {
               
 
               <div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={DataBaseService.clearPositions}>Clear received nodes </IonButton>
+              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>deletePositions()}>Clear received nodes </IonButton>
               <div id="spacer-advTop" />
               <IonButton id="settings_button" fill='outline' slot='start' onClick={DataBaseService.clearTextMessages}>Clear Text Msgs </IonButton>
               <div id="spacer-advTop" />

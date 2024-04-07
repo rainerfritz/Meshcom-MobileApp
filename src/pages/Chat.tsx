@@ -21,6 +21,7 @@ import ConfigObject from '../utils/ConfigObject';
 import BLEconnStore from '../store/BLEconnected';
 import {getBLEconnStore} from '../store/Selectors';
 import DatabaseService from '../DBservices/DataBaseService';
+import DMfrmMapStore from '../store/DMfrmMap';
 
 
 
@@ -85,6 +86,11 @@ const Tab3: React.FC = () => {
 
   // reference to bottom of chat
   const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  // DM callsign trigger from Map
+  const dmFrmMap_ = DMfrmMapStore.useState(s => s.dmfDMfrmMap);
+
+
 
 
 
@@ -284,7 +290,7 @@ const Tab3: React.FC = () => {
         await LocalNotifications.createChannel({
           id: '1',
           name: 'channel1',
-          importance: 5,
+          importance: 4,
           visibility: 1,
           vibration: true,
           sound: 'morse_r.wav'
@@ -398,6 +404,20 @@ const Tab3: React.FC = () => {
       }
     }
   }
+
+
+  // handle the Direct Message Button from the map
+  useEffect(() => {
+    if(dmFrmMap_.shDMfrmMap){
+      console.log("Chat - DM from Map to Call: " + dmFrmMap_.dmCallMap);
+      toCallsign_.current = dmFrmMap_.dmCallMap;
+      setShCallsign(true);
+      DMfrmMapStore.update(s => {
+        s.dmfDMfrmMap.shDMfrmMap = false;
+      });
+    }
+  }, [dmFrmMap_]);
+
 
 
   // LongPress Handling on Messages to fire actionsheet
