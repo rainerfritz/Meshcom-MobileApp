@@ -27,6 +27,7 @@ import MheardStaticStore from '../utils/MheardStaticStore';
 import BleConfigFinish from '../store/BLEConfFin';
 import UpdateFW from '../store/UpdtFW';
 import { usePhoneGps } from '../utils/PhoneGps';
+import DataBaseService from '../DBservices/DataBaseService';
 
 
 
@@ -53,9 +54,13 @@ const Tab1: React.FC = () => {
   const RAK_BLE_UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
   const RAK_BLE_UART_RXCHAR = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
   const RAK_BLE_UART_TXCHAR = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
-
+  const LEGACY_DFU_SERVICE = '00001530-1212-efde-1523-785feabcd123';
+  const BLE_WAIT_SCAN = 5000; // sleep time we wait for a scan to finish
 
   const [scanDevices, setScanDevices] = useState<ScanRes[]>([]);
+  const ble_scan_devices = useRef<ScanRes[]>([]); // scan devices ref for reconnect etc.
+  const ble_scan_ongoing = useRef<boolean>(false);  // scan ongoing flag, avoid multiple scans at once
+  const isAppActive_Ref = useRef<boolean>(false);
   const [connFlag, setConnFlag] = useState<boolean>(false);
   const [showProgrBar, setShowProgrBar] = useState<boolean>(false);
 
@@ -75,9 +80,6 @@ const Tab1: React.FC = () => {
   // remember we loaded on startup settings screen
   const didrun = useRef<boolean>(false);
 
-  // list of BLE devices
-  const devices = useRef<ScanRes[]>([]);
-
   // manual disconnect ref to know if we disco ble manually
   const manual_ble_disco  = useRef<boolean>(false);
   // alert card params
@@ -92,7 +94,7 @@ const Tab1: React.FC = () => {
 
   // reconnect BLE
   const MAX_RETRIES = 15;
-  const RECON_TIME = 3000;
+  const RECON_TIME = BLE_WAIT_SCAN + 2000;
   const recon_count = useRef<number>(0);
   const recon_time = useRef<number>(RECON_TIME);
   const [shReconProgr, setShReconProgr] = useState<boolean>(false);
@@ -211,15 +213,29 @@ const Tab1: React.FC = () => {
 
   // actions when app goes or comes from background
   useEffect(() => {
-
+    // set REF to current state
+    isAppActive_Ref.current = isAppActive;
+    //App did run already and is not fresh started
     if (didrun.current) {
-      console.log("Connect - App active: " + isAppActive);
+      console.log("Connect - App active: " + isAppActive_Ref.current);
       console.log("Recon Count: " + recon_count.current);
-
+      // check if we are in reconnect state
+      console.log("Reconnect State: " + doReconnect.current);
+      if (doReconnect.current) {
+        console.log("Reconnect State active!");
+        // if we are in reconnect state and the app is active we start the reconnect timer
+        if (isAppActive_Ref.current) {
+          reconnectBLE(ConfigObject.getBleDevId());
+        }
+      }
     }
-
   }, [isAppActive]);
 
+
+  // async timeout function for BLE scan
+  const sleep = (ms: number) => {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
 
   /**
@@ -228,7 +244,7 @@ const Tab1: React.FC = () => {
 
   // scan BLE devices
   const getScan = async () => {
-
+    ble_scan_ongoing.current = true;
     console.log("Scanning BLE Devices");
 
     // if we are in reconnect state ignore scanning
@@ -340,22 +356,25 @@ const Tab1: React.FC = () => {
             localname_str = "";
           }
         }
-      ).catch((error) => {
-        console.log("Scan Result Error!");
-        console.log(error);
-      });
+      );
 
-      setTimeout(async () => {
-        await BleClient.stopLEScan();
+      // stop the scan after 5 seconds
+      await sleep(BLE_WAIT_SCAN);
+      await BleClient.stopLEScan();
 
-        console.log('stopped scanning');
-        setShowProgrBar(false);
+      console.log('stopped scanning');
+      setShowProgrBar(false);
 
-        const newDev = scan_res;
-        setScanDevices(newDev);
+      // sort the scan results by their name
+      scan_res.sort((a, b) => (a.devName > b.devName) ? 1 : -1);
+      const newDev = scan_res;
+      setScanDevices(newDev);
+      ble_scan_devices.current = newDev;
+      ble_scan_ongoing.current = false;
+      return;
 
-      }, 5000);
     } catch (error) {
+      console.log("BLE Scan Error!");
       console.error(error);
     }
   }
@@ -372,9 +391,48 @@ const Tab1: React.FC = () => {
     // set devID in ConfigObject
     ConfigObject.setBleDevId(devID);
     // clear the timer if in reconnect
-    if(timerID_ref.current !== null) clearTimeout(timerID_ref.current);
+    if(timerID_ref.current !== null) clearInterval(timerID_ref.current);
     // check if the DB is open. Makes new connection and opens DB if not
-    await DatabaseService.checkDbConn();
+    try {
+      await DatabaseService.checkDbConn(); 
+    } catch (error) {
+      console.log("BLE Connect - Error on DB Connection!");
+      console.error(error);
+      setShowProgrBar(false);
+      setAlHeader("Error on DB Connection!");
+      const err_msg = (error as Error).message;
+      setAlMsg(err_msg);
+      setShAlertCard(true);
+    }
+    
+    // check if DB state is initialized
+    if(!DataBaseService.isInit){
+      // try to init DB again
+      try {
+        await DatabaseService.initializeDatabase();
+      } catch (error) {
+        console.log("BLE Connect - Error on DB Initialization!");
+        console.error(error);
+        setShowProgrBar(false);
+        setAlHeader("Error on DB Initialization!");
+        const err_msg = (error as Error).message;
+        setAlMsg(err_msg);
+        setShAlertCard(true);
+      }
+      // sleep for 2 sec to give the DB time to open
+      await sleep(2000);
+      // check if DB is open
+      if(!DataBaseService.isInit){
+        console.log("BLE Connect - DB not initialized!");
+        setShowProgrBar(false);
+        setAlHeader("Error on DB Initialization!");
+        setAlMsg("Please connect again!");
+        setShAlertCard(true);
+        return;
+      }
+    } else {
+      console.log("BLE Connect - DB initialized!");
+    }
 
     try {
       // if we are connected already to a device, disco that and connect new
@@ -389,9 +447,7 @@ const Tab1: React.FC = () => {
       }
 
       //connect to device
-      await BleClient.connect(devID, (deviceId) => onDisconnect(deviceId)).then(() => {
-        console.log('Connect resolved successful with: ', devID);
-      });
+      await BleClient.connect(devID, (deviceId) => onDisconnect(deviceId));
       
       //get services of the device
       const services = await BleClient.getServices(devID);
@@ -431,9 +487,12 @@ const Tab1: React.FC = () => {
               MheardStaticStore.setMhArr(res);
             }
 
-          })}).then(() => {
+          })}).then(async () => {
 
         console.log('connected to device', devID);
+
+        // Update Recon State in DB
+        await DatabaseService.setReconState(0, devID);
 
         // update devID in BLE Hook
         updateDevID(devID);
@@ -545,26 +604,15 @@ const Tab1: React.FC = () => {
 
       setShowProgrBar(false);
       setShReconProgr(false);
-      
-      // try to reconnect
-      // !! DISABLED till new BLE Service and Reconnect is implemented
-      /*if(doReconnect.current === true){
-        console.log("Reconnecting to node!");
-        reconnectBLE(devID);
-      }*/
-
-      // when we land here post the error to the user
-      /*setAlHeader("Error Connecting to Node!");
-      setAlMsg(errmsg_str);
-      setShAlertCard(true);*/
     }
   }
+
 
 
   // BLE disconnect callback
   async function onDisconnect(deviceId: string) {
 
-    console.log("Device disconnected callback");
+    console.log("Device disconnected callback from DevID: " + deviceId);
     const newConnState = false;
     setConnFlag(newConnState);
 
@@ -578,69 +626,57 @@ const Tab1: React.FC = () => {
       s.ble_connected = false;
     });
 
-    // reset config parameter in state
-    ConfigStore.update(s => {
-      s.config.callSign = "XX",
-      s.config.lat = 48.2098,
-      s.config.lon = 16.3708,
-      s.config.alt = 0
-    });
-
     setShowProgrBar(false);
 
     // BLE disconnect was not manually triggered - Reconnect
-    // !! DISABLED till new BLE Service and Reconnect is implemented
-    /*if(manual_ble_disco.current === false && (recon_count.current <= MAX_RETRIES)){
-        console.log("BLE client disconnected without Useraction!");
-        console.log("Reconnect Count: " + recon_count.current);
-        console.log("App Active: " + isAppActive);
-        console.log("Platform: " + pltfrm.current);
-
-        // initial reconnect trigger
-        if(connFlag === false){
-          console.log("Setting Recon Active true");
-          if(isAppActive){
-            doReconnect.current = true;
-            setShStopReconBtn(true);
-            reconnectBLE(deviceId);
-          }
-          if(!isAppActive && pltfrm.current === 'ios'){
-            doReconnect.current = true;
-            reconnectBLE(deviceId);
-          }
-          if(!isAppActive && pltfrm.current ==='android'){
-            setAlHeader("Node Disconnected in Background!");
-            setAlMsg("Please reconnect to Node manually!");
-            setShAlertCard(true);
-            // reset recon button and recon progress
-            setShReconProgr(false);
-            setShStopReconBtn(false);
-            setShowProgrBar(false);
-            // set the flag to stop reconnect
-            doReconnect.current = false;
-            // close DB connection
-            await DatabaseService.closeConnection();
-          }
-        }
+    
+    if(manual_ble_disco.current === false) {
+      console.log("BLE client disconnected without Useraction!");
+      // set the recon flag
+      doReconnect.current = true;
+      // write to DB
+      await DatabaseService.checkDbConn();
+      await DatabaseService.setReconState(1, deviceId);
+      setShStopReconBtn(true);
+      /**
+       * starting the reconnect procedure only if the app is active
+       * it first scans again BLE devices in an interval and if found it connects again
+       * On iOS scanning only works in background with dedicated BLE service but we don't find any devices if searching for them
+       * On Android the BLE service needs to get a foreground service to do anything in background
+       * So for now we only reconnect if the app is active
+       * Furthermore the reconnect state is written to the DB. If the app gets active again the reconnect is triggered (not yet implemented!)
+       *  */
+      if (isAppActive_Ref.current) {
+        reconnectBLE(deviceId);
+      }
     } else {
-      // close DB connection
-      await DatabaseService.closeConnection();
-    }*/
+      // Manual disconnect was triggered
+      // reset config parameter in state
+      ConfigStore.update(s => {
+        s.config.callSign = "XX",
+          s.config.lat = 48.2098,
+          s.config.lon = 16.3708,
+          s.config.alt = 0
+      });
+    }
 
+    // close DB connection
     await DatabaseService.closeConnection();
+
     // reset ble_conf_finish state
     BleConfigFinish.update(s => {
       s.BleConfFin = 0;
     });
 
     // alert the user that it disconnected if not manually
-    if ( manual_ble_disco.current === false) {
+    /*if (manual_ble_disco.current === false) {
       setShDiscoCard(true);
-    }
+    }*/
 
     // reset manual disco flag
     manual_ble_disco.current = false;
   }
+
 
 
   /**
@@ -649,7 +685,7 @@ const Tab1: React.FC = () => {
    */
   const reconnectBLE = async (devID: string) => {
 
-    if(recon_count.current > MAX_RETRIES){
+    /*if(recon_count.current > MAX_RETRIES){
       console.log("Connect - Max Retries reached!");
 
       setAlHeader("Max Retries Reconnecting reached!");
@@ -664,12 +700,12 @@ const Tab1: React.FC = () => {
       // close DB connection
       await DatabaseService.closeConnection();
       return;
-    }
-    
+    }*/
+
     recon_count.current++;
     console.log("Reconnect Tries: " + recon_count.current);
 
-    if(isAppActive)
+    if (isAppActive_Ref.current)
       history.push("/connect");
 
     if (connFlag === false) {
@@ -678,29 +714,61 @@ const Tab1: React.FC = () => {
 
       console.log("Recon Timer starts with: " + (recon_time.current / 1000) + " sec.");
 
-      timerID_ref.current = setTimeout(async () => {
-        console.log('Reconnect Timer, trying to reconnect');
-        await connDev(devID);
-        //if(recon_active.current === true) await connDev(devID);
-      }, recon_time.current);
+      if (!ble_scan_ongoing.current) {
+        timerID_ref.current = setInterval(async () => {
+          console.log('Reconnect Timer, scanning for BLE devices!');
+          // do a ble scan and check if the lost node is in the list
+          await getScan(); // scan takes 5 sec
 
-      // widen time if connect was again unsuccessful
-      if(recon_time.current >= 12000){
-        recon_time.current = 12000;
-      } else {
-        recon_time.current = recon_time.current + RECON_TIME;
+          // check the scan results if the lost node is in the list
+          let found_node = false;
+          ble_scan_devices.current.forEach((dev) => {
+            if (dev.dev_id_ === devID) {
+              found_node = true;
+            }
+          });
+
+          if (!found_node) {
+            console.log("Node not found in scan list! DeviceID: " + devID);
+          } else {
+            console.log("Node found in scan list! DeviceID: " + devID);
+            clearInterval(timerID_ref.current);
+            await connDev(devID);
+          }
+        }, recon_time.current);
+
+        // widen time if connect was again unsuccessful
+        /*if(recon_time.current >= 12000){
+          recon_time.current = 12000;
+        } else {
+          recon_time.current = recon_time.current + RECON_TIME;
+        }
+        console.log("Reconect Time set to: " + (recon_time.current / 1000) + " sec.");*/
+
+        return () => {
+          clearInterval(timerID_ref.current);
+        }
       }
-      console.log("Reconect Time set to: " + (recon_time.current / 1000) + " sec.");
     }
   }
 
 
+  // handle reset reconnect triggered by button
+  const handleReconActive = (state: boolean) => {
+    console.log("Stop Recon Button pressed. State: " + state);
+
+    if (timerID_ref.current !== null) clearInterval(timerID_ref.current);
+    doReconnect.current = false;
+    setShReconProgr(false);
+    setShowProgrBar(false);
+    setShStopReconBtn(false);
+  }
 
 
   // redirect to config page if unset node
   const redirectConnect = () => {
     setShDiscoCard(false);
-    if(isAppActive)
+    if (isAppActive)
       history.push("/connect");
   }
 
@@ -724,11 +792,8 @@ const Tab1: React.FC = () => {
     });
 
     try {
-      await BleClient.stopNotifications(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_RXCHAR).then(async () => {
-        await BleClient.disconnect(devID).then(() => {
-          console.log('Disconnected from device ', devID);
-        });
-      });
+      await BleClient.stopNotifications(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_RXCHAR);
+      await BleClient.disconnect(devID);
     } catch (error: any) {
       console.error("Error on Disconnect: " + error.message);
       // reboot the node if the callsign is not set. BLE Authentication Error. 
@@ -850,6 +915,7 @@ const Tab1: React.FC = () => {
     } else {
       await doDisco(devID_s).then(() => {
         console.log("Disco done at handleBtn!");
+        // if user directly switches from a connected node to another one, we connect to the new one
         if(devIDBtn !== devID_s){
           setTimeout(async () => {
             await connDev(devIDBtn);
@@ -860,15 +926,7 @@ const Tab1: React.FC = () => {
   }
 
 
-  // handle reset reconnect
-  const handleReconActive = (state:boolean) => {
-    console.log("Stop Recon Button pressed. State: " + state);
 
-    if(timerID_ref.current !== null) clearTimeout(timerID_ref.current);
-    setShReconProgr(false);
-    setShowProgrBar(false);
-    setShStopReconBtn(false);
-  }
 
   
 

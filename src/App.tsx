@@ -49,17 +49,19 @@ import DataBaseService from './DBservices/DataBaseService';
 setupIonicReact();
 
 const Appl: React.FC = () => {
-   // init DB
-   const initDB = async () => {
-    console.log('Initializing Database');
-    await DataBaseService.initializeDatabase();
-  }
+  
 
 
   // set initial app is axctive state and add event listener
   useEffect(() => {
     // init DB
+    const initDB = async () => {
+      console.log('Initializing Database');
+      await DataBaseService.initializeDatabase();
+    };
+    // call init DB
     initDB();
+    
     // check wether app is in background or not
     App.addListener('appStateChange', ({ isActive }) => {
       console.log('App state changed. Is active?', isActive);

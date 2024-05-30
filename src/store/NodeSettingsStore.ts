@@ -7,6 +7,7 @@ import {NodeSettings} from "../utils/AppInterfaces";
 const defaultNodeSettings:NodeSettings = {
     TYP: "SN",
     GW: false,
+    WS: false,
     DISP: true,
     BTN: false,
     MSH: true,

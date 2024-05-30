@@ -1,6 +1,8 @@
 import { BleClient, numbersToDataView } from "@capacitor-community/bluetooth-le";
 import {useMSG} from './MessageHandler';
 import { useEffect, useRef, useState } from "react";
+import ConfigObject from "../utils/ConfigObject";
+
 
 const RAK_BLE_UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 //const RAK_BLE_UART_RXCHAR = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
@@ -105,6 +107,7 @@ export function useBLE() {
     
     // send a text command to node
     const sendTxtCmdNode = (cmd: string) => {
+        console.log("BLEHANDLER - DevID Config Object " + ConfigObject.getBleDevId());
 
         if (cmd !== "") {
 

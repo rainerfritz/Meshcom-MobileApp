@@ -22,6 +22,7 @@ import BLEconnStore from '../store/BLEconnected';
 import {getBLEconnStore} from '../store/Selectors';
 import DatabaseService from '../DBservices/DataBaseService';
 import DMfrmMapStore from '../store/DMfrmMap';
+import BleConfigFinish from '../store/BLEConfFin';
 
 
 
@@ -338,11 +339,9 @@ const Tab3: React.FC = () => {
         console.log("Last Msg Nr Store: " + lastNotifyID_s);
 
         // notify trigger is in the message object (Need to wait for mesgs from buffer of node, while not connected)
-
         if(config_s.callSign !== last_msg.fromCall && last_msg.fromCall.length > 1 && lastNotifyID_s !== last_msg.msgNr && last_msg.notify){
 
           if(thisPlatform === "ios"){
-
             LocalNotifications.schedule({
               notifications: [
                 {
@@ -352,14 +351,12 @@ const Tab3: React.FC = () => {
                   schedule: {
                     at: new Date(Date.now() + 1000 * 1), // in 1 secs
                     repeats: false
-                  },
-                  sound: 'morse_r.wav'
+                  }
                 }]
             });
           }
   
           if(thisPlatform === "android"){
-  
             LocalNotifications.schedule({
               notifications: [
                 {
@@ -371,7 +368,6 @@ const Tab3: React.FC = () => {
                     repeats: false
                   },
                   channelId: '1',
-                  sound: 'morse_r.wav',
                   smallIcon: 'res://drawable/meshcom_logo_32x32_transp_gray',
                   largeIcon: 'res://drawable/meshcom_logo_64x64'
                 }]
@@ -632,7 +628,7 @@ const Tab3: React.FC = () => {
             {shCallsign ? <>
               <div className="dm_call">
               <IonItem>
-                <IonInput className='custominput' ref={callsignInputRef} label='To Callsign' labelPlacement="stacked" type='text' maxlength={MAX_CHAR_CALLSIGN} onIonInput={(ev) => handleInput(ev)} value={toCallsign_.current}></IonInput>
+                <IonInput className='custominput' ref={callsignInputRef} label='To Callsign or Group' labelPlacement="stacked" type='text' maxlength={MAX_CHAR_CALLSIGN} onIonInput={(ev) => handleInput(ev)} value={toCallsign_.current}></IonInput>
                 </IonItem>
               </div>
             </> : <></>}

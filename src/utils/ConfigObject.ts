@@ -8,7 +8,7 @@ class ConfClass{
     ble_dev_id:string = "00:00:00:00:00:00";
     own_position:GpsData;
 
-    constructor(){
+    constructor() {
         this.infodata_obj = {
             FWVER: "0.0.0",
             CALL: "",
@@ -18,7 +18,14 @@ class ConfClass{
             ATXT: "none",
             BLE: "none",
             BATP: 0,
-            BATV: 0
+            BATV: 0,
+            "GCH": 0,
+            "GCB0": 0,
+            "GCB1": 0,
+            "GCB2": 0,
+            "GCB3": 0,
+            "GCB4": 0,
+            "CTRY": "none"
         }
         this.own_position = {
             LAT: 0,

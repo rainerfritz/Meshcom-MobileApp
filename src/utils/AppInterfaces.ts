@@ -78,7 +78,9 @@ export interface MheardType {
     mh_rssi:number,
     mh_hw:string,
     mh_snr:number,
-    mh_distance:number
+    mh_distance:number,
+    mh_pl: number,
+    mh_mesh: number
 }
 
 // Reconnect flag for Background
@@ -138,7 +140,14 @@ export interface InfoData {
     ATXT: string,
     BLE: string,
     BATP: number,
-    BATV: number
+    BATV: number,
+    "GCH": number,
+    "GCB0": number,
+    "GCB1": number,
+    "GCB2": number,
+    "GCB3": number,
+    "GCB4": number,
+    "CTRY": string
 }
 
 
@@ -172,6 +181,7 @@ export interface WifiSettings {
 export interface NodeSettings {
     TYP: string,
     GW: boolean,
+    WS: boolean,
     DISP: boolean,
     BTN: boolean,
     MSH: boolean,
@@ -206,7 +216,9 @@ export interface Mheard {
     MOD: number,
     RSSI: number,
     SNR: number,
-    DIST: number
+    DIST: number,
+    PL: number,
+    MESH: number
 }
 
 // Config sent from Node Finish message

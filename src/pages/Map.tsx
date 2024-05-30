@@ -484,7 +484,7 @@ const NodeMap = () => {
 
     if(currConfig.callSign === pos_call) color = markerColor_own;
     else if (mheard_calls.current.includes(pos_call)) color = markerColor_mh;
-    else if (regex.test(pos_call)) color = markerColor_xcall;
+    else if (regex.test(pos_call) && !(mheard_calls.current.includes(pos_call))) color = markerColor_xcall;
     else color = markerColor;
 
     return color;

@@ -7,8 +7,7 @@ import {
 import { MsgType, PosType } from "../utils/AppInterfaces";
 import PosiStore from "../store/PosiStore";
 import MsgStore from "../store/MsgStore";
-import { format, compareAsc, sub } from "date-fns";
-import { Capacitor } from "@capacitor/core";
+import { format, sub } from "date-fns";
 
 
 
@@ -95,11 +94,12 @@ class DatabaseService {
                     });
                 }
 
-                /*if (DatabaseService.db) {
+                if (DatabaseService.db) {
                     console.log('Creating reconState table');
                     await DatabaseService.db.execute(`CREATE TABLE IF NOT EXISTS reconState (
                         id INTEGER PRIMARY KEY NOT NULL,
-                        reconStateVal INTEGER NOT NULL
+                        reconStateVal INTEGER NOT NULL,
+                        devID TEXT
                     );`).catch((err) => {
                             console.error('Error creating reconState table:', err);
                     });
@@ -108,7 +108,7 @@ class DatabaseService {
                     console.log('reconState:', res?.values);
                     if (res.values === undefined || res.values.length === 0) {
                         console.log('reconState table is empty, adding default value');
-                        await DatabaseService.db?.execute('INSERT INTO reconState (id,reconStateVal) VALUES (0,0);');
+                        await DatabaseService.db?.execute('INSERT INTO reconState (id,reconStateVal,devID) VALUES (0,0,"");');
 
                         const res = await DatabaseService.db?.query('SELECT * FROM reconState');
                         console.log('reconState after insert:', res?.values);
@@ -116,7 +116,7 @@ class DatabaseService {
 
                 } else {
                     console.error('Error creating tables. Database connection not open.');
-                }*/
+                }
 
                 // housekeeping
                 await DatabaseService.housekeeping();
@@ -368,9 +368,10 @@ class DatabaseService {
                 console.log('Creating new connection');
                 const sqlite = new SQLiteConnection(CapacitorSQLite);
                 DatabaseService.connection = sqlite as SQLiteConnection; // Cast to SQLiteConnection
-                await DatabaseService.connection.createConnection(DatabaseService.dbName, false, 'no-encryption', 1, false);
+                DatabaseService.db = await DatabaseService.connection.createConnection(DatabaseService.dbName, false, 'no-encryption', 1, false);
             } catch (error) {
                 console.error('Error creating new connection:', error);
+                DatabaseService.isInit = false;
             }
         }
         // check if db is open
@@ -378,6 +379,7 @@ class DatabaseService {
             const res = await DatabaseService.db.isDBOpen();
             if (res.result) {
                 console.log('Database is open');
+                DatabaseService.isInit = true;
             } else {
                 console.error('Database is not open');
                 // open the database
@@ -388,15 +390,19 @@ class DatabaseService {
                     const res = await DatabaseService.db.isDBOpen();
                     if (res.result) {
                         console.log('Database is open');
+                        DatabaseService.isInit = true;
                     } else {
                         console.error('Database is not open');
+                        DatabaseService.isInit = false;
                     }
                 } catch (error) {
                     console.error('Error opening database:', error);
+                    DatabaseService.isInit = false;
                 }
             }
         } else {
-            console.error('Database connection not open');
+            console.error('DB - Error Database not open');
+            DatabaseService.isInit = false;
         }
     }
 
@@ -408,6 +414,7 @@ class DatabaseService {
             try {
                 await DatabaseService.db.close();
                 await DatabaseService.connection?.closeConnection(this.dbName, false);
+                DatabaseService.isInit = false;
             } catch (error) {
                 console.error('Error closing database:', error);
             }
@@ -415,7 +422,7 @@ class DatabaseService {
     }
 
     // return reconStateVal
-    /*static async getReconState() {
+    static async getReconState() {
         console.log('SQLite Connection:', DatabaseService.connection);
         console.log('SQLite DB:', DatabaseService.db);
 
@@ -438,11 +445,11 @@ class DatabaseService {
     }
 
     // set reconStateVal
-    static async setReconState(val: number) {
+    static async setReconState(val: number, devID_: string) {
         if (DatabaseService.db) {
-            console.log('DB Setting reconState:', val);
+            console.log('DB Setting reconState:', val + ' ' + devID_);
             try {
-                await DatabaseService.db.execute(`UPDATE reconState SET reconStateVal = ${val} WHERE id = 0;`);
+                await DatabaseService.db.execute(`UPDATE reconState SET reconStateVal = ${val}, devID = "${devID_}" WHERE id = 0;`);
                 // print the new reconStateVal
                 const res = await DatabaseService.db.query('SELECT * FROM reconState WHERE id = 0;');
                 if (res.values) {
@@ -454,7 +461,7 @@ class DatabaseService {
         } else {
             console.error('Error setting reconState. Database not open.');
         }
-    }*/
+    }
 
     // clear the TextMessages table
     static async clearTextMessages() {

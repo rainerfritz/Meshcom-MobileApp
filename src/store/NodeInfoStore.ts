@@ -13,7 +13,14 @@ const defaultInfoData:InfoData = {
     ATXT: "none",
     BLE: "none",
     BATP: 0,
-    BATV: 0
+    BATV: 0,
+    GCH: 0,
+    GCB0: 0,
+    GCB1: 0,
+    GCB2: 0,
+    GCB3: 0,
+    GCB4: 0,
+    CTRY: "none"
 }
 
 const NodeInfoStore = new Store({

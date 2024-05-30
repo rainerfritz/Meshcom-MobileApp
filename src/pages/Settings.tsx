@@ -23,10 +23,12 @@ import BLEconnStore from '../store/BLEconnected';
 import ShouldConfStore from '../store/ShouldConfNode';
 import DataBaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
-import BleConfigFinish from '../store/BLEConfFin';
 import AppActiveState from '../store/AppActive';
 import WifiSettingsStore from '../store/WifiSettings';
 import { WifiSettings } from '../utils/AppInterfaces';
+import NodeSettingsStore from '../store/NodeSettingsStore';
+
+
 
 
 const Tab2: React.FC = () => {
@@ -56,6 +58,9 @@ const Tab2: React.FC = () => {
 
   // wifii settings from store
   const wifiSettings_s:WifiSettings = useStoreState(WifiSettingsStore, getWifiSettings);
+
+  // node settings
+  const nodeSettings = useStoreState(NodeSettingsStore, s => s.nodeSettings);
 
   // sensor settings from store
   //const sensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, getSensorSettings);
@@ -88,9 +93,6 @@ const Tab2: React.FC = () => {
 
   // switch show wifi pwd
   const [shWifiPwd, setShWifiPwd] = useState<boolean>(false);
-
-  // Min wait time for position send to node
-  const minWaitTime_txpos = 10000; // 10 sec
 
   // DB functions
   //const {resetNodePosDB, addCONF, clearTxtMsgs, clearMheards} = useStorage();
@@ -155,6 +157,66 @@ const Tab2: React.FC = () => {
   // I2C Scanresult
   const scanResult = useStoreState(ScanI2CStore, getScanResult);
 
+  // timer to count how often sendpos and sendtrackwas sent
+  let now_obj = new Date();
+  const txpos_last = useRef<number>(now_obj.getTime());
+  const minWaitTime_txpos = 10000; // 10 sec
+
+  // country settings 
+  // {"EU", "EU8", "UK", "EA", "US", "VR2", "868", "915", "MAN"};
+  const [shCtrySetting, setShCtrySetting] = useState<boolean>(false);
+  const ctrySetting = NodeInfoStore.useState(s => s.infoData.CTRY);
+  const ctry_setting_changed = useRef<boolean>(false);
+  const ctry_setting_changed_str = useRef<string>("");
+  // sets the ctry setting to the node
+  const setCtryNode = (ctry_ev:string) => {
+    console.log("Setting Country: " + ctry_ev);
+    ctry_setting_changed.current = true;
+    ctry_setting_changed_str.current = ctry_ev;
+    NodeInfoStore.update(s => {
+      s.infoData.CTRY = ctry_ev;
+    });
+  }
+  const ctry_list = ["EU", "EU8", "UK", "UK8", "US", "VR2", "868", "906"];
+  const ctry_list_translated: {[key: string]: string} = 
+  {"EU":"EU | 433.175MHz", 
+  "EU8":"EU8 | 433.175MHz", 
+  "UK":"UK | 439.9125MHz",
+  "UK8":"UK8 | 439.9125MHz",
+  "US":"US | 433.175MHz", 
+  "VR2":"VR2 | 435.775MHz", 
+  "868":"868 | 869.525MHz", 
+  "906":"906 | 906.875MHz"};
+  // set the ctry setting changed string to value when recived from node
+  useEffect(()=>{
+    console.log("Ctry Setting set from Node: " + ctrySetting);
+    ctry_setting_changed_str.current = ctrySetting;
+  },[ctrySetting]);
+
+  // Group Call Settings
+  const [shGroupCallSet, setShGroupCallSet] = useState<boolean>(false);
+  const setGrpCmd = useRef<string>("");
+  const isGateWay = NodeSettingsStore.useState(s => s.nodeSettings.GW);
+  const masterGrp = NodeInfoStore.useState(s => s.infoData.GCH);
+  const grp0 = NodeInfoStore.useState(s => s.infoData.GCB0);
+  const grp1 = NodeInfoStore.useState(s => s.infoData.GCB1);
+  const grp2 = NodeInfoStore.useState(s => s.infoData.GCB2);
+  const grp3 = NodeInfoStore.useState(s => s.infoData.GCB3);
+  const grp4 = NodeInfoStore.useState(s => s.infoData.GCB4);
+  // references for the inputs
+  const gchRef = useRef<HTMLIonInputElement>(null);
+  const gcb0Ref = useRef<HTMLIonInputElement>(null);
+  const gcb1Ref = useRef<HTMLIonInputElement>(null);
+  const gcb2Ref = useRef<HTMLIonInputElement>(null);
+  const gcb3Ref = useRef<HTMLIonInputElement>(null);
+  const gcb4Ref = useRef<HTMLIonInputElement>(null);
+  // reset the group call settings
+  const resetGrpCall = () => {
+    console.log("Reset Group Call Settings");
+    // send to node
+    sendTxtCmdNode("--setgrc 0;0;0;0;0;0;");
+  }
+  
 
 
   useIonViewDidEnter(() => {
@@ -165,7 +227,10 @@ const Tab2: React.FC = () => {
     const bleconn = ble_connected;
     console.log("Settings Page BLE connected: " + bleconn);
     updateBLEConnected(bleconn);
+    // set the sendpos and sendtrack wait timer that it can be pushed now. We wait after first press of the button
+    txpos_last.current = 0;
   });
+
 
 
   // change symbol table according primary or secondary table
@@ -253,6 +318,11 @@ const Tab2: React.FC = () => {
   }, [config_s]);
 
 
+
+  // sleep function for delay
+  const sleep = (ms:number) => {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
 
   //send config to phone - we send a string with delimeter Config starts with "C:" 
@@ -640,11 +710,6 @@ const Tab2: React.FC = () => {
    * --gateway on/off
    * 
    *  */ 
-  // timer to count how often sendpos was sent
-  let now_obj = new Date();
-  const txpos_last = useRef<number>(now_obj.getTime());
-  const txpos_cnt = useRef<number>(0);
-
   const sendTxtCmd = (cmd: string) => {
 
     // final cmd string
@@ -829,25 +894,19 @@ const Tab2: React.FC = () => {
       case "txpos": {
         // check if txpos was sent in the last 10 seconds
         const now = now_obj.getTime();
+        console.log("TX POS pressed at: " + now);
         const diff = now - txpos_last.current;
         console.log("TX POS Diff: " + diff);
 
         if (diff >= minWaitTime_txpos) {
-          txpos_cnt.current = 0;
-        }
-
-        if (diff >= minWaitTime_txpos || txpos_cnt.current === 0) {
           cmd_ = "--sendpos";
-          txpos_last.current = now;
-
+          txpos_last.current = now_obj.getTime();
         } else {
           setAlHeader("TXPOS already sent!");
           setAlMsg("TX POS only every " + minWaitTime_txpos / 1000 + " sec possible!");
           setShAlertCard(true);
 
         }
-
-        txpos_cnt.current++;
         break;
       }
 
@@ -858,19 +917,14 @@ const Tab2: React.FC = () => {
         console.log("TXTRACK Diff: " + diff);
 
         if (diff > minWaitTime_txpos) {
-          txpos_cnt.current = 0;
-        }
-
-        if (diff > minWaitTime_txpos || txpos_cnt.current === 0) {
           cmd_ = "--sendtrack";
-          txpos_last.current = now;
+          txpos_last.current = now_obj.getTime();
         }
         else {
           setAlHeader("TXTRACK already sent!");
           setAlMsg("TXTRACK only every " + minWaitTime_txpos / 1000 + " sec possible!");
           setShAlertCard(true);
         }
-        txpos_cnt.current++;
         break;
       }
 
@@ -958,6 +1012,32 @@ const Tab2: React.FC = () => {
         
         break;
       }
+
+      //webserver on/off
+      case "websrv": {
+        if (nodeSettings.WS) {
+          cmd_ = "--webserver off";
+        } else {
+          cmd_ = "--webserver on";
+        }
+        break;
+      }
+
+      // country setting
+      case "ctry": {
+        if (ctry_setting_changed_str.current !== "" && ctry_setting_changed_str.current !== " ") {
+          cmd_ = "--setctry " + ctry_setting_changed_str.current;
+        }
+        break;
+      }
+
+      // group settings
+      case "setGroup": {
+        if (setGrpCmd.current !== "") {
+          cmd_ = setGrpCmd.current;
+        }
+        break;
+      }
     }
 
     // finally send it via textmsg
@@ -1012,6 +1092,7 @@ const Tab2: React.FC = () => {
     if(call_changed.current){
       console.log("Call changed");
       setCallSign();
+      
     }
 
     if(wifi_changed.current){
@@ -1038,6 +1119,87 @@ const Tab2: React.FC = () => {
       sendTxtCmd("utcoffset");
     }
 
+    // set the country setting to the node
+    if(ctry_setting_changed.current){
+      console.log("Setting Country to Node");
+      ctry_setting_changed.current = false;
+      sendTxtCmd("ctry");
+    }
+
+    // GROUP SETTINGS
+    // check if group settings changed and send them to node
+    const checkGrpInput = (grp_value:string | number | null | undefined):number => {
+      if(grp_value !== null && grp_value !== undefined && grp_value !== "" && grp_value !== " "){
+        // check if the value is a number
+        const grp_val_nr = +grp_value;
+        if(!isNaN(grp_val_nr)){
+          return grp_val_nr;
+        } else {
+          return 0;
+        }
+      }
+      return 0;
+    }
+
+    if (shGroupCallSet) {
+      let master_grp_nr = 0;
+      let gcb0 = 0;
+      let gcb1 = 0;
+      let gcb2 = 0;
+      let gcb3 = 0;
+      let gcb4 = 0;
+      let master_grp_changed = false;
+
+      if (isGateWay) {
+        // check if the value is a number
+        const gch: number = checkGrpInput(gchRef.current!.value);
+        if (gch !== master_grp_nr) {
+          master_grp_changed = true;
+          master_grp_nr = gch;
+        }
+      }
+
+      gcb0 = checkGrpInput(gcb0Ref.current!.value);
+      gcb1 = checkGrpInput(gcb1Ref.current!.value);
+      gcb2 = checkGrpInput(gcb2Ref.current!.value);
+      gcb3 = checkGrpInput(gcb3Ref.current!.value);
+      gcb4 = checkGrpInput(gcb4Ref.current!.value);
+
+      // check if group settings changed
+      if (gcb0 !== grp0 || gcb1 !== grp1 || gcb2 !== grp2 || gcb3 !== grp3 || gcb4 !== grp4 || master_grp_changed) {
+        console.log("Group Settings changed");
+        console.log("Master Group: " + master_grp_nr);
+        console.log("Group 0: " + gcb0);
+        console.log("Group 1: " + gcb1);
+        console.log("Group 2: " + gcb2);
+        console.log("Group 3: " + gcb3);
+        console.log("Group 4: " + gcb4);
+        // set fields values
+        /*NodeInfoStore.update(s => {
+          s.infoData.GCH = master_grp_nr;
+          s.infoData.GCB0 = gcb0;
+          s.infoData.GCB1 = gcb1;
+          s.infoData.GCB2 = gcb2;
+          s.infoData.GCB3 = gcb3;
+          s.infoData.GCB4 = gcb4;
+        });*/
+
+        let cmd_str = "--setgrc ";
+        if (master_grp_changed) {
+          cmd_str = cmd_str + master_grp_nr.toString() + ";";
+        } else {
+          cmd_str = cmd_str + "0;";
+        }
+        cmd_str = cmd_str + gcb0.toString() + ";" + gcb1.toString() + ";" + gcb2.toString() + ";" + gcb3.toString() + ";" + gcb4.toString() + ";";
+        master_grp_changed = false;
+        console.log("Group CMD: " + cmd_str);
+        setGrpCmd.current = cmd_str;
+        sendTxtCmd("setGroup");
+      }
+    }
+
+
+
     // send save settings command only when call_changed or wifi_changed or aprsSym_changed - will reboot the client
     if (call_changed.current || wifi_changed.current || aprsSym_changed.current || owPinChanged.current) {
 
@@ -1061,6 +1223,11 @@ const Tab2: React.FC = () => {
         sendDV(view1, devID_s);
       }
     }
+
+    // tell the user that settings are saved
+    setAlHeader("Settings saved!");
+    setAlMsg("In some cases node reboots in 15s!");
+    setShAlertCard(true);
   }
 
 
@@ -1261,6 +1428,18 @@ const Tab2: React.FC = () => {
               <div>APRS Symbol: {config_s.aprs_symbol}</div>
               <div>APRS Comment: {aprs_cmt_store}</div>
             </div>
+
+            {(masterGrp > 0 || grp0 > 0 || grp1 > 0 || grp2 > 0 || grp3 > 0 || grp4 > 0) && <div className='settings_cont'>
+              <div>Call Groups:</div>
+              {isGateWay && masterGrp > 0 && <div>Master Group: {masterGrp}</div>}
+              {grp0 > 0 && <div>Group 1: {grp0}</div>}
+              {grp1 > 0 && <div>Group 2: {grp1}</div>}
+              {grp2 > 0 && <div>Group 3: {grp2}</div>}
+              {grp3 > 0 && <div>Group 4: {grp3}</div>}
+              {grp4 > 0 && <div>Group 5: {grp4}</div>}
+            </div>
+            }
+
             <div className='settings_cont'>
               {config_s.hw != "RAK4631" ? <>
               <div>Wifi SSID: {wifiSettings_s.SSID}</div>
@@ -1315,7 +1494,6 @@ const Tab2: React.FC = () => {
             <div id="spacer-toggle" />
             <IonItem>
               <IonSelect interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="APRS Symbol" onIonChange={(ev) => aprsSymChanged(ev.detail.value)}>
-
                 {aprs_symbols_mapped.map((sym) => (
                   <IonSelectOption key={sym.s_name} value={sym.s_char}>
                     {sym.s_name}
@@ -1347,6 +1525,72 @@ const Tab2: React.FC = () => {
             <IonItem>
               <IonInput value={node_utc_offset.current} ref={node_utc_offset_ref} label='Set UTC Offset' labelPlacement="floating" type='number' maxlength={2} onIonInput={(ev) => setNodeUTCoffSet(ev.detail.value!)}></IonInput>
             </IonItem>
+          </div>
+
+          <div id="spacer-buttons" />
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shCtrySetting ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShCtrySetting(!shCtrySetting)} />
+              </div>
+              <IonText>Country Setting</IonText>
+            </div>
+            {shCtrySetting && 
+              <IonItem>
+              <IonSelect value={ctrySetting} interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="Country" onIonChange={(ev) => setCtryNode(ev.detail.value)}>
+                {ctry_list.map((ctry) => (
+                  <IonSelectOption key={ctry} value={ctry}>
+                    {ctry_list_translated[ctry]}
+                  </IonSelectOption>
+                ))}
+              </IonSelect><br></br>
+            </IonItem>
+            }
+          </div>
+
+          <div id="spacer-buttons" />
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shGroupCallSet ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShGroupCallSet(!shGroupCallSet)} />
+              </div>
+              <IonText>Group Subscription</IonText>
+            </div>
+            {shGroupCallSet &&
+              <div className='setting_wrapper'>
+                {isGateWay &&
+                  <div className='mt-3 mb-3'>Master Group</div>
+                }
+                {isGateWay &&
+                  <IonItem>
+                    <IonInput value={masterGrp} ref={gchRef} label='Set Master Group' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  </IonItem>
+                }
+                <div className='mt-3 mb-3'>Sub Group 1</div>
+                <IonItem>
+                  <IonInput value={grp0} ref={gcb0Ref} label='Set Sub Group 1' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Sub Group 2</div>
+                <IonItem>
+                  <IonInput value={grp1} ref={gcb1Ref} label='Set Sub Group 2' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Sub Group 3</div>
+                <IonItem>
+                  <IonInput value={grp2} ref={gcb2Ref} label='Set Sub Group 3' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Sub Group 4</div>
+                <IonItem>
+                  <IonInput value={grp3} ref={gcb3Ref} label='Set Sub Group 4' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Sub Group 5</div>
+                <IonItem>
+                  <IonInput value={grp4} ref={gcb4Ref} label='Set Sub Group 5' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                </IonItem>
+                <div className='resetGrpBtn'>
+                    <IonButton fill='solid' slot='start' onClick={() => resetGrpCall()}>Reset Groups</IonButton>
+                </div>
+              </div>
+            }
           </div>
 
           <div id="spacer-buttons" />
@@ -1386,6 +1630,9 @@ const Tab2: React.FC = () => {
                   </div>
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("wx")}>WX-Info</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={nodeSettings.WS ? 'solid' : 'outline'} onClick={() => sendTxtCmd("websrv")}>Webserver</IonButton>
                   </div>
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("scani2c")}>Scan I2C</IonButton>
@@ -1475,9 +1722,6 @@ const Tab2: React.FC = () => {
               <IonText >Advanced Settings</IonText>
             </div>
             {shAdvSetting ? <>
-
-              
-
               <div id="spacer-advTop" />
               <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>deletePositions()}>Clear received nodes </IonButton>
               <div id="spacer-advTop" />

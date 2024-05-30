@@ -12,9 +12,6 @@ const config: CapacitorConfig = {
         resize: 'ionic',
         resizeOnFullScreen: true,
       },
-      LocalNotifications: {
-        sound: "morse_r.wav",
-      },
       CapacitorSQLite: {
         iosDatabaseLocation: 'Library/CapacitorDatabase',
         iosIsEncryption: false,

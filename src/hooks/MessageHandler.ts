@@ -30,7 +30,6 @@
 //import {useStorage, PosType, MsgType, ConfType, MheardType} from './UseStorage';
 import ConfigStore from '../store/ConfStore';
 import ShouldConfStore from '../store/ShouldConfNode';
-import RedirectChatStore from '../store/RedirectChat';
 import {aprs_char_table, aprs_pri_symbols, aprs_sec_symbols} from '../store/AprsSymbols';
 import {hwtable} from '../store/HwTable';
 import {modtable} from '../store/ModTable';
@@ -40,10 +39,8 @@ import WxDataStore from '../store/WxData';
 import AprsCmtStore from '../store/AprsCmtStore';
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { PosType, MsgType, ConfType, MheardType, SensorSettings, WxData, GpsData, WifiSettings, InfoData, NodeSettings, AprsSettings, Mheard } from '../utils/AppInterfaces';
-import MsgStore from '../store/MsgStore';
-import PosiStore from '../store/PosiStore';
 import ConfigObject from '../utils/ConfigObject';
 import DatabaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
@@ -51,6 +48,7 @@ import BleConfigFinish from '../store/BLEConfFin';
 import UpdateFW from '../store/UpdtFW';
 import WifiSettingsStore from '../store/WifiSettings';
 import MheardStaticStore from '../utils/MheardStaticStore';
+import NodeSettingsStore from '../store/NodeSettingsStore';
 
 
 export function useMSG() {
@@ -1260,7 +1258,7 @@ export function useMSG() {
                  * Trennzeichen @
                  */
 
-                console.log("Mheard Msg received");
+                /*console.log("Mheard Msg received");
 
                 let callsign_arr:number[] = [];
                 let date_arr:number[] = [];
@@ -1391,7 +1389,7 @@ export function useMSG() {
                     mh_distance:distance
                 }
 
-                return (newMheard);
+                return (newMheard);*/
             }
 
             // Data Message from Node
@@ -1406,38 +1404,6 @@ export function useMSG() {
              * Info Data:
              * DI{"TYP":"I","FWVER":"C 4.29 d","CALL":"OE1KFR-2","ID":3215539008,"HWID":10,"MAXV":4.239999771,"ATXT":"","BLE":"short","BATP":0,"BATV":1.86}
              * 
-             * export interface ConfType {
-            callSign:string,
-            lat:number,
-            lon:number,
-            alt:number,
-            wifi_ssid:string,
-            wifi_pwd:string,
-            aprs_pri_sec:string,
-            aprs_symbol:string,
-            gps_on:boolean,
-            bme_on:boolean,
-            bmp_on:boolean,
-            gw_on:boolean,
-            display_off:boolean,
-            button_on:boolean,
-            track_on:boolean,
-            bat_volt:number,
-            bat_perc:number,
-            hw:string,
-            mod:string,
-            fw_ver:string,
-            tx_pwr:number,
-            frequency:number,
-            comment: string,
-            onewire_on:boolean,
-            onewire_pin:number,
-            lps33_on:boolean,
-            mesh_on:boolean,
-            bme680_on:boolean,
-            mcu811_on:boolean,
-            node_utc_offset:number
-        }
              */
 
 
@@ -1484,7 +1450,7 @@ export function useMSG() {
                         // There should always be a field "TYP" which gives us the type of the json data
                         const json_data = JSON.parse(json_str);
 
-                        // check if one of the fields is undefined.
+                        // check if one of the fields is undefined or null.
                         if(!checkJSON(json_data)){
                             console.log("ERROR: JSON Data incomplete!");
                             break;
@@ -1596,10 +1562,36 @@ export function useMSG() {
                                 const temp = wx_data.TEMP;
                                 console.log("Temp: " + temp);
                                 console.log("TOUT: " + wx_data.TOUT);
+                                console.log("HUM: " + wx_data.HUM);
+                                console.log("PRES: " + wx_data.PRES);
+                                console.log("QNH: " + wx_data.QNH); 
 
                                 WxDataStore.update(s => {
                                     s.wxData = wx_data;
                                 });
+
+                                // update wxdata in own position in db -> needed by the map
+                                console.log("MHANDLER: Update Own Position WX Measurements in DB Callsign: " + node_call_ref.current);
+                                let db_pos = null;
+                                db_pos = await DatabaseService.getPos(node_call_ref.current).then((pos: PosType | null) => {
+                                    if (pos !== null && pos !== undefined) {
+                                        console.log("MHANDLER: Own Position found in DB: " + JSON.stringify(pos));
+                                        pos.temperature = +wx_data.TEMP.toFixed(1);
+                                        pos.humidity = +wx_data.HUM.toFixed(1);
+                                        pos.pressure = +wx_data.PRES.toFixed(2);
+                                        pos.qnh = +wx_data.QNH.toFixed(2);
+                                        pos.alt_press = +wx_data.ALT.toFixed(0);
+                                        pos.gas_res = +wx_data.GAS.toFixed(1);
+                                        pos.co2 = +wx_data.CO2.toFixed(1);
+                                        return pos;
+                                    }
+                                });
+
+                                if(db_pos !== null && db_pos !== undefined){
+                                    console.log("MHANDLER: Update Position in DB");
+                                    await DatabaseService.writePos(db_pos);
+                                }
+                                
 
                                 /*ConfigStore.update(s => {
                                     s.config.onewire_pin = wx_data.OWPIN;
@@ -1755,6 +1747,7 @@ export function useMSG() {
                                 const node_settings:NodeSettings = json_data;
 
                                 console.log("GW: " + node_settings.GW);
+                                console.log("WS: " + node_settings.WS);
                                 console.log("DISP: " + node_settings.DISP);
                                 console.log("BTN: " + node_settings.BTN);
                                 console.log("MSH: " + node_settings.MSH);
@@ -1776,6 +1769,11 @@ export function useMSG() {
                                     s.config.node_utc_offset = +node_settings.UTCOF.toFixed(1);
                                     s.config.tx_pwr = node_settings.TXP;
                                     s.config.frequency = +node_settings.MQRG.toFixed(3);
+                                });
+
+                                // update nodesettings store
+                                NodeSettingsStore.update(s => {
+                                    s.nodeSettings = node_settings;
                                 });
 
                                 break;
@@ -1890,7 +1888,9 @@ export function useMSG() {
                                     mh_rssi:mheard.RSSI,
                                     mh_snr:mheard.SNR,
                                     mh_hw:hwtable[mheard.HW],
-                                    mh_distance:+mheard.DIST.toFixed(2)
+                                    mh_distance:+mheard.DIST.toFixed(2),
+                                    mh_pl:mheard.PL,
+                                    mh_mesh:mheard.MESH
                                 }
 
                                 return (new_mheard);
@@ -1960,8 +1960,7 @@ export function useMSG() {
         const keys = Object.keys(json) as Array<keyof typeof json>;
 
         keys.forEach((key) => {
-
-            if (json[key] === undefined) {
+            if (json[key] === undefined || json[key] === null) {
                 console.log("ERROR: JSON Key: " + String(key) + " is undefined!");
                 return false;
             }
