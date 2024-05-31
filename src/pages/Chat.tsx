@@ -23,6 +23,7 @@ import {getBLEconnStore} from '../store/Selectors';
 import DatabaseService from '../DBservices/DataBaseService';
 import DMfrmMapStore from '../store/DMfrmMap';
 import BleConfigFinish from '../store/BLEConfFin';
+import NotifyMsgState from '../store/NotifyMsg';
 
 
 
@@ -60,6 +61,9 @@ const Tab3: React.FC = () => {
 
   // store notifypermission
   const canNotify = useRef<boolean>(false);
+
+  // flag we got a new message to fire notification - has full new message object
+  const notifyMsg_s = useStoreState(NotifyMsgState, s => s.notifyMsg);
 
   // store last MsgID in gloabl State to avoid notifies on page change
   const lastNotifyID_s = useStoreState(LastNotifyID, getLastNotifyID);
@@ -287,7 +291,6 @@ const Tab3: React.FC = () => {
 
       //create a channel for notify on adroid
       if (thisPlatform === "android") {
-
         await LocalNotifications.createChannel({
           id: '1',
           name: 'channel1',
@@ -332,7 +335,7 @@ const Tab3: React.FC = () => {
         cmdAck = true;
       }
 
-      if(canNotify.current === true && !cmdAck){
+      /*if(canNotify.current === true && !cmdAck){
 
         console.log("Msgs in Store: " + msgArr_s.length);
         console.log("Last Msg Nr: " + last_msg.msgNr);
@@ -380,11 +383,60 @@ const Tab3: React.FC = () => {
           s.lastMsgID = last_msg.msgNr;
         });
 
-      }
+      }*/
       scrollToBottom();
     }
   }, [msgArr_s]);
 
+
+  // Trigger that we fire a notification on new message
+  useEffect(() => {
+    console.log("CHAT - New Message to Notify: ");
+    console.log(notifyMsg_s);
+    const notify_title = "New Message from " + notifyMsg_s.fromCall;
+    notifyMsgUser(notify_title, notifyMsg_s.msgTXT);
+  }, [notifyMsg_s.msgNr]);
+
+
+  // local notification method
+  const notifyMsgUser = async (title_:string, body_:string) => {
+    if(canNotify.current === true){
+      if(thisPlatform === "ios"){
+        LocalNotifications.schedule({
+          notifications: [
+            {
+              title:title_,
+              body: body_,
+              id: Math.floor(Math.random() * 600000),
+              schedule: {
+                at: new Date(Date.now() + 1000 * 1), // in 1 secs
+                repeats: false
+              },
+              sound:''
+            }]
+        });
+      }
+
+      if(thisPlatform === "android"){
+        LocalNotifications.schedule({
+          notifications: [
+            {
+              title: title_,
+              body: body_,
+              id: Math.floor(Math.random() * 600000),
+              schedule: {
+                at: new Date(Date.now() + 1000 * 1), // in 1 secs
+                repeats: false
+              },
+              channelId: '1',
+              smallIcon: 'res://drawable/meshcom_logo_32x32_transp_gray',
+              largeIcon: 'res://drawable/meshcom_logo_64x64',
+              sound: 'morse_r.wav'
+            }]
+        });
+      }
+    }
+  }
 
 
   // switch message type - own - own/dm - other

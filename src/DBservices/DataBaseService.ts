@@ -8,7 +8,7 @@ import { MsgType, PosType } from "../utils/AppInterfaces";
 import PosiStore from "../store/PosiStore";
 import MsgStore from "../store/MsgStore";
 import { format, sub } from "date-fns";
-
+import NotifyMsgState from "../store/NotifyMsg";
 
 
 class DatabaseService {

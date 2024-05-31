@@ -49,6 +49,7 @@ import UpdateFW from '../store/UpdtFW';
 import WifiSettingsStore from '../store/WifiSettings';
 import MheardStaticStore from '../utils/MheardStaticStore';
 import NodeSettingsStore from '../store/NodeSettingsStore';
+import NotifyMsgState from '../store/NotifyMsg';
 
 
 export function useMSG() {
@@ -1609,14 +1610,14 @@ export function useMSG() {
                                 console.log("Info Data received!");
                                 const info_data: InfoData = JSON.parse(json_str);
 
+                                // update infodata in ConfigObject
+                                // needed for connect Page
+                                ConfigObject.setConf(info_data);
+
                                 // update Node Info Store
                                 NodeInfoStore.update(s => {
                                     s.infoData = info_data;
                                 });
-
-                                // update infodata in ConfigObject
-                                // needed for connect Page
-                                ConfigObject.setConf(info_data);
 
                                 const callsign = info_data.CALL;
                                 console.log("Node Callsign: " + callsign);

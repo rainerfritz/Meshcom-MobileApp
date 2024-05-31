@@ -28,6 +28,7 @@ import BleConfigFinish from '../store/BLEConfFin';
 import UpdateFW from '../store/UpdtFW';
 import { usePhoneGps } from '../utils/PhoneGps';
 import DataBaseService from '../DBservices/DataBaseService';
+import NotifyMsgState from '../store/NotifyMsg';
 
 
 
@@ -476,6 +477,14 @@ const Tab1: React.FC = () => {
               // escape all quotation marks
               console.log("Connect: Text Message: " + res.msgTXT);
               await DatabaseService.writeTxtMsg(res);
+              // do the notification if from another callsign
+              const curr_call = ConfigObject.getConf().CALL;
+              if (res.fromCall !== curr_call && (!res.msgTXT.startsWith("--"))) {
+                console.log("Connect: Notification from: " + res.fromCall);
+                NotifyMsgState.update(s => {
+                  s.notifyMsg = res;
+                });
+              }
             } 
             if (res !== undefined && 'temperature' in res) {
                 console.log("Connect: Pos Msg from: " + res.callSign);
