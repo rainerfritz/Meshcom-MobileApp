@@ -125,6 +125,10 @@ const Tab1: React.FC = () => {
   // get current AppState
   const isAppActive = AppActiveState.useState(s => s.active);
 
+  // flag that we can notify on new messages. no notify when stored messages are read on ble connect 
+  const canNotify = useRef<boolean>(false);
+
+
 
 
   // setup local notifications. we need to get permission from user/os first
@@ -479,7 +483,7 @@ const Tab1: React.FC = () => {
               await DatabaseService.writeTxtMsg(res);
               // do the notification if from another callsign
               const curr_call = ConfigObject.getConf().CALL;
-              if (res.fromCall !== curr_call && (!res.msgTXT.startsWith("--"))) {
+              if (res.fromCall !== curr_call && (!res.msgTXT.startsWith("--")) && canNotify.current) {
                 console.log("Connect: Notification from: " + res.fromCall);
                 NotifyMsgState.update(s => {
                   s.notifyMsg = res;
@@ -634,6 +638,9 @@ const Tab1: React.FC = () => {
     BLEconnStore.update(s => {
       s.ble_connected = false;
     });
+
+    // reset notification flag
+    canNotify.current = false;
 
     setShowProgrBar(false);
 
@@ -854,6 +861,9 @@ const Tab1: React.FC = () => {
       view1.setUint8(1, 0x20);
       view1.setInt32(2, ts, true);
       sendDV(view1, devID_s);
+
+      // set the can notify flag to true
+      canNotify.current = true;
 
       // redirect to chat
       if (isAppActive && !setConfAl) {

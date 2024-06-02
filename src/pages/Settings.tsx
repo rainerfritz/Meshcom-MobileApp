@@ -91,6 +91,9 @@ const Tab2: React.FC = () => {
   const wifipwdInputRef = useRef<HTMLIonInputElement>(null);
   const aprsCmtRef = useRef<HTMLIonInputElement>(null);
 
+  // Regex for callsign check
+  const regexCallsign = /^([A-Z]{1,2}[0-9][A-Z]{1,3}|[0-9][A-Z][0-9][A-Z]{1,3})-[0-9]{1,2}$/;
+
   // switch show wifi pwd
   const [shWifiPwd, setShWifiPwd] = useState<boolean>(false);
 
@@ -371,7 +374,8 @@ const Tab2: React.FC = () => {
 
 
   // send new callsign to node
-  const setCallSign = () => {
+  // returns true if regex of callsign is correct
+  const setCallSign = ():boolean => {
 
     const nodeCall = callInputRef.current!.value;
 
@@ -384,9 +388,16 @@ const Tab2: React.FC = () => {
         call_s = call_s.trim();
         console.log("Callsign setting: " + call_s);
 
+        // check if callsign is valid
+        if (!regexCallsign.test(call_s)) {
+          console.log("Invalid Callsign!");
+          clearInput();
+          return false;
+        }
+
         let cal_len = call_s.length;
         console.log("Callsign len: " + cal_len);
-        if (cal_len > 20) cal_len = 20;
+        if (cal_len > 11) cal_len = 11;
 
         // dataview object
         let call_buffer = new ArrayBuffer(cal_len + 3);
@@ -405,11 +416,10 @@ const Tab2: React.FC = () => {
         ConfigStore.update(s => {
           s.config.callSign = call_s;
         });
-
       }
     }
-
     clearInput();
+    return true;
   }
 
 
@@ -1091,8 +1101,12 @@ const Tab2: React.FC = () => {
 
     if(call_changed.current){
       console.log("Call changed");
-      setCallSign();
-      
+      if(!setCallSign()) {
+        setAlHeader("Invalid Callsign Setting!");
+        setAlMsg("Please check Callsign! Should be like: OE1XYZ-1 (CLIENT) or OE1XYZ-12 (GATEWAY)");
+        setShAlertCard(true);
+        return;
+      }
     }
 
     if(wifi_changed.current){

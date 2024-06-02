@@ -317,73 +317,11 @@ const Tab3: React.FC = () => {
   }
 
 
-  // fire notify if new message arrives
+  // scroll to bottom if new message arrives
   useEffect(() => {
 
     if (msgArr_s && msgArr_s.length > 0) {
 
-      const last_msg_index = msgArr_s.length - 1;
-      const last_msg = msgArr_s[last_msg_index];
-      if(last_msg.fromCall === undefined) return;
-      
-      const notify_title = "New Message from " + last_msg.fromCall;
-
-      // dont alert if settings ack from node
-      let cmdAck = false;
-      if(last_msg.msgTXT.startsWith("--")) {
-        if(!last_msg.msgTXT.startsWith("--MeshCom"))
-        cmdAck = true;
-      }
-
-      /*if(canNotify.current === true && !cmdAck){
-
-        console.log("Msgs in Store: " + msgArr_s.length);
-        console.log("Last Msg Nr: " + last_msg.msgNr);
-        console.log("Last Msg Nr Store: " + lastNotifyID_s);
-
-        // notify trigger is in the message object (Need to wait for mesgs from buffer of node, while not connected)
-        if(config_s.callSign !== last_msg.fromCall && last_msg.fromCall.length > 1 && lastNotifyID_s !== last_msg.msgNr && last_msg.notify){
-
-          if(thisPlatform === "ios"){
-            LocalNotifications.schedule({
-              notifications: [
-                {
-                  title: notify_title,
-                  body: last_msg.msgTXT,
-                  id: Math.floor(Math.random() * 600000),
-                  schedule: {
-                    at: new Date(Date.now() + 1000 * 1), // in 1 secs
-                    repeats: false
-                  }
-                }]
-            });
-          }
-  
-          if(thisPlatform === "android"){
-            LocalNotifications.schedule({
-              notifications: [
-                {
-                  title: notify_title,
-                  body: last_msg.msgTXT,
-                  id: Math.floor(Math.random() * 600000),
-                  schedule: {
-                    at: new Date(Date.now() + 1000 * 1), // in 1 secs
-                    repeats: false
-                  },
-                  channelId: '1',
-                  smallIcon: 'res://drawable/meshcom_logo_32x32_transp_gray',
-                  largeIcon: 'res://drawable/meshcom_logo_64x64'
-                }]
-            });
-          }
-        }
-
-        //update state with last msgID
-        LastNotifyID.update(s => {
-          s.lastMsgID = last_msg.msgNr;
-        });
-
-      }*/
       scrollToBottom();
     }
   }, [msgArr_s]);
@@ -489,7 +427,6 @@ const Tab3: React.FC = () => {
       setMsgNrAS(msgNr);
       setIsOpenAS(true);
     }
-
   }
 
 
@@ -521,6 +458,9 @@ const Tab3: React.FC = () => {
           selCall = selMsg[0].toCall;
         } else {
           selCall = selMsg[0].fromCall;
+          console.log("To Call: " + selMsg[0].toCall);
+          // check for group message to set the group number
+          if(!isNaN(+selMsg[0].toCall) && selMsg[0].toCall !== "") selCall = selMsg[0].toCall;
         }
         
         console.log("DM to Callsign: " + selCall);
@@ -529,7 +469,6 @@ const Tab3: React.FC = () => {
         setShCallsign(true);
       }
     }
-
     setIsOpenAS(false);
   }
   
@@ -607,9 +546,15 @@ const Tab3: React.FC = () => {
                 <div key={i} onTouchStart={handleButtonPress} onTouchEnd={() => handleButtonRelease(msg.msgNr)} className={msgType(msg)}>
 
                   {msg.isDM ? <>
+                    {!isNaN(+msg.toCall) ? <>
+                      <div className="ion-text-start">
+                      <IonText id="msg-dm">GROUP-MESSAGE {msg.toCall}</IonText>
+                    </div>
+                    </>:<>
                     <div className="ion-text-start">
                       <IonText id="msg-dm">DIRECT-MESSAGE</IonText>
                     </div>
+                    </>}
                   </> : <></>}
 
                   <div className="ion-text-start">
