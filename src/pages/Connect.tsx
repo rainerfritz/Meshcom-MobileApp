@@ -230,7 +230,10 @@ const Tab1: React.FC = () => {
         console.log("Reconnect State active!");
         // if we are in reconnect state and the app is active we start the reconnect timer
         if (isAppActive_Ref.current) {
-          reconnectBLE(ConfigObject.getBleDevId());
+          /**
+           * RECONNECT DISABLED !!!!
+           */
+          //reconnectBLE(ConfigObject.getBleDevId());
         }
       }
     }
@@ -648,6 +651,9 @@ const Tab1: React.FC = () => {
     
     if(manual_ble_disco.current === false) {
       console.log("BLE client disconnected without Useraction!");
+      /*
+      RECONNECT DISABLED !!!!!
+      
       // set the recon flag
       doReconnect.current = true;
       // write to DB
@@ -661,10 +667,14 @@ const Tab1: React.FC = () => {
        * On Android the BLE service needs to get a foreground service to do anything in background
        * So for now we only reconnect if the app is active
        * Furthermore the reconnect state is written to the DB. If the app gets active again the reconnect is triggered (not yet implemented!)
-       *  */
+       *  
       if (isAppActive_Ref.current) {
         reconnectBLE(deviceId);
-      }
+      }*/
+      // alert the user that it disconnected if not manually
+
+      setShDiscoCard(true);
+
     } else {
       // Manual disconnect was triggered
       // reset config parameter in state
@@ -683,11 +693,6 @@ const Tab1: React.FC = () => {
     BleConfigFinish.update(s => {
       s.BleConfFin = 0;
     });
-
-    // alert the user that it disconnected if not manually
-    /*if (manual_ble_disco.current === false) {
-      setShDiscoCard(true);
-    }*/
 
     // reset manual disco flag
     manual_ble_disco.current = false;

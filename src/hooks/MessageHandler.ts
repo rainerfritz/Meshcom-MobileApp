@@ -33,7 +33,7 @@ import ShouldConfStore from '../store/ShouldConfNode';
 import {aprs_char_table, aprs_pri_symbols, aprs_sec_symbols} from '../store/AprsSymbols';
 import {hwtable} from '../store/HwTable';
 import {modtable} from '../store/ModTable';
-import { format, compareAsc, isAfter, fromUnixTime } from "date-fns";
+import { format, compareAsc, isAfter, fromUnixTime, isBefore } from "date-fns";
 import GpsDataStore from '../store/GpsData';
 import WxDataStore from '../store/WxData';
 import AprsCmtStore from '../store/AprsCmtStore';
@@ -206,8 +206,10 @@ export function useMSG() {
                         console.log("Node Date: " + node_date);
                         console.log("Node Time: " + node_time);
                         // we only take the time if it is after 2023-01-01 (node default time is 2023-01-01 00:00:00)
-                        if(isAfter(unix_time, new Date(2024,1,1))){
+                        if(isAfter(unix_time, new Date(2024,1,1)) && isBefore(unix_time, now_timestamp + /*24h */ 86400000)){
                             timestamp_node = unix_time;
+                        } else {
+                            console.log("Node Time not valid! Using current time!");
                         }
                     }
 
@@ -880,14 +882,14 @@ export function useMSG() {
 
             case 0x80: {
 
-                console.log("Config Msg received");
+                //console.log("OLD Config Msg received");
 
                 /*
                 LENGTH 2B - FLAG 1B - LENCALL 1B - Callsign - LAT 8B(Double) - LON 8B(Double) - ALT 4B(INT) - 1B SSID_Length - Wifi_SSID - 1B Wifi_PWD - Wifi_PWD 
                 - 1B APRS_PRIM_SEC - 1B APRS_SYMBOL - 4B SettingsMask - 1B HW-ID - 1B MOD-ID - 1B FW_Version - 1B Comment Length - Comment - 4B Settingsbyte2 - 0x00
                 */
 
-                const call_offset_conf = 2;
+                /*const call_offset_conf = 2;
                 const call_len_conf = msg.getUint8(1);
                 let call_arr_conf:number[] = [];
                 const lat_offset = call_offset_conf + call_len_conf;
@@ -1016,7 +1018,7 @@ export function useMSG() {
                 const settingBytes = msg.getInt32(offSetSettingsBytes, true);
                 console.log("Settings Byte Value: " + settingBytes);
 
-                /*
+                
                 bDisplayVolt = meshcom_settings.node_sset & 0x0001;
                 bDisplayOff = meshcom_settings.node_sset & 0x0002;
                 bPosDisplay = meshcom_settings.node_sset & 0x0004;
@@ -1037,7 +1039,7 @@ export function useMSG() {
                 MESH = meshcom_settings.node_sset2 & 0x0020;
                 bBME680ON =  meshcom_settings.node_sset2 & 0x0004;
                 bMCU811ON =  meshcom_settings.node_sset2 & 0x0008;
-                */
+                
                 const opt_bDisplayVolt = 0x0001;
                 const opt_bDisplayOff = 0x0002;
                 const opt_bPosDisplay = 0x0004;
@@ -1078,7 +1080,7 @@ export function useMSG() {
 
 
                 // get HW-Type, Modulation ID, FW Version, QRG
-                let fw_vers_str_ = "";
+                /*let fw_vers_str_ = "";
                 let hw_str = "";
                 let mod_str_ = "";
                 let tx_pwr_ = 0;
@@ -1171,7 +1173,7 @@ export function useMSG() {
                         bBME680ON =  meshcom_settings.node_sset2 & 0x0004;
                         bMCU811ON =  meshcom_settings.node_sset2 & 0x0008;
                         */
-    
+                        /*
                         const opt_bONEWIRE = 0x0001;
                         const opt_bLPS33 = 0x0002;
                         const opt_bMESH = 0x0020;
@@ -1188,7 +1190,7 @@ export function useMSG() {
                         if ((setting2Bytes & opt_bLPS33) !== 0) lps33_on_ = true;
                         if ((setting2Bytes & opt_bMESH) !== 0) mesh_retrx_ = false;
                         if ((setting2Bytes & opt_bBME680ON) !== 0) bme680_on_ = true;
-                        if ((setting2Bytes & opt_bMCU811ON) !== 0) mcu811_on_ = true;*/
+                        if ((setting2Bytes & opt_bMCU811ON) !== 0) mcu811_on_ = true;
     
                 }
                 
@@ -1229,169 +1231,20 @@ export function useMSG() {
                 }
 
                 // update config in store state
-                console.log("Update Config in Store");
+                //console.log("Update Config in Store");
                 /*ConfigStore.update(s => {
                     s.config = newConfig;
                 });*/
 
                 // update AprsComment in store state
-                AprsCmtStore.update(s => {
+                /*AprsCmtStore.update(s => {
                     s.aprsCmt = comment_str;
-                });
-
-
-                // show set baseconfig alert on unset node
-                if(newConfig.callSign === "" || newConfig.callSign === "XX0XXX-00"){
-
-                    /*ShouldConfStore.update(s => {
-                        s.shouldConf = true;
-                    });*/
-
-                } 
+                });*/
 
                 break;
             }
 
-            case 0x91: {
-
-                /**
-                 * länge 1B- 0x91 - 10B Call (0x00 term.) - Datum - Zeit - Type (:/!/) - HW Type from Call - MOD (3 medium slow) - RSSI - SNR @
-                 * Trennzeichen @
-                 */
-
-                /*console.log("Mheard Msg received");
-
-                let callsign_arr:number[] = [];
-                let date_arr:number[] = [];
-                let time_arr:number[] = [];
-                let rssi_arr:number[] = [];
-                let snr_arr:number[] = [];
-                let hw_arr:number[] = [];
-                
-                let msg_type = ':';
-                let hw_type = 0;
-                let modulation = 0;
-                let rssi = 0;
-                let call_str = "";
-                let call_end_index = 0;
-                let date_str = "";
-                let time_str = "";
-                let snr = 0;
-
-
-                // get callsign - field has currently fixed 10 length filled with 0x00
-                for (let i=1; i<msg_len; i++){
-
-                    if(msg.getUint8(i) === 0x00) {
-                        if(call_end_index < 10) call_end_index = 10;
-                        break;
-                    }
-                    callsign_arr[i-1] = msg.getUint8(i);
-                    call_end_index = i;
-                }
-
-                call_str = convBARRtoStr(callsign_arr);
-                console.log("Call: " + call_str);
-
-                let index = 0;
-                let field = 1; // 1:Datum, 2:Zeit, 3:MSGType, 4:HW, 5: Modulation, 6:RSSI, 7:SNR
-
-                for (let i=call_end_index + 1; i<msg_len; i++){
-
-                    if(msg.getUint8(i) === 0x00) break;
-                    //console.log("Field: " + field);
-                    //console.log("i: " + i);
-
-                    if(msg.getUint8(i) === 0x40){
-                        // @ split sign reached
-                        field++;
-                        index = 0;
-                        i++;
-                    }
-
-
-                    switch (field){
-
-                        case 1: {
-                            date_arr[index] = msg.getUint8(i);
-                            break;
-                        }
-                        case 2: {
-                            time_arr[index] = msg.getUint8(i);
-                            break;
-                        }
-                        case 3: {
-                            msg_type = String.fromCharCode(msg.getUint8(i));
-                            break;
-                        }
-                        case 4: {
-                            hw_arr[index] = msg.getUint8(i);
-                            break;
-                        }
-                        case 5: {
-                            modulation = +String.fromCharCode(msg.getUint8(i));
-                            break;
-                        }
-                        case 6: {
-                            rssi_arr[index] = msg.getUint8(i);
-                            break;
-                        }
-                        case 7: {
-                            snr_arr[index] = msg.getUint8(i);
-                            break;
-                        }
-                    }
-                    
-                    index++;
-
-                }
-
-                date_str = convBARRtoStr(date_arr);
-                // if date = 2023-01-01 (default on node fw) the node had no actual time add current date and time
-                if(date_str === "2023-01-01"){
-                    date_str = date_now;
-                }
-                console.log("Date: " + date_str);
-
-                time_str = convBARRtoStr(time_arr);
-                if(date_str === "2023-01-01"){
-                    time_str = time;
-                }
-                console.log("Time: " + time_str);
-
-                console.log("Msg Type: " + msg_type);
-                hw_type = +convBARRtoStr(hw_arr);
-
-                console.log("HW ID: " + hw_type);
-                console.log("MOD: " + modulation);
-
-                rssi = +convBARRtoStr(rssi_arr);
-                console.log("RSSI: " + rssi);
-                
-                snr = +convBARRtoStr(snr_arr);
-                console.log("SNR: " + snr);
-
-                const hw_str = hwtable[hw_type];
-                console.log("HW String: " + hw_str);
-
-                // check if we have a position to this callsign to calc distance as the crow flies (in km)
-                let distance = 0;
-
-                // we add own nodecall when writing to DB
-                let newMheard:MheardType = {
-                    mh_timestamp:now_timestamp,
-                    mh_nodecall:"",
-                    mh_callSign:call_str,
-                    mh_date:date_str,
-                    mh_time:time_str,
-                    mh_rssi:rssi,
-                    mh_snr:snr,
-                    mh_hw:hw_str,
-                    mh_distance:distance
-                }
-
-                return (newMheard);*/
-            }
+            
 
             // Data Message from Node
             /**

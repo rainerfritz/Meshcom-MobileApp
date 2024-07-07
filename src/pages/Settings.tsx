@@ -1572,31 +1572,27 @@ const Tab2: React.FC = () => {
             </div>
             {shGroupCallSet &&
               <div className='setting_wrapper'>
-                {isGateWay &&
-                  <div className='mt-3 mb-3'>Master Group</div>
-                }
-                {isGateWay &&
-                  <IonItem>
-                    <IonInput value={masterGrp} ref={gchRef} label='Set Master Group' labelPlacement="floating" type='number' maxlength={6}></IonInput>
-                  </IonItem>
-                }
-                <div className='mt-3 mb-3'>Sub Group 1</div>
+                <div className='mt-3 mb-3'>Group 1</div>
+                <IonItem>
+                  <IonInput value={masterGrp} ref={gchRef} label='Set Master Group' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Group 2</div>
                 <IonItem>
                   <IonInput value={grp0} ref={gcb0Ref} label='Set Sub Group 1' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Sub Group 2</div>
+                <div className='mt-3 mb-3'>Group 3</div>
                 <IonItem>
                   <IonInput value={grp1} ref={gcb1Ref} label='Set Sub Group 2' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Sub Group 3</div>
+                <div className='mt-3 mb-3'>Group 4</div>
                 <IonItem>
                   <IonInput value={grp2} ref={gcb2Ref} label='Set Sub Group 3' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Sub Group 4</div>
+                <div className='mt-3 mb-3'>Group 5</div>
                 <IonItem>
                   <IonInput value={grp3} ref={gcb3Ref} label='Set Sub Group 4' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Sub Group 5</div>
+                <div className='mt-3 mb-3'>Group 6</div>
                 <IonItem>
                   <IonInput value={grp4} ref={gcb4Ref} label='Set Sub Group 5' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>

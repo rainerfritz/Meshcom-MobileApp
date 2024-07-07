@@ -154,6 +154,10 @@ class DatabaseService {
                 const res = await DatabaseService.db.query('SELECT * FROM TextMessages ORDER BY timestamp ASC;');
                 if (res.values) {
                     //console.log('TextMessages:', res.values);
+                    // print all the messages
+                    res.values.forEach((msg: MsgType) => {
+                        console.log('MsgNr:', msg.msgNr, 'MsgTimestamp:', msg.timestamp, 'MsgTime:', msg.msgTime, 'From:', msg.fromCall, 'To:', msg.toCall, 'Msg:', msg.msgTXT, 'Via:', msg.via, 'Ack:', msg.ack, 'isDM:', msg.isDM, 'Notify:', msg.notify);
+                    });
                     return res.values;
                 }
             } catch (error) {
