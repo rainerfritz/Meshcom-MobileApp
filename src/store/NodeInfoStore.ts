@@ -14,12 +14,12 @@ const defaultInfoData:InfoData = {
     BLE: "none",
     BATP: 0,
     BATV: 0,
-    GCH: 0,
     GCB0: 0,
     GCB1: 0,
     GCB2: 0,
     GCB3: 0,
     GCB4: 0,
+    GCB5: 0,
     CTRY: "none"
 }
 

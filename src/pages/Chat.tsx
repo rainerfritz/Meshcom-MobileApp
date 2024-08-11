@@ -622,13 +622,12 @@ const Tab3: React.FC = () => {
           </div>
 
           <div className='input_bar'>
-            {shCallsign ? <>
+            {shCallsign &&
               <div className="dm_call">
               <IonItem>
                 <IonInput className='custominput' ref={callsignInputRef} label='To Callsign or Group' labelPlacement="stacked" type='text' maxlength={MAX_CHAR_CALLSIGN} onIonInput={(ev) => handleInput(ev)} value={toCallsign_.current}></IonInput>
                 </IonItem>
-              </div>
-            </> : <></>}
+              </div>}
 
             <div >
               <IonItem>

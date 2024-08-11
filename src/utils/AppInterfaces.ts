@@ -141,12 +141,12 @@ export interface InfoData {
     BLE: string,
     BATP: number,
     BATV: number,
-    "GCH": number,
     "GCB0": number,
     "GCB1": number,
     "GCB2": number,
     "GCB3": number,
     "GCB4": number,
+    "GCB5": number,
     "CTRY": string
 }
 
@@ -172,6 +172,7 @@ export interface WifiSettings {
     PW: string,
     IP: string,
     GW: string,
+    AP: boolean,
     DNS: string,
     SUB: string
 }

@@ -180,10 +180,11 @@ const Tab2: React.FC = () => {
       s.infoData.CTRY = ctry_ev;
     });
   }
-  const ctry_list = ["EU", "EU8", "UK", "UK8", "US", "VR2", "868", "906"];
+  const ctry_list = ["EU", "EU8", "ON", "UK", "UK8", "US", "VR2", "868", "906"];
   const ctry_list_translated: {[key: string]: string} = 
   {"EU":"EU | 433.175MHz", 
-  "EU8":"EU8 | 433.175MHz", 
+  "EU8":"EU8 | 433.175MHz",
+  "ON":"ON | 433.175MHz",
   "UK":"UK | 439.9125MHz",
   "UK8":"UK8 | 439.9125MHz",
   "US":"US | 433.175MHz", 
@@ -200,24 +201,24 @@ const Tab2: React.FC = () => {
   const [shGroupCallSet, setShGroupCallSet] = useState<boolean>(false);
   const setGrpCmd = useRef<string>("");
   const isGateWay = NodeSettingsStore.useState(s => s.nodeSettings.GW);
-  const masterGrp = NodeInfoStore.useState(s => s.infoData.GCH);
   const grp0 = NodeInfoStore.useState(s => s.infoData.GCB0);
   const grp1 = NodeInfoStore.useState(s => s.infoData.GCB1);
   const grp2 = NodeInfoStore.useState(s => s.infoData.GCB2);
   const grp3 = NodeInfoStore.useState(s => s.infoData.GCB3);
   const grp4 = NodeInfoStore.useState(s => s.infoData.GCB4);
+  const grp5 = NodeInfoStore.useState(s => s.infoData.GCB5);
   // references for the inputs
-  const gchRef = useRef<HTMLIonInputElement>(null);
   const gcb0Ref = useRef<HTMLIonInputElement>(null);
   const gcb1Ref = useRef<HTMLIonInputElement>(null);
   const gcb2Ref = useRef<HTMLIonInputElement>(null);
   const gcb3Ref = useRef<HTMLIonInputElement>(null);
   const gcb4Ref = useRef<HTMLIonInputElement>(null);
+  const gcb5Ref = useRef<HTMLIonInputElement>(null);
   // reset the group call settings
   const resetGrpCall = () => {
     console.log("Reset Group Call Settings");
     // send to node
-    sendTxtCmdNode("--setgrc 0;0;0;0;0;0;");
+    sendTxtCmdNode("--setgrc");
   }
   
 
@@ -1156,38 +1157,29 @@ const Tab2: React.FC = () => {
     }
 
     if (shGroupCallSet) {
-      let master_grp_nr = 0;
       let gcb0 = 0;
       let gcb1 = 0;
       let gcb2 = 0;
       let gcb3 = 0;
       let gcb4 = 0;
-      let master_grp_changed = false;
-
-      if (isGateWay) {
-        // check if the value is a number
-        const gch: number = checkGrpInput(gchRef.current!.value);
-        if (gch !== master_grp_nr) {
-          master_grp_changed = true;
-          master_grp_nr = gch;
-        }
-      }
+      let gcb5 = 0;
 
       gcb0 = checkGrpInput(gcb0Ref.current!.value);
       gcb1 = checkGrpInput(gcb1Ref.current!.value);
       gcb2 = checkGrpInput(gcb2Ref.current!.value);
       gcb3 = checkGrpInput(gcb3Ref.current!.value);
       gcb4 = checkGrpInput(gcb4Ref.current!.value);
+      gcb5 = checkGrpInput(gcb5Ref.current!.value);
 
       // check if group settings changed
-      if (gcb0 !== grp0 || gcb1 !== grp1 || gcb2 !== grp2 || gcb3 !== grp3 || gcb4 !== grp4 || master_grp_changed) {
+      if (gcb0 !== grp0 || gcb1 !== grp1 || gcb2 !== grp2 || gcb3 !== grp3 || gcb4 !== grp4 || gcb5 !== grp5) {
         console.log("Group Settings changed");
-        console.log("Master Group: " + master_grp_nr);
         console.log("Group 0: " + gcb0);
         console.log("Group 1: " + gcb1);
         console.log("Group 2: " + gcb2);
         console.log("Group 3: " + gcb3);
         console.log("Group 4: " + gcb4);
+        console.log("Group 5: " + gcb5);
         // set fields values
         /*NodeInfoStore.update(s => {
           s.infoData.GCH = master_grp_nr;
@@ -1199,13 +1191,8 @@ const Tab2: React.FC = () => {
         });*/
 
         let cmd_str = "--setgrc ";
-        if (master_grp_changed) {
-          cmd_str = cmd_str + master_grp_nr.toString() + ";";
-        } else {
-          cmd_str = cmd_str + "0;";
-        }
-        cmd_str = cmd_str + gcb0.toString() + ";" + gcb1.toString() + ";" + gcb2.toString() + ";" + gcb3.toString() + ";" + gcb4.toString() + ";";
-        master_grp_changed = false;
+        cmd_str = cmd_str + gcb0.toString() + ";" + gcb1.toString() + ";" + gcb2.toString() + ";" + gcb3.toString() + ";" + gcb4.toString() + ";" + gcb5.toString() + ";";
+
         console.log("Group CMD: " + cmd_str);
         setGrpCmd.current = cmd_str;
         sendTxtCmd("setGroup");
@@ -1443,14 +1430,14 @@ const Tab2: React.FC = () => {
               <div>APRS Comment: {aprs_cmt_store}</div>
             </div>
 
-            {(masterGrp > 0 || grp0 > 0 || grp1 > 0 || grp2 > 0 || grp3 > 0 || grp4 > 0) && <div className='settings_cont'>
+            {(grp0 > 0 || grp1 > 0 || grp2 > 0 || grp3 > 0 || grp4 > 0 || grp5 > 0) && <div className='settings_cont'>
               <div>Call Groups:</div>
-              {isGateWay && masterGrp > 0 && <div>Master Group: {masterGrp}</div>}
               {grp0 > 0 && <div>Group 1: {grp0}</div>}
               {grp1 > 0 && <div>Group 2: {grp1}</div>}
               {grp2 > 0 && <div>Group 3: {grp2}</div>}
               {grp3 > 0 && <div>Group 4: {grp3}</div>}
               {grp4 > 0 && <div>Group 5: {grp4}</div>}
+              {grp5 > 0 && <div>Group 6: {grp5}</div>}
             </div>
             }
 
@@ -1574,27 +1561,27 @@ const Tab2: React.FC = () => {
               <div className='setting_wrapper'>
                 <div className='mt-3 mb-3'>Group 1</div>
                 <IonItem>
-                  <IonInput value={masterGrp} ref={gchRef} label='Set Master Group' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp0} ref={gcb0Ref} label='Set Group 1' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 2</div>
                 <IonItem>
-                  <IonInput value={grp0} ref={gcb0Ref} label='Set Sub Group 1' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp1} ref={gcb1Ref} label='Set Group 2' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 3</div>
                 <IonItem>
-                  <IonInput value={grp1} ref={gcb1Ref} label='Set Sub Group 2' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp2} ref={gcb2Ref} label='Set Group 3' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 4</div>
                 <IonItem>
-                  <IonInput value={grp2} ref={gcb2Ref} label='Set Sub Group 3' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp3} ref={gcb3Ref} label='Set Group 4' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 5</div>
                 <IonItem>
-                  <IonInput value={grp3} ref={gcb3Ref} label='Set Sub Group 4' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp4} ref={gcb4Ref} label='Set Group 5' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 6</div>
                 <IonItem>
-                  <IonInput value={grp4} ref={gcb4Ref} label='Set Sub Group 5' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp5} ref={gcb5Ref} label='Set Group 6' labelPlacement="floating" type='number' maxlength={6}></IonInput>
                 </IonItem>
                 <div className='resetGrpBtn'>
                     <IonButton fill='solid' slot='start' onClick={() => resetGrpCall()}>Reset Groups</IonButton>

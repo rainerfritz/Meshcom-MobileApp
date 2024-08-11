@@ -8,6 +8,7 @@ const defaultWifiSettings:WifiSettings = {
     PW: "none",
     IP: "0.0.0.0",
     GW: "0.0.0.0",
+    AP: false,
     DNS: "0.0.0.0",
     SUB: "255.255.255.0"
 }
