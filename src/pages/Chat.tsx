@@ -75,7 +75,6 @@ const Tab3: React.FC = () => {
   // remember last dm to callsign
   const toCallsign_ = useRef<string>("");
 
-
   // longpress event
   const MIN_PRESS_TIME = 800; //ms
   //actionsheet
@@ -95,6 +94,8 @@ const Tab3: React.FC = () => {
   // DM callsign trigger from Map
   const dmFrmMap_ = DMfrmMapStore.useState(s => s.dmfDMfrmMap);
 
+  // stores the last timestamp of a message in chat to insert date panel
+  const lastMsgTime = useRef<number>(Date.now());
 
 
 
@@ -494,6 +495,29 @@ const Tab3: React.FC = () => {
     toCallsign_.current = inp;
   }
 
+
+  // check if timestamps of two text messages have midnight in between to show date
+  const checkMidnight = (msg:MsgType) => {
+
+    const day_msg = new Date(msg.timestamp);
+    const day_last = new Date(lastMsgTime.current);
+
+    if(day_msg.getDate() !== day_last.getDate()){
+      lastMsgTime.current = msg.timestamp;
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+
+  // return the date panel
+  const getLocalDate = (msg:MsgType) : string => {
+    const localDateString:string = new Date(msg.timestamp).toLocaleDateString();
+    return localDateString;
+  }
+
+
   
 
 
@@ -541,6 +565,11 @@ const Tab3: React.FC = () => {
 
           {msgArr_s.map((msg, i) => (
             <>
+              {checkMidnight(msg) &&
+                <div className="date-panel">
+                  <IonText id="msg-time">{getLocalDate(msg)}</IonText>
+                </div>}
+
               {msg.msgNr !== 0 ? <>
 
                 <div key={i} onTouchStart={handleButtonPress} onTouchEnd={() => handleButtonRelease(msg.msgNr)} className={msgType(msg)}>

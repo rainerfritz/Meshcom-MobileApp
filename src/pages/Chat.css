@@ -138,8 +138,21 @@ ion-input.custominput{
 #spacer-txtbox{
     height: 3px;
     width: auto;
-
 }
 #bottom{
     width: auto;
+}
+
+.date-panel{
+    width: auto;
+    height: 5%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #0b3944;
+    color: #fff;
+    font-size: 1.1em;
+    border-radius: 6px;
+    margin-top: 5px;
+    margin-bottom: 10px;
 }

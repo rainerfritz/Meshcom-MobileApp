@@ -162,7 +162,7 @@ const Tab2: React.FC = () => {
 
   // timer to count how often sendpos and sendtrackwas sent
   let now_obj = new Date();
-  const txpos_last = useRef<number>(now_obj.getTime());
+  const txpos_last = useRef<number>(Date.now());
   const minWaitTime_txpos = 10000; // 10 sec
 
   // country settings 
@@ -184,7 +184,6 @@ const Tab2: React.FC = () => {
   const ctry_list_translated: {[key: string]: string} = 
   {"EU":"EU | 433.175MHz", 
   "EU8":"EU8 | 433.175MHz",
-  "ON":"ON | 433.175MHz",
   "UK":"UK | 439.9125MHz",
   "UK8":"UK8 | 439.9125MHz",
   "US":"US | 433.175MHz", 
@@ -232,7 +231,7 @@ const Tab2: React.FC = () => {
     console.log("Settings Page BLE connected: " + bleconn);
     updateBLEConnected(bleconn);
     // set the sendpos and sendtrack wait timer that it can be pushed now. We wait after first press of the button
-    txpos_last.current = 0;
+    //txpos_last.current = 0;
   });
 
 
@@ -904,32 +903,31 @@ const Tab2: React.FC = () => {
 
       case "txpos": {
         // check if txpos was sent in the last 10 seconds
-        const now = now_obj.getTime();
+        const now = Date.now();
         console.log("TX POS pressed at: " + now);
         const diff = now - txpos_last.current;
         console.log("TX POS Diff: " + diff);
 
         if (diff >= minWaitTime_txpos) {
           cmd_ = "--sendpos";
-          txpos_last.current = now_obj.getTime();
+          txpos_last.current = Date.now();
         } else {
           setAlHeader("TXPOS already sent!");
           setAlMsg("TX POS only every " + minWaitTime_txpos / 1000 + " sec possible!");
           setShAlertCard(true);
-
         }
         break;
       }
 
       case "txtrack": {
         // check if txpos was sent in the last 10 seconds and track is on
-        const now = now_obj.getTime();
+        const now = Date.now();
         const diff = now - txpos_last.current;
         console.log("TXTRACK Diff: " + diff);
 
-        if (diff > minWaitTime_txpos) {
+        if (diff >= minWaitTime_txpos) {
           cmd_ = "--sendtrack";
-          txpos_last.current = now_obj.getTime();
+          txpos_last.current = Date.now();
         }
         else {
           setAlHeader("TXTRACK already sent!");
