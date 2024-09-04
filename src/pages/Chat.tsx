@@ -647,20 +647,41 @@ const Tab3: React.FC = () => {
         <div className="send-text">
 
           <div className='dm_btn'>
-            <IonButton slot='start' onClick={() => setShCallsign(!shCallsign)} size='small' fill="outline" {...{ color: shCallsign ? "success" : "primary" }}>DM</IonButton>
+            <IonButton 
+              slot='start' 
+              onClick={() => setShCallsign(!shCallsign)} 
+              size='small' 
+              fill="outline" {...{ color: shCallsign ? "success" : "primary" }}>DM</IonButton>
           </div>
 
           <div className='input_bar'>
             {shCallsign &&
               <div className="dm_call">
-              <IonItem>
-                <IonInput className='custominput' ref={callsignInputRef} label='To Callsign or Group' labelPlacement="stacked" type='text' maxlength={MAX_CHAR_CALLSIGN} onIonInput={(ev) => handleInput(ev)} value={toCallsign_.current}></IonInput>
+                <IonItem>
+                  <IonInput
+                    className='custominput'
+                    ref={callsignInputRef}
+                    label='To Callsign or Group'
+                    labelPlacement="stacked"
+                    type='text'
+                    maxlength={MAX_CHAR_CALLSIGN}
+                    onIonInput={(ev) => handleInput(ev)}
+                    value={toCallsign_.current}>
+                  </IonInput>
                 </IonItem>
               </div>}
 
-            <div >
+            <div>
               <IonItem>
-                <IonInput className='custominput' ref={textInputRef} label='Type Message' labelPlacement="stacked" type='text' autocorrect='on' maxlength={MAX_CHAR_TEXTINPUT}></IonInput>
+                <IonInput
+                  className='custominput'
+                  ref={textInputRef}
+                  label='Type Message'
+                  labelPlacement="stacked"
+                  type='text'
+                  autocorrect='on'
+                  maxlength={MAX_CHAR_TEXTINPUT}>
+                </IonInput>
               </IonItem>
             </div>
           </div>
@@ -671,7 +692,6 @@ const Tab3: React.FC = () => {
         </div>
       </IonFooter>
       
-
     </IonPage>
   );
 };

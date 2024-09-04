@@ -329,6 +329,9 @@ const NodeMap = () => {
 
     const info = {call_:call, lat_:lat, lon_:lon, alt_:alt, bat_:bat, hw_:hw, press_:pressure, hum_:humidity, temp_:temperature, qnh_:qnh, 
       timestamp_:timestamp, comment_:comment, temp_2_:temp_2, co2_:co2, gas_res_:gas_res, alt_press_:alt_press};
+    // print the info
+    console.log("Marker Info: Call: " + call + " Lat: " + lat + " Lon: " + lon + " Alt: " + alt + " Bat: " + bat + " HW: " + hw + " Press: " + pressure + " Hum: " + humidity + " Temp: " + temperature + " QNH: " + qnh + " Time: " + timestamp + " Comment: " + comment + " Temp_2: " + temp_2 + " CO2: " + co2 + " Gas Res: " + gas_res + " Alt Press: " + alt_press);
+    
     setMarkerInfo(info);
 
     setCurrentPoint({latitude:lat, longitude:lon});
