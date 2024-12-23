@@ -1578,6 +1578,7 @@ export function useMSG() {
                                 console.log("Wifi GW: " + wifi_settings.GW);
                                 console.log("Wifi DNS: " + wifi_settings.DNS);
                                 console.log("Wifi SUB: " + wifi_settings.SUB);
+                                console.log("Wifi AP: " + wifi_settings.AP);
 
                                 // update config store
                                 WifiSettingsStore.update(s => {

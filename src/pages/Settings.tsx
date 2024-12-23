@@ -728,26 +728,32 @@ const Tab2: React.FC = () => {
     switch (cmd) {
 
       case "gw": {
+        if (!wifiSettings_s.AP) {
+          if (config_s.gw_on) {
 
-        if (config_s.gw_on) {
+            cmd_ = "--gateway off";
 
-          cmd_ = "--gateway off";
-
-        } else {
-
-          // check if we have a wifi pw set
-          if (config_s.hw !== "RAK4631") {
-            if (config_s.wifi_pwd.length > 0 && config_s.wifi_pwd !== "none") {
-              cmd_ = "--gateway on";
-            } else {
-              console.log("Wifi PW not set! GW Mode not possible!");
-              setAlHeader("Error!");
-              setAlMsg("Wifi Settings not configured!");
-              setShAlertCard(true);
-            }
           } else {
-            cmd_ = "--gateway on";
+
+            // check if we have a wifi pw set
+            if (config_s.hw !== "RAK4631") {
+              if (config_s.wifi_pwd.length > 0 && config_s.wifi_pwd !== "none") {
+                cmd_ = "--gateway on";
+              } else {
+                console.log("Wifi PW not set! GW Mode not possible!");
+                setAlHeader("Error!");
+                setAlMsg("Wifi Settings not configured!");
+                setShAlertCard(true);
+              }
+            } else {
+              cmd_ = "--gateway on";
+            }
           }
+        } else {
+          console.log("AP Mode active! GW Mode not possible!");
+          setAlHeader("AP Mode active!");
+          setAlMsg("GW Mode not possible!");
+          setShAlertCard(true);
         }
         break;
       }
@@ -1044,6 +1050,23 @@ const Tab2: React.FC = () => {
       case "setGroup": {
         if (setGrpCmd.current !== "") {
           cmd_ = setGrpCmd.current;
+        }
+        break;
+      }
+
+      // set Wifi-AP Mode
+      case "wifi_ap": {
+        if (!nodeSettings.GW) {
+          if (wifiSettings_s.AP) {
+            cmd_ = "--wifiap off";
+          }
+          else {
+            cmd_ = "--wifiap on";
+          }
+        } else {
+          setAlHeader("Gateway Mode active!");
+          setAlMsg("Wifi AP Mode not possible!");
+          setShAlertCard(true);
         }
         break;
       }
@@ -1603,7 +1626,7 @@ const Tab2: React.FC = () => {
               <div className='settings_btns'>
                 <div className='settings_btns_l'>
                   <div>
-                    <IonButton expand="block" fill={config_s.gw_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("gw")}>GATEWAY</IonButton>
+                    <IonButton expand="block" fill={nodeSettings.GW ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("gw")}>GATEWAY</IonButton>
                   </div>
                   <div >
                     <IonButton expand="block" fill={config_s.display_off ? 'outline' : 'solid'} slot='start' onClick={() => sendTxtCmd("display")}>DISPLAY</IonButton>
@@ -1657,6 +1680,9 @@ const Tab2: React.FC = () => {
                   </div>
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("posdebug")}>POS-Info</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={wifiSettings_s.AP ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("wifi_ap")}>Wifi AP</IonButton>
                   </div>
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => setShRebootCard(true)}>REBOOT</IonButton>

@@ -150,6 +150,10 @@ const Tab3: React.FC = () => {
   // sending a textmessage
   const sendMsg = () => {
 
+    if(!ble_connected){
+      console.log("BLE not connected");
+      return;
+    }
     console.log("Sending Message");
     console.log("shCallsign: " + shCallsign);
     let isDM = false;
@@ -666,6 +670,7 @@ const Tab3: React.FC = () => {
                     type='text'
                     maxlength={MAX_CHAR_CALLSIGN}
                     onIonInput={(ev) => handleInput(ev)}
+                    disabled={!ble_connected}
                     value={toCallsign_.current}>
                   </IonInput>
                 </IonItem>
@@ -680,6 +685,7 @@ const Tab3: React.FC = () => {
                   labelPlacement="stacked"
                   type='text'
                   autocorrect='on'
+                  disabled={!ble_connected}
                   maxlength={MAX_CHAR_TEXTINPUT}>
                 </IonInput>
               </IonItem>
@@ -687,7 +693,7 @@ const Tab3: React.FC = () => {
           </div>
 
           <div className='send_btn'>
-            <IonIcon slot='end' icon={caretForwardCircle} onClick={() => sendMsg()} color='primary' size='large'></IonIcon>
+            <IonIcon slot='end' icon={caretForwardCircle} onClick={() => sendMsg()} {...{ color: ble_connected ? "primary" : "danger" }} size='large'></IonIcon>
           </div>
         </div>
       </IonFooter>
