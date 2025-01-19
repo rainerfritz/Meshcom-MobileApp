@@ -193,7 +193,8 @@ export interface NodeSettings {
     MQRG: number,
     MSF: number,
     MCR: number,
-    MBW: number
+    MBW: number,
+    GWNPOS: boolean
 }
 
 // APRS Settings interface 

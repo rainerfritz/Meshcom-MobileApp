@@ -1,5 +1,7 @@
 import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, 
-  IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, IonLoading} from '@ionic/react';
+  IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, IonLoading, IonModal,
+IonButtons, IonList, IonItem, IonLabel,
+useIonViewWillLeave} from '@ionic/react';
 
 import './Connect.css';
 
@@ -29,7 +31,7 @@ import UpdateFW from '../store/UpdtFW';
 import { usePhoneGps } from '../utils/PhoneGps';
 import DataBaseService from '../DBservices/DataBaseService';
 import NotifyMsgState from '../store/NotifyMsg';
-
+import LogS from '../utils/LogService';
 
 
 export interface ScanRes {
@@ -64,19 +66,21 @@ const Tab1: React.FC = () => {
   const isAppActive_Ref = useRef<boolean>(false);
   const [connFlag, setConnFlag] = useState<boolean>(false);
   const [showProgrBar, setShowProgrBar] = useState<boolean>(false);
+  const connInProgress = useRef<boolean>(false);  // Flag to avoid multiple connect attempts
+
 
   // store device id
   //const devID_s = useStoreState(DevIDStore, getDevID);
   const [devID_s, setDevIDs] = useState<string>("");
 
   //show set config Alert state
-  const setConfAl = useStoreState(ShouldConfStore, getShouldConfStore);
+  const setConfAl = ShouldConfStore.useState(s => s.shouldConf);
 
   //config from sate store
   const config_s:ConfType = ConfigStore.useState(s => s.config);
 
   // redirect to chat if config is set
-  const shRedirChat = useStoreState(RedirectChatStore, getRedirChatStore);
+  const shRedirChat = RedirectChatStore.useState(s => s.redirChat);
 
   // remember we loaded on startup settings screen
   const didrun = useRef<boolean>(false);
@@ -128,13 +132,15 @@ const Tab1: React.FC = () => {
   // flag that we can notify on new messages. no notify when stored messages are read on ble connect 
   const canNotify = useRef<boolean>(false);
 
+  // remember if this page is active
+  const thisPageActive = useRef<boolean>(false);
 
 
 
   // setup local notifications. we need to get permission from user/os first
   const getNotifyPermission = async () => {
     if((await LocalNotifications.requestPermissions()).display === 'granted'){
-      console.log("Local Notification allowed");
+      LogS.log(0, "Local Notification allowed");
     }
   }
 
@@ -207,12 +213,19 @@ const Tab1: React.FC = () => {
   }, []);
 
 
-  // when we enter screen we want to do an initial scan
+  // when we enter for the first time the screen we want to do an initial scan
   useIonViewDidEnter(() => {
     if (!didrun.current) {
       getScan();
       didrun.current = true;
     }
+    // set the page active flag
+    thisPageActive.current = true;
+  });
+
+  // when we leave the page we clear the page active flag
+  useIonViewWillLeave(() => {
+    thisPageActive.current = false;
   });
 
 
@@ -224,6 +237,7 @@ const Tab1: React.FC = () => {
     if (didrun.current) {
       console.log("Connect - App active: " + isAppActive_Ref.current);
       console.log("Recon Count: " + recon_count.current);
+      LogS.log(0, "App active: " + isAppActive_Ref.current);
       // check if we are in reconnect state
       console.log("Reconnect State: " + doReconnect.current);
       if (doReconnect.current) {
@@ -253,8 +267,7 @@ const Tab1: React.FC = () => {
   // scan BLE devices
   const getScan = async () => {
     ble_scan_ongoing.current = true;
-    console.log("Scanning BLE Devices");
-
+    LogS.log(0, "Scanning BLE Devices");
     // if we are in reconnect state ignore scanning
     /*DatabaseService.getReconState().then((reconstate) => {
       if (reconstate) return;
@@ -274,11 +287,11 @@ const Tab1: React.FC = () => {
 
       // check if BLE is enabled
       const ble_enabled = await BleClient.isEnabled();
-      console.log("BLE enabled on phone: " + ble_enabled);
+      LogS.log(0, "BLE enabled on phone: " + ble_enabled);
 
       if (!ble_enabled) {
         // alert that BLE is not enabled - iOS comes with alert message, check android
-        console.log("BLE not enabled on phone!");
+        LogS.log(1, "BLE not enabled on phone!");
 
         if (pltfrm.current === "android") {
           setAlHeader("Bluetooth is not enabled!");
@@ -292,7 +305,7 @@ const Tab1: React.FC = () => {
         const loc_enabled = await BleClient.isLocationEnabled();
 
         if (!loc_enabled) {
-          console.log("Android Location Service disabled!");
+          LogS.log(1, "Android Location Service disabled!");
           // open Location settings in android
           await BleClient.openLocationSettings();
         }
@@ -370,7 +383,7 @@ const Tab1: React.FC = () => {
       await sleep(BLE_WAIT_SCAN);
       await BleClient.stopLEScan();
 
-      console.log('stopped scanning');
+      LogS.log(0, "Stopped Scanning");
       setShowProgrBar(false);
 
       // sort the scan results by their name
@@ -382,8 +395,7 @@ const Tab1: React.FC = () => {
       return;
 
     } catch (error) {
-      console.log("BLE Scan Error!");
-      console.error(error);
+      LogS.log(1, "Error on BLE Scan! " + error);
     }
   }
 
@@ -392,7 +404,15 @@ const Tab1: React.FC = () => {
   // connect to device
   const connDev = async (devID: string) => {
 
-    console.log("Connecting DeviceID: " + devID);
+    // check if we are already connecting to a device
+    if (connInProgress.current) {
+      LogS.log(0, "BLE Connect already in Progress!");
+      return;
+    }
+
+    connInProgress.current = true;
+
+    LogS.log(0, "Connecting DeviceID: " + devID);
     setShowProgrBar(true);
     // set devId state here local
     setDevIDs(devID);
@@ -404,8 +424,7 @@ const Tab1: React.FC = () => {
     try {
       await DatabaseService.checkDbConn(); 
     } catch (error) {
-      console.log("BLE Connect - Error on DB Connection!");
-      console.error(error);
+      LogS.log(1, "Error on DB Connection! " + error);
       setShowProgrBar(false);
       setAlHeader("Error on DB Connection!");
       const err_msg = (error as Error).message;
@@ -415,31 +434,20 @@ const Tab1: React.FC = () => {
     
     // check if DB state is initialized
     if(!DataBaseService.isInit){
+      LogS.log(0, "BLE Connect - DB is not initialized!");
       // try to init DB again
       try {
         await DatabaseService.initializeDatabase();
       } catch (error) {
-        console.log("BLE Connect - Error on DB Initialization!");
-        console.error(error);
+        LogS.log(1, "BLE Connect - Error on DB Initialization! " + error);
         setShowProgrBar(false);
         setAlHeader("Error on DB Initialization!");
         const err_msg = (error as Error).message;
         setAlMsg(err_msg);
         setShAlertCard(true);
       }
-      // sleep for 2 sec to give the DB time to open
-      await sleep(2000);
-      // check if DB is open
-      if(!DataBaseService.isInit){
-        console.log("BLE Connect - DB not initialized!");
-        setShowProgrBar(false);
-        setAlHeader("Error on DB Initialization!");
-        setAlMsg("Please connect again!");
-        setShAlertCard(true);
-        return;
-      }
     } else {
-      console.log("BLE Connect - DB initialized!");
+      LogS.log(0, "BLE Connect - DB initialized!");
     }
 
     try {
@@ -482,7 +490,7 @@ const Tab1: React.FC = () => {
           parseMsg(value).then(async (res) => {
             if (res !== undefined && 'msgTXT' in res) {
               // escape all quotation marks
-              console.log("Connect: Text Message: " + res.msgTXT);
+              LogS.log(0,"Connect - Txt Msg: " + res.msgTXT);
               await DatabaseService.writeTxtMsg(res);
               // do the notification if from another callsign
               const curr_call = ConfigObject.getConf().CALL;
@@ -505,7 +513,7 @@ const Tab1: React.FC = () => {
 
           })}).then(async () => {
 
-        console.log('connected to device', devID);
+        LogS.log(0, "Connected to Device: " + devID);
 
         // Update Recon State in DB
         await DatabaseService.setReconState(0, devID);
@@ -538,7 +546,7 @@ const Tab1: React.FC = () => {
           setShLoadConf(true);
         
         // finally we send a hello message to the client. It then starts sending data if any
-        console.log("Sending Hello Msg to Node!");
+        LogS.log(0, "Sending Hello Msg to Node!");
         const len_hello = 4;
         const call_buffer = new ArrayBuffer(len_hello);
         const view1 = new DataView(call_buffer);
@@ -555,8 +563,7 @@ const Tab1: React.FC = () => {
 
       }).catch((error) => {
         
-        console.log("Error on Start Notifications!");
-        console.log(error);
+        LogS.log(1, "Error on Start Notifications! " + error);
         // connection happened so we need to to disconnect
         doDisco(devID);
         // initiate a new scan, so the user can click connect again without manual scan
@@ -570,20 +577,24 @@ const Tab1: React.FC = () => {
 
       setShowProgrBar(false);
 
+      connInProgress.current = false;
+
     } catch (error: any) {
       
-      console.log("Error on connect: " + error.message);
+      LogS.log(1,"Error on connect: " + error.message);
 
       const errmsg_str:string = error.message;
 
+      setShowProgrBar(false);
+      setShReconProgr(false);
+
       if(errmsg_str.includes("removed pairing")){
 
-        console.log("Error Pairing: " + errmsg_str);
-        setShowProgrBar(false);
-        setShReconProgr(false);
+        LogS.log(1,"Error Pairing: " + errmsg_str);
         setAlHeader("Error Pairing! Remove Node from BLE Devices after Erase/Flash");
         setAlMsg(errmsg_str);
         setShAlertCard(true);
+        connInProgress.current = false;
         return;
       } 
       
@@ -591,12 +602,18 @@ const Tab1: React.FC = () => {
 
         if(config_s.callSign === "XX0XXX-00"){
 
-          console.log("Error Connecting: " + errmsg_str);
-          setShowProgrBar(false);
-          setShReconProgr(false);
+          LogS.log(1,"Error Connecting: " + errmsg_str);
           setAlHeader("Error Connection! Remove Node from BLE Devices after Erase/Flash");
           setAlMsg(errmsg_str);
           setShAlertCard(true);
+          connInProgress.current = false;
+          return;
+        } else {
+          LogS.log(1,"Error Connecting: " + errmsg_str);
+          setAlHeader("Error on Connection!");
+          setAlMsg(errmsg_str);
+          setShAlertCard(true);
+          connInProgress.current = false;
           return;
         }
       } 
@@ -620,6 +637,7 @@ const Tab1: React.FC = () => {
 
       setShowProgrBar(false);
       setShReconProgr(false);
+      connInProgress.current = false;
     }
   }
 
@@ -628,7 +646,7 @@ const Tab1: React.FC = () => {
   // BLE disconnect callback
   async function onDisconnect(deviceId: string) {
 
-    console.log("Device disconnected callback from DevID: " + deviceId);
+    LogS.log(0,"Device disconnected callback from DevID: " + deviceId);
     const newConnState = false;
     setConnFlag(newConnState);
 
@@ -648,9 +666,9 @@ const Tab1: React.FC = () => {
     setShowProgrBar(false);
 
     // BLE disconnect was not manually triggered - Reconnect
-    
+    console.log("Manual disco state: " + manual_ble_disco.current);
     if(manual_ble_disco.current === false) {
-      console.log("BLE client disconnected without Useraction!");
+      LogS.log(0,"BLE client disconnected without Useraction!");
       /*
       RECONNECT DISABLED !!!!!
       
@@ -672,8 +690,7 @@ const Tab1: React.FC = () => {
         reconnectBLE(deviceId);
       }*/
       // alert the user that it disconnected if not manually
-
-      setShDiscoCard(true);
+      if(thisPageActive.current) setShDiscoCard(true);
 
     } else {
       // Manual disconnect was triggered
@@ -789,8 +806,8 @@ const Tab1: React.FC = () => {
   // redirect to config page if unset node
   const redirectConnect = () => {
     setShDiscoCard(false);
-    if (isAppActive)
-      history.push("/connect");
+    /*if (isAppActive)
+      history.push("/connect");*/
   }
 
 
@@ -950,9 +967,6 @@ const Tab1: React.FC = () => {
   }
 
 
-
-
-  
 
 
   return (

@@ -8,7 +8,8 @@ import { MsgType, PosType } from "../utils/AppInterfaces";
 import PosiStore from "../store/PosiStore";
 import MsgStore from "../store/MsgStore";
 import { format, sub } from "date-fns";
-import NotifyMsgState from "../store/NotifyMsg";
+import LogS from "../utils/LogService";
+
 
 
 class DatabaseService {
@@ -23,102 +24,104 @@ class DatabaseService {
     
 
     static async initializeDatabase() {
+        LogS.log(0, 'Initializing Database');
         try {
-            if (!DatabaseService.connection) {
-                const sqlite = new SQLiteConnection(CapacitorSQLite);
-                DatabaseService.connection = sqlite as SQLiteConnection; // Cast to SQLiteConnection
-                DatabaseService.db = await DatabaseService.connection.createConnection(this.dbName, false, 'no-encryption', 1, false);
-
-                if (DatabaseService.db) {
-                    try {
-                        console.log('DB Name: ', DatabaseService.db?.getConnectionDBName());
-                        console.log('Opening database:', DatabaseService.db);
-                        await DatabaseService.db.open();
-                        const res = await DatabaseService.db.isDBOpen();
-                        if (res.result) {
-                            console.log('Database is open');
-                        } else {
-                            console.error('Database is not open');
-                        }
-                    } catch (error) {
-                        console.error('Error opening database:', error);
+            // check the db connection or build one
+            await DatabaseService.checkDbConn();
+            
+            if (DatabaseService.db) {
+                try {
+                    LogS.log(0, 'DB Name: ' + DatabaseService.db?.getConnectionDBName());
+                    LogS.log(0, 'Opening Database: ' + DatabaseService.dbName);
+                    await DatabaseService.db.open();
+                    const res = await DatabaseService.db.isDBOpen();
+                    if (res.result) {
+                        LogS.log(0, 'Database is open');
+                    } else {
+                        LogS.log(1, 'Error opening database');
                     }
-                    
+                } catch (error) {
+                    LogS.log(1, 'Error opening database:' + error);
                 }
+                
+            } else {
+                LogS.log(1, 'Error Database could not be opened');
+            }
 
-                // Your database initialization logic here
-                // For example: Create tables if they don't exist
-                if (DatabaseService.db) {
-                    await DatabaseService.db.execute(`
-                        CREATE TABLE IF NOT EXISTS TextMessages (
-                            id INTEGER PRIMARY KEY,
-                            timestamp INTEGER,
-                            msgNr INTEGER,
-                            msgTime TEXT,
-                            fromCall TEXT,
-                            toCall TEXT,
-                            msgTXT TEXT,
-                            via TEXT,
-                            ack INTEGER,
-                            isDM INTEGER,
-                            notify INTEGER
-                        )
-                    `).catch((err) => {
-                        console.error('Error creating TextMessages table:', err);
-                    });
-                }
+            // Your database initialization logic here
+            // For example: Create tables if they don't exist
+            if (DatabaseService.db) {
+                await DatabaseService.db.execute(`
+                    CREATE TABLE IF NOT EXISTS TextMessages (
+                        id INTEGER PRIMARY KEY,
+                        timestamp INTEGER,
+                        msgNr INTEGER,
+                        msgTime TEXT,
+                        fromCall TEXT,
+                        toCall TEXT,
+                        msgTXT TEXT,
+                        via TEXT,
+                        ack INTEGER,
+                        isDM INTEGER,
+                        notify INTEGER
+                    )
+                `).catch((err) => {
+                    LogS.log(1, 'Error creating TextMessages table:' + err);
+                });
+            }
 
-                if (DatabaseService.db) {
-                    await DatabaseService.db.execute(`
-                        CREATE TABLE IF NOT EXISTS Positions (
-                            id INTEGER PRIMARY KEY,
-                            timestamp INTEGER,
-                            callSign TEXT,
-                            lat REAL,
-                            lon REAL,
-                            alt REAL,
-                            bat TEXT,
-                            hw TEXT,
-                            pressure REAL,
-                            temperature REAL,
-                            humidity REAL,
-                            qnh REAL,
-                            comment TEXT,
-                            temp_2 REAL,
-                            co2 REAL,
-                            alt_press REAL,
-                            gas_res REAL
-                        )
-                    `).catch((err) => {
-                        console.error('Error creating Positions table:', err);
-                    });
-                }
+            if (DatabaseService.db) {
+                await DatabaseService.db.execute(`
+                    CREATE TABLE IF NOT EXISTS Positions (
+                        id INTEGER PRIMARY KEY,
+                        timestamp INTEGER,
+                        callSign TEXT,
+                        lat REAL,
+                        lon REAL,
+                        alt REAL,
+                        bat TEXT,
+                        hw TEXT,
+                        pressure REAL,
+                        temperature REAL,
+                        humidity REAL,
+                        qnh REAL,
+                        comment TEXT,
+                        temp_2 REAL,
+                        co2 REAL,
+                        alt_press REAL,
+                        gas_res REAL
+                    )
+                `).catch((err) => {
+                    LogS.log(1, 'Error creating Positions table:' + err);
+                });
+            }
 
-                if (DatabaseService.db) {
-                    console.log('Creating reconState table');
-                    await DatabaseService.db.execute(`CREATE TABLE IF NOT EXISTS reconState (
-                        id INTEGER PRIMARY KEY NOT NULL,
-                        reconStateVal INTEGER NOT NULL,
-                        devID TEXT
-                    );`).catch((err) => {
-                            console.error('Error creating reconState table:', err);
-                    });
-                    
+            if (DatabaseService.db) {
+                console.log('Creating reconState table');
+                await DatabaseService.db.execute(`CREATE TABLE IF NOT EXISTS reconState (
+                    id INTEGER PRIMARY KEY NOT NULL,
+                    reconStateVal INTEGER NOT NULL,
+                    devID TEXT
+                );`).catch((err) => {
+                        LogS.log(1, 'Error creating reconState table:' + err);
+                });
+                
+                const res = await DatabaseService.db?.query('SELECT * FROM reconState');
+                console.log('reconState:' + res?.values);
+                if (res.values === undefined || res.values.length === 0) {
+                    console.log('reconState table is empty, adding default value');
+                    await DatabaseService.db?.execute('INSERT INTO reconState (id,reconStateVal,devID) VALUES (0,0,"");');
+
                     const res = await DatabaseService.db?.query('SELECT * FROM reconState');
-                    console.log('reconState:', res?.values);
-                    if (res.values === undefined || res.values.length === 0) {
-                        console.log('reconState table is empty, adding default value');
-                        await DatabaseService.db?.execute('INSERT INTO reconState (id,reconStateVal,devID) VALUES (0,0,"");');
-
-                        const res = await DatabaseService.db?.query('SELECT * FROM reconState');
-                        console.log('reconState after insert:', res?.values);
-                    }
-
-                } else {
-                    console.error('Error creating tables. Database connection not open.');
+                    console.log('reconState after insert:' + res?.values);
                 }
 
-                // housekeeping
+            } else {
+                LogS.log(1, 'Error creating recon table. Database connection not open.');
+            }
+
+            // housekeeping
+            if (DatabaseService.db) {
                 await DatabaseService.housekeeping();
 
                 // update the store with txt messages
@@ -142,7 +145,8 @@ class DatabaseService {
                 DatabaseService.isInit = true;
             }
         } catch (error) {
-            console.error('Error initializing database:', error);
+            LogS.log(1, 'Error initializing database:' + error);
+            DatabaseService.isInit = false;
         }
     }
 
@@ -155,16 +159,16 @@ class DatabaseService {
                 if (res.values) {
                     //console.log('TextMessages:', res.values);
                     // print all the messages
-                    res.values.forEach((msg: MsgType) => {
+                    /*res.values.forEach((msg: MsgType) => {
                         console.log('MsgNr:', msg.msgNr, 'MsgTimestamp:', msg.timestamp, 'MsgTime:', msg.msgTime, 'From:', msg.fromCall, 'To:', msg.toCall, 'Msg:', msg.msgTXT, 'Via:', msg.via, 'Ack:', msg.ack, 'isDM:', msg.isDM, 'Notify:', msg.notify);
-                    });
+                    });*/
                     return res.values;
                 }
             } catch (error) {
-                console.error('Error getting text messages:', error);
+                LogS.log(1, 'Error getting text messages:' + error);
             }
         } else {
-            console.error('Error getting text messages. Database not open.');
+            LogS.log(1, 'Error getting text messages. Database not open.');
         }
         return [];
     }
@@ -181,13 +185,14 @@ class DatabaseService {
                 return;
             }
 
-            console.log('DB Writing text message:', msg);
+            console.log('DB Writing text message:' + msg.msgTXT);
+
             try {
                 const id = Date.now();
                 const query_str = `INSERT INTO TextMessages (id,timestamp, msgNr, msgTime, fromCall, toCall, msgTXT, via, ack, isDM, notify) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
                 const values = [id, msg.timestamp, msg.msgNr, msg.msgTime, msg.fromCall, msg.toCall, msg.msgTXT, msg.via, msg.ack, msg.isDM, msg.notify];
                 const ret = await DatabaseService.db.run(query_str, values);
-                console.log('DB writeTxtMsg ret:', ret.changes?.values);
+                console.log('DB writeTxtMsg ret:' + ret.changes?.values);
                 // read back all messages
                 const txtMsgs = await DatabaseService.getTextMessages();
                 const escTxtMsgs = DatabaseService.escapeQuotesInArr(txtMsgs);
@@ -196,10 +201,10 @@ class DatabaseService {
                     s.msgArr = escTxtMsgs;
                 });
             } catch (error) {
-                console.error('Error writing text message:', error);
+                LogS.log(1, 'Error writing text message:' + error);
             }
         } else {
-            console.error('Error writing text message. Database not open.');
+            LogS.log(1, 'Error writing text message. Database not open.');
         }
     }
 
@@ -219,13 +224,13 @@ class DatabaseService {
     // Acknowledge Text Message
     static async ackTxtMsg(msgNr: number, ack_type: number) {
         if (DatabaseService.db) {
-            console.log('DB Acknowledging text message:', msgNr);
+            console.log('DB Acknowledging text message:' + msgNr);
             try {
                 // get message(s) with msgNr
                 const res = await DatabaseService.db.query(`SELECT * FROM TextMessages WHERE msgNr = ${msgNr}`);
                 if (res.values) {
                     if(res.values.length > 1) {
-                        console.error("More than one message with the same msgNr!");
+                        LogS.log(1, 'More than one message with the same msgNr!');
                     }
                     for (let i = 0; i < res.values.length; i++) {
                         const msg: MsgType = res.values[i];
@@ -259,10 +264,10 @@ class DatabaseService {
                     }
                 }
             } catch (error) {
-                console.error('Error acknowledging text message:', error);
+                LogS.log(1, 'Error acknowledging text message:' + error);
             }
         } else {
-            console.error('Error acknowledging text message. Database not open.');
+            LogS.log(1, 'Error acknowledging text message. Database not open.');
         }
     }
 
@@ -277,10 +282,10 @@ class DatabaseService {
                     return res.values;
                 }
             } catch (error) {
-                console.error('Error getting positions:', error);
+                LogS.log(1, 'Error getting positions:' + error);
             }
         } else {
-            console.error('Error getting positions. Database not open.');
+            LogS.log(1, 'Error getting positions. Database not open.');
         }
         return [];
     }
@@ -296,10 +301,10 @@ class DatabaseService {
                     return res.values[0];
                 }
             } catch (error) {
-                console.error('Error getting position:', error);
+                LogS.log(1, 'Error getting position:' + error);
             }
         } else {
-            console.error('Error getting position. Database not open.');
+            LogS.log(1, 'Error getting position. Database not open.');
         }
         return null;
     }
@@ -326,10 +331,10 @@ class DatabaseService {
                     s.posArr.push(pos);
                 });
             } catch (error) {
-                console.error('Error writing position:', error);
+                LogS.log(1, 'Error writing position:' + error);
             }
         } else {
-            console.error('Error writing position. Database connection not open.');
+            LogS.log(1, 'Error writing position. Database connection not open.');
         }
     }
 
@@ -351,30 +356,36 @@ class DatabaseService {
                     });
                 }
             } catch (error) {
-                console.error('Error updating position:', error);
+                LogS.log(1, 'Error updating position:' + error);
             }
         } else {
-            console.error('Error updating position. Database connection not open.');
+            LogS.log(1, 'Error updating position. Database connection not open.');
         }
     }
 
 
     // check if we have db connection and db is open
     static async checkDbConn() {
+        // do we have a sqlite connection object?
+        if(DatabaseService.connection === null) {
+            LogS.log(0, 'DB - No connection object. Crating a new one');
+            const sqlite = new SQLiteConnection(CapacitorSQLite);
+            DatabaseService.connection = sqlite as SQLiteConnection; // Cast to SQLiteConnection
+        }
         // check if we have connection
-        const conn = await DatabaseService.connection?.isConnection(DatabaseService.dbName, false);
-        if (conn?.result) {
-            console.log('DB - checking Connection:', conn);
+        const retCC = (await DatabaseService.connection.checkConnectionsConsistency()).result;
+        const conn = (await DatabaseService.connection?.isConnection(DatabaseService.dbName, false)).result;
+        if (conn && retCC) {
+            LogS.log(0, 'DB - getting SQLite Connection:' + conn);
+            DatabaseService.db = await DatabaseService.connection.retrieveConnection(DatabaseService.dbName, false);
         } else {
-            console.error('Database connection not open');
+            LogS.log(0, 'DB - Database connection not open');
             // create a new connection
             try {
-                console.log('Creating new connection');
-                const sqlite = new SQLiteConnection(CapacitorSQLite);
-                DatabaseService.connection = sqlite as SQLiteConnection; // Cast to SQLiteConnection
+                LogS.log(0, 'DB - Creating new connection');
                 DatabaseService.db = await DatabaseService.connection.createConnection(DatabaseService.dbName, false, 'no-encryption', 1, false);
             } catch (error) {
-                console.error('Error creating new connection:', error);
+                LogS.log(1, 'Error creating new connection:' + error);
                 DatabaseService.isInit = false;
             }
         }
@@ -382,30 +393,30 @@ class DatabaseService {
         if (DatabaseService.db) {
             const res = await DatabaseService.db.isDBOpen();
             if (res.result) {
-                console.log('Database is open');
+                LogS.log(0, 'DB - Database is open');
                 DatabaseService.isInit = true;
             } else {
-                console.error('Database is not open');
+                LogS.log(1, 'Database is not open');
                 // open the database
                 try {
-                    console.log('Opening database');
+                    LogS.log(0, 'DB - Opening database');
                     await DatabaseService.db.open();
                     // check if db is open
                     const res = await DatabaseService.db.isDBOpen();
                     if (res.result) {
-                        console.log('Database is open');
+                        LogS.log(0, 'Database is open');
                         DatabaseService.isInit = true;
                     } else {
-                        console.error('Database is not open');
+                        LogS.log(1, 'Database is not open');
                         DatabaseService.isInit = false;
                     }
                 } catch (error) {
-                    console.error('Error opening database:', error);
+                    LogS.log(1, 'Error opening database:' + error);
                     DatabaseService.isInit = false;
                 }
             }
         } else {
-            console.error('DB - Error Database not open');
+            LogS.log(1, 'Error Database could not be opened');
             DatabaseService.isInit = false;
         }
     }
@@ -414,13 +425,13 @@ class DatabaseService {
     // close the database connection
     static async closeConnection() {
         if (DatabaseService.db) {
-            console.log('DB Closing database');
+            LogS.log(0, 'DB Closing database');
             try {
                 await DatabaseService.db.close();
                 await DatabaseService.connection?.closeConnection(this.dbName, false);
                 DatabaseService.isInit = false;
             } catch (error) {
-                console.error('Error closing database:', error);
+                LogS.log(1, 'Error closing database:' + error);
             }
         }
     }
@@ -505,7 +516,7 @@ class DatabaseService {
     // Housekeeping function to remove old messages from the TextMessages and Positions table
     // Both have the timestamp field
     static async housekeeping() {
-        console.log('DB Housekeeping');
+        LogS.log(0, 'DB Housekeeping');
         // get current date
         const today = new Date();
         const max_timestamp_txt = sub(today, { days: DatabaseService.MAX_AGE_TXT_MSG });
@@ -526,7 +537,7 @@ class DatabaseService {
             const ret_pos = await DatabaseService.db?.execute(sql_str_pos);
             console.log('DB housekeeping Positions ret:', ret_pos?.changes?.values);
         } else {
-            console.error('Error housekeeping. Database not open.');
+            LogS.log(1, 'Error housekeeping. Database not open.');
         }
     }
 }

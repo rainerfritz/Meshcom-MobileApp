@@ -18,7 +18,8 @@ const defaultNodeSettings:NodeSettings = {
     MQRG: 0,
     MSF: 0,
     MCR: 0,
-    MBW: 0
+    MBW: 0,
+    GWNPOS: false
 }
 
 const NodeSettingsStore = new Store({

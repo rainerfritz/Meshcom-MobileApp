@@ -50,6 +50,7 @@ import WifiSettingsStore from '../store/WifiSettings';
 import MheardStaticStore from '../utils/MheardStaticStore';
 import NodeSettingsStore from '../store/NodeSettingsStore';
 import NotifyMsgState from '../store/NotifyMsg';
+import LogS from '../utils/LogService';
 
 
 export function useMSG() {
@@ -1317,7 +1318,7 @@ export function useMSG() {
 
                             case "G": {
 
-                                console.log("GPS Data received!");
+                                LogS.log(0, "GPS Data received!");
                                 const gps_data: GpsData = JSON.parse(json_str);
 
                                 // PRINT ALL GPS DATA
@@ -1410,7 +1411,7 @@ export function useMSG() {
 
                             case "W": {
 
-                                console.log("WX Data received!");
+                                LogS.log(0, "WX Data received!");
                                 const wx_data: WxData = JSON.parse(json_str);
 
                                 const temp = wx_data.TEMP;
@@ -1460,7 +1461,7 @@ export function useMSG() {
 
                             case "I": {
 
-                                console.log("Info Data received!");
+                                LogS.log(0, "NodeInfo Data received!");
                                 const info_data: InfoData = JSON.parse(json_str);
 
                                 // update infodata in ConfigObject
@@ -1473,7 +1474,7 @@ export function useMSG() {
                                 });
 
                                 const callsign = info_data.CALL;
-                                console.log("Node Callsign: " + callsign);
+                                LogS.log(0, "Node Callsign: " + callsign);
                                 // update callsign ref
                                 node_call_ref.current = callsign;
 
@@ -1535,7 +1536,7 @@ export function useMSG() {
                             }
 
                             case "SE": {
-                                console.log("Sensor Settings received!");
+                                LogS.log(0, "Sensor Settings received!");
 
                                 const sensor_settings:SensorSettings = json_data;
                                 console.log("Sensor Settings: " + JSON.stringify(sensor_settings));
@@ -1568,7 +1569,7 @@ export function useMSG() {
                             }
 
                             case "SW": {
-                                console.log("Wifi Settings received!");
+                                LogS.log(0, "Wifi Settings received!");
                                 //{"TYP":"SW", "SSID":"string up to 30 chars?","PW":"also a long string", "IP":"192.168.1.123", "GW":"192.168.1.1", "DNS":"192.168.1.1", "SUB":"255.255.255.0"}
 
                                 const wifi_settings:WifiSettings = json_data;
@@ -1595,9 +1596,9 @@ export function useMSG() {
 
                             case "SN": {
                                 //{"TYP":"SN","GW":false,"DISP":true,"BTN":false,"MSH":true,"GPS":false,"TRACK":false,"UTCOF":28.2730,"TXP":22,
-                                //"MQRG":433.175,"MSF":11,"MCR":6,"MBW":250}
+                                //"MQRG":433.175,"MSF":11,"MCR":6,"MBW":250,"GWNPOS":false}
 
-                                console.log("Node Settings received!");
+                                LogS.log(0, "Node Settings received!");
 
                                 const node_settings:NodeSettings = json_data;
 
@@ -1612,6 +1613,7 @@ export function useMSG() {
                                 console.log("TXP: " + node_settings.TXP);
                                 console.log("MQRG: " + node_settings.MQRG);
                                 console.log("MSF: " + node_settings.MSF);
+                                console.log("GWNPOS: " + node_settings.GWNPOS);
 
                                 // update config store
                                 ConfigStore.update(s => {
@@ -1636,7 +1638,7 @@ export function useMSG() {
 
                             case "SA": {
                                 //{"TYP":"SA","ATXT":"none","SYMID":"/","SYMCD":"#"}
-                                console.log("APRS Settings received!");
+                                LogS.log(0, "APRS Settings received!");
 
                                 const aprs_settings:AprsSettings = json_data;
 
@@ -1752,7 +1754,7 @@ export function useMSG() {
                             }
 
                             case "CONFFIN": {
-                                console.log("Config Finished received!");
+                                LogS.log(0, "Config Finished received!");
                                 // set the config finished flag in the store
                                 BleConfigFinish.update(s => {
                                     s.BleConfFin = Date.now();
@@ -1767,7 +1769,7 @@ export function useMSG() {
                 break;
             }
             default:
-                console.log("Msg Flag did not match!");
+                LogS.log(1, "Msg Flag did not match!");
         }
     }
 

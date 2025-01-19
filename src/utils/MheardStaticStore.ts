@@ -19,8 +19,13 @@ class MheardStaticStore {
 
     setMhArr(mheard:MheardType){
         //if we have the mheard in the array, update it
-        //console.log("Mheard Static Store: " + JSON.stringify(mheard));
+        console.log("Mheard Static Store: " + JSON.stringify(mheard));
         let mhfound = false;
+        let mh_dateStr = mheard.mh_date + "T" + mheard.mh_time;
+        //console.log("Mheard DateTimeString: " + mh_dateStr);
+        mheard.mh_timestamp = new Date(mh_dateStr).getTime();
+        //console.log("Mheard Timestamp: " + mheard.mh_timestamp);
+        
 
         this.mhArr_s.forEach((mh)=>{
             if(mheard.mh_callSign === mh.mh_callSign && mheard.mh_nodecall === mh.mh_nodecall){

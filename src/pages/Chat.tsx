@@ -1,4 +1,4 @@
-import { IonButton, IonActionSheet, IonContent, IonFooter, IonGrid, IonHeader, IonIcon, IonInput, IonItem, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter } from '@ionic/react';
+import { IonButton, IonActionSheet, IonContent, IonFooter, IonGrid, IonHeader, IonIcon, IonInput, IonItem, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons } from '@ionic/react';
 import { useEffect, useRef, useState } from 'react';
 import {ConfType, MsgType} from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
@@ -8,7 +8,7 @@ import { DevIDStore } from '../store';
 import { getConfigStore, getDevID, getLastNotifyID, getMsgStore, getPlatformStore } from '../store/Selectors';
 import MsgStore from '../store/MsgStore';
 import ConfigStore from '../store/ConfStore';
-import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle} from 'ionicons/icons';
+import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle, settings} from 'ionicons/icons';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import PlatformStore from '../store/PlatformStore';
 import LastNotifyID from '../store/LastNotifyID';
@@ -20,11 +20,10 @@ import {MsgTxtLink} from '../components/MsgTxtLink';
 import ConfigObject from '../utils/ConfigObject';
 import BLEconnStore from '../store/BLEconnected';
 import {getBLEconnStore} from '../store/Selectors';
-import DatabaseService from '../DBservices/DataBaseService';
 import DMfrmMapStore from '../store/DMfrmMap';
-import BleConfigFinish from '../store/BLEConfFin';
 import NotifyMsgState from '../store/NotifyMsg';
-
+import { useHistory } from "react-router";
+import LogS from '../utils/LogService';
 
 
 const Tab3: React.FC = () => {
@@ -97,12 +96,21 @@ const Tab3: React.FC = () => {
   // stores the last timestamp of a message in chat to insert date panel
   const lastMsgTime = useRef<number>(Date.now());
 
+  // alert card params
+  const [shDiscoCard, setShDiscoCard] = useState<boolean>(false);
+
+  //const navigation = useIonRouter();
+  const history = useHistory();
+
+  // remember if this page is active
+  const thisPageActive = useRef<boolean>(false);
 
 
 
   // scroll down when we enter the chat
   useIonViewDidEnter (()=>{
-    console.log("Chat window did enter");
+    LogS.log(0,"Chat window did enter");
+    thisPageActive.current = true;
     //const devid = devID_s;
     //updateDevID(devid);
     scrollToBottom();
@@ -119,18 +127,31 @@ const Tab3: React.FC = () => {
     }
   });
 
+  // remember that we left the page
+  useIonViewWillLeave(()=>{
+    thisPageActive.current = false;
+  });
+
 
   // actions when app goes or comes from background
   useEffect(() => {
-    console.log("Chat App active: " + isAppActive);
+    LogS.log(0,"Chat - App active: " + isAppActive);
     // update BLE Hook
-    console.log("Chat - BLE Connected: " + ble_connected);
+    LogS.log(0,"Chat - BLE Connected: " + ble_connected);
     console.log("Chat - BLE DevID: " + devID_s);
     // scroll down if Chat screen gets active again
     if(isAppActive){
       scrollToBottom();
     } 
   }, [isAppActive]);
+
+
+  // show discocard if BLE disconnects
+  useEffect(() => {
+    if(!ble_connected && thisPageActive.current){
+      setShDiscoCard(true);
+    }
+  }, [ble_connected]);
 
 
 
@@ -152,6 +173,7 @@ const Tab3: React.FC = () => {
 
     if(!ble_connected){
       console.log("BLE not connected");
+      setShDiscoCard(true);
       return;
     }
     console.log("Sending Message");
@@ -282,6 +304,7 @@ const Tab3: React.FC = () => {
         setchatBoxPadding(newPading1);
       }
     });
+    LogS.log(0,"Chat - Mounted Page");
   }, []);
 
 
@@ -436,7 +459,7 @@ const Tab3: React.FC = () => {
 
 
 
-  // handle actionsheet result
+  // handle actionsheet result copy text / send DM for specific message
   const handleActionSheet = (detailAS: OverlayEventDetail) => {
 
     console.log("AS Detail: ");
@@ -522,6 +545,12 @@ const Tab3: React.FC = () => {
   }
 
 
+  // redirect to connect page if unset node
+  const redirectConnect = () => {
+    setShDiscoCard(false);
+    if (isAppActive)
+      history.push("/connect");
+  }
   
 
 
@@ -538,6 +567,19 @@ const Tab3: React.FC = () => {
             <IonTitle size="large">Messages</IonTitle>
           </IonToolbar>
         </IonHeader>
+
+        <IonAlert
+          isOpen={shDiscoCard}
+          onDidDismiss={() => redirectConnect()}
+          header="BLE Disconnect"
+          message="Node disconnected! Auto-Reconnect is disabled currently."
+          buttons={[
+            {
+              text: "OK"
+            },
+          ]}
+        />
+
         <IonActionSheet
           isOpen={isOpenAS}
           buttons={[

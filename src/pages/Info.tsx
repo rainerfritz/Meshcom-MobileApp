@@ -1,6 +1,6 @@
 
 // import components
-import { IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonPage, IonProgressBar, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, useIonViewWillLeave } from '@ionic/react';
+import { IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonItem, IonLabel, IonList, IonModal, IonPage, IonProgressBar, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, useIonViewWillLeave } from '@ionic/react';
 import { useStoreState } from 'pullstate';
 import { getConfigStore, getGpsData, getSensorSettings, getWxData, getDevID, getBLEconnStore, getAppActiveState } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
@@ -13,47 +13,12 @@ import { DevIDStore } from '../store';
 import './Info.css';
 import GpsDataStore from '../store/GpsData';
 import WxDataStore from '../store/WxData';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import SensorSettingsStore from '../store/SensorSettings';
 import BLEconnStore from '../store/BLEconnected';
 import ConfigObject from '../utils/ConfigObject';
+import LogS from '../utils/LogService';
 
-/*
-export interface WxData {
-    BMEON: boolean,
-    BME680ON: boolean,
-    MCU811ON: boolean,
-    LPS33ON: boolean,
-    OWON: boolean,
-    OWPIN: number,
-    TEMP: number,
-    TOUT: number,
-    HUM: number,
-    QFE: number,
-    QNH: number,
-    ALT: number,
-    GAS: number,
-    CO2: number
-}
-
-export interface GpsData {
-    LAT: number,
-    LON: number,
-    ALT: number,
-    SAT: number,
-    SFIX: boolean,
-    HDOP: number,
-    RATE: number,
-    NEXT: number,
-    DIST: number,
-    DIRn: number,
-    DIRo: number,
-    DATE: string,
-    UTCOFF: number,
-    GPSON: boolean,
-    TRACKON: boolean
-}
-*/
 
 
 
@@ -187,6 +152,26 @@ const Info: React.FC = () => {
     cmd_index.current = 0;
   }
 
+  // handle log window and messages
+  const [shLog, setShLog] = useState<boolean>(false);
+  const [logMsgs, setLogMsgs] = useState<string []>([]);
+  const openLogWindow = () => {
+    clearUpdtTimer();
+    setShLog(true);
+    const newLogs = LogS.logs;
+    setLogMsgs(newLogs);
+  }
+
+  const clearLogMsgs = () => {
+    LogS.clearLogs();
+    setLogMsgs([]);
+  }
+
+  const closeLogWindow = () => {
+    setShLog(false);
+    startUpdtTimer();
+  }
+
 
 
 
@@ -275,6 +260,33 @@ const Info: React.FC = () => {
             <div>App Version: 4.21</div>
           </div>
         </div>
+
+        <div id="LogBtn">
+          <IonButton size='small' fill='outline' slot='start' color='primary' onClick={() => openLogWindow()}>Log</IonButton>
+        </div>
+        <div id="spacer-bottom"></div>
+        <IonModal isOpen={shLog}>
+          <IonHeader>
+            <IonToolbar>
+              <IonTitle>LOG</IonTitle>
+              <IonButtons slot="start">
+                <IonButton onClick={() => clearLogMsgs()}>Clear</IonButton>
+              </IonButtons>
+              <IonButtons slot="end">
+                <IonButton onClick={() => closeLogWindow()}>Close</IonButton>
+              </IonButtons>
+            </IonToolbar>
+          </IonHeader>
+          <IonContent className="ion-padding">
+            <IonList>
+              {logMsgs.map((log, i) => (
+                <IonItem key={i}>
+                  <IonLabel>{log}</IonLabel>
+                </IonItem>
+              ))}
+            </IonList>
+          </IonContent>
+        </IonModal>
 
       </IonContent>
     </IonPage>

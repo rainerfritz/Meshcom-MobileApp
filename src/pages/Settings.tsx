@@ -1,5 +1,5 @@
 
-import { IonContent, IonHeader, IonPage, IonText, IonTitle, IonToolbar, IonLabel, IonInput, IonItem, IonButton, IonToggle, IonRange, IonIcon, IonRow, IonCol, IonGrid, IonSelect, IonSelectOption, useIonViewWillEnter, IonAlert, IonProgressBar, useIonViewDidEnter } from '@ionic/react';
+import { IonContent, IonHeader, IonPage, IonText, IonTitle, IonToolbar, IonLabel, IonInput, IonItem, IonButton, IonToggle, IonRange, IonIcon, IonRow, IonCol, IonGrid, IonSelect, IonSelectOption, useIonViewWillEnter, IonAlert, IonProgressBar, useIonViewDidEnter, useIonViewWillLeave } from '@ionic/react';
 import { useEffect, useRef, useState } from 'react';
 import {useBLE} from '../hooks/BleHandler';
 import { Geolocation } from '@capacitor/geolocation';
@@ -9,7 +9,7 @@ import { useStoreState } from 'pullstate';
 import { DevIDStore } from '../store';
 import { getDevID, getSensorSettings, getBLEconnStore, getConfigStore, getScanResult, getNodeInfoStore, getBleConfFinish, getWifiSettings } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
-import { ConfType, InfoData, SensorSettings } from '../utils/AppInterfaces';
+import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings } from '../utils/AppInterfaces';
 import { RangeValue } from '@ionic/core';
 import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, send, add } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols, aprs_sec_symbols} from '../store/AprsSymbols';
@@ -25,8 +25,8 @@ import DataBaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
 import AppActiveState from '../store/AppActive';
 import WifiSettingsStore from '../store/WifiSettings';
-import { WifiSettings } from '../utils/AppInterfaces';
 import NodeSettingsStore from '../store/NodeSettingsStore';
+import LogS from '../utils/LogService';
 
 
 
@@ -37,12 +37,6 @@ const Tab2: React.FC = () => {
 
   // BLE TX function
   const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected, addMsgQueue} = useBLE();
-
-  // DB functions
-  //const { clearPositions, clearTxtMessages } = useSQLiteDB();
-
-  // Send TxtCmd function
-  //const {sendTxtCmdNode} = useMSG();
 
   // history forward to page
   const history = useHistory();
@@ -60,10 +54,17 @@ const Tab2: React.FC = () => {
   const wifiSettings_s:WifiSettings = useStoreState(WifiSettingsStore, getWifiSettings);
 
   // node settings
-  const nodeSettings = useStoreState(NodeSettingsStore, s => s.nodeSettings);
+  const nodeSettings:NodeSettings = useStoreState(NodeSettingsStore, s => s.nodeSettings);
+
+  useEffect(() => {
+    LogS.log(0,"Settings Page NodeSettings updated");
+  }, [nodeSettings]);
 
   // sensor settings from store
-  //const sensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, getSensorSettings);
+  const sensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, s => s.sensorSettings);
+
+  // get current AppState
+  const isAppActive = AppActiveState.useState(s => s.active);
 
   // trigger if we have an unconfiuired node
   //const shouldConf = useStoreState(ShouldConfStore, s => s.shouldConf);
@@ -73,8 +74,8 @@ const Tab2: React.FC = () => {
 
   // Trigger if BLE Config is finished
   //const confFin = BleConfigFinish.useState(s => s.BleConfFin);
-  // get current AppState
-  //const isAppActive = AppActiveState.useState(s => s.active);
+  
+
 
 
   // remember which setting changed to send it to node
@@ -97,27 +98,8 @@ const Tab2: React.FC = () => {
   // switch show wifi pwd
   const [shWifiPwd, setShWifiPwd] = useState<boolean>(false);
 
-  // DB functions
-  //const {resetNodePosDB, addCONF, clearTxtMsgs, clearMheards} = useStorage();
-
-  // value from timer slider for phone sends position
-  const [lastEmittedValue, setLastEmittedValue] = useState<RangeValue>();
-
-  // show timer slider for timed gps transmits to node
-  const [shGpsSlider, setShGpsSlider] = useState<boolean>(false);
-
-  // interval timer for pos msgs from phone
-  const intTimeMinutesMin = useRef(3);
-  const intTimeMinutesMax = useRef(60);
-  const msecToMinuteFactor = 60000;  // set to 1000 for seconds for testing
-  const [intTime, setIntTime] = useState<number>(intTimeMinutesMin.current * msecToMinuteFactor);
-  const [runTimer, setRunTimer] = useState<boolean>(false);
-
   // show advanced settings
   const [shAdvSetting, setshAdvSetting] = useState<boolean>(false);
-
-  // show Position set ok card
-  //const [shPosOk, setShPosOk] = useState<boolean>(false);
 
   // APRS primary Symbols
   const [aprs_prim_sec_s, setAprs_prim_sec_s] = useState<string>("primary");
@@ -130,6 +112,12 @@ const Tab2: React.FC = () => {
   const [shAlertCard, setShAlertCard] = useState<boolean>(false);
   const [alHeader, setAlHeader] = useState<string>("");
   const [alMsg, setAlMsg] = useState<string>("");
+
+  // disco card params
+  const [shDiscoCard, setShDiscoCard] = useState<boolean>(false);
+
+  // remember if this page is active
+  const thisPageActive = useRef<boolean>(false);
  
   // tx power settings
   const [txpower_slider, setTxpower_slider] = useState<RangeValue>();
@@ -222,17 +210,31 @@ const Tab2: React.FC = () => {
   
 
 
+  // Tasks we need to do when we enter the page
   useIonViewDidEnter(() => {
     // update the ble devid from pullsate store
+    thisPageActive.current = true;
     const devid = devID_s;
     updateDevID(devid);
     console.log("Settings Page: Updating DevID " + devid);
     const bleconn = ble_connected;
     console.log("Settings Page BLE connected: " + bleconn);
     updateBLEConnected(bleconn);
-    // set the sendpos and sendtrack wait timer that it can be pushed now. We wait after first press of the button
-    //txpos_last.current = 0;
+
   });
+
+  // Tasks we need to do when we leave the page
+  useIonViewWillLeave(() => {
+    thisPageActive.current = false;
+  });
+
+  // trigger the BLE disco function when we disconnect and on page
+  useEffect(() => {
+    if (!ble_connected && thisPageActive.current) {
+      console.log("Settings Page: BLE disconnected!");
+      setShDiscoCard(true);
+    }
+  }, [ble_connected]);
 
 
 
@@ -284,14 +286,14 @@ const Tab2: React.FC = () => {
     const hw_type = config_s.hw;
 
     if(hw_type === "TBEAM V1.1 1268" || hw_type === "T-ECHO" || hw_type === "RAK4631" || hw_type === "HELTEC V3"){
-      minTXpwr.current = 1;
+      minTXpwr.current = 2;
       maxTXpwr.current = 22;
     }
     else if (hw_type === "EBYTE E22" || hw_type === "EBYTE E220") {
       minTXpwr.current = 3;
       maxTXpwr.current = 30;
     } else {
-      minTXpwr.current = 1;
+      minTXpwr.current = 2;
       maxTXpwr.current = 17;
     }
 
@@ -567,50 +569,6 @@ const Tab2: React.FC = () => {
     setShAlertCard(true);
 
   }
-
-
-  // start automatik pos to node if phone sends pos is on
-  useEffect(() =>{
-    if(shGpsSlider){
-      console.log("Phone sends Position activated");
-      scrollToBottom();
-      setRunTimer(true);
-      // send initial Pos Message
-      setCurrentPosGPS(false);
-    } else {
-      setRunTimer(false);
-    }
-  },[shGpsSlider]);
-
-
-  //get slider value instantly and convert it to int from RangeValue (very dirty)
-  useEffect(() => {
-
-    if(lastEmittedValue){
-      console.log("Slider set to: " + lastEmittedValue);
-      const newTime = +lastEmittedValue!.toString();
-      setIntTime(newTime * msecToMinuteFactor); 
-    }
-  }, [lastEmittedValue]);
-
-
-  // Phone Pos Interval
-  useEffect(() => {
-    console.log("intTime set to: " + intTime);
-
-    if (runTimer) {
-      const interval = setInterval(async () => {
-        console.log("Pos TX Ticker ");
-        // send it phone without saving to nodes flash
-        setCurrentPosGPS(false);
-      }, intTime);
-
-      return () => {
-        console.log("Clearing Interval");
-        // should we save the last position??
-        clearInterval(interval)};
-    }
-  }, [intTime, runTimer]);
 
 
 
@@ -1070,10 +1028,31 @@ const Tab2: React.FC = () => {
         }
         break;
       }
+
+      // gateway no-pos mode
+      case "gw_nopos": {
+        if(nodeSettings.GWNPOS){
+          cmd_ = "--gateway pos";
+        }
+        else {
+          cmd_ = "--gateway nopos";
+        }
+        break;
+      }
+
+      // change into safeboot OTA mode
+      case "otaupdate": {
+        cmd_ = "--ota-update";
+        setAlHeader("Booting into OTA Mode!");
+          setAlMsg("Access it via Web-Browser via <CALLSIGN.local> or in AP Mode: IP:192.168.4.1 or Meshcom-OTA.local");
+          setShAlertCard(true);
+        break;
+      }
     }
 
     // finally send it via textmsg
     sendTxtCmdNode(cmd_);
+    LogS.log(0,"Settings Userbutton: " + cmd_);
 
     // forward to info page when pos or wx info button pressed
     if (cmd === "posdebug" || cmd === "wx") {
@@ -1389,6 +1368,13 @@ const Tab2: React.FC = () => {
     });
   }
 
+  // redirect to connect page if unset node
+  const redirectConnect = () => {
+    setShDiscoCard(false);
+    if (isAppActive)
+      history.push("/connect");
+  }
+
 
 
   return (
@@ -1410,6 +1396,18 @@ const Tab2: React.FC = () => {
           header={alHeader}
           message={alMsg}
           onDismiss={() => setShAlertCard(false)}
+        />
+
+        <IonAlert
+          isOpen={shDiscoCard}
+          onDidDismiss={() => redirectConnect()}
+          header="BLE Disconnect"
+          message="Node disconnected! Auto-Reconnect is disabled currently."
+          buttons={[
+            {
+              text: "OK"
+            },
+          ]}
         />
 
         <IonAlert
@@ -1655,8 +1653,14 @@ const Tab2: React.FC = () => {
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("scani2c")}>Scan I2C</IonButton>
                   </div>
+                  <div>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("otaupdate")}>OTA Update</IonButton>
+                  </div>
                 </div>
                 <div className='settings_btns_r'>
+                  {/*<div>
+                    <IonButton expand="block" fill={nodeSettings.GWNPOS ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("gw_nopos")}>GW NO POS</IonButton>
+                  </div>  */}
                   <div>
                     <IonButton expand="block" fill={config_s.mesh_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("mesh_retrx")}>MESH</IonButton>
                   </div>
@@ -1710,28 +1714,7 @@ const Tab2: React.FC = () => {
                 <IonLabel>Tx-Pwr: {tx_pwr.current} dBm / {tx_pwr_w}mW</IonLabel>
               </div>
             </> : <></>}
-          </div>
-
-          <div id="spacer-buttons" />
-
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shGpsSlider ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShGpsSlider(!shGpsSlider)} />
-              </div>
-              <IonText >Phone sends Position</IonText>
-            </div>
-
-            {shGpsSlider ? <>
-              <div className='ionrange_box'>
-                <IonRange min={intTimeMinutesMin.current} max={intTimeMinutesMax.current} pin={true} debounce={350} pinFormatter={(value: number) => `${value} Minutes`}
-                  onIonChange={({ detail }) => setLastEmittedValue(detail.value)}></IonRange>
-                <IonLabel>Interval: {intTime / msecToMinuteFactor} Minutes</IonLabel>
-              </div>
-            </> : <></>}
-          </div >
-          
-          
+          </div>  
 
           <div id="spacer-buttons" />
 
