@@ -7,7 +7,6 @@ const defaultConf:ConfType = {
     lon:0.0,
     alt:0.0,
     wifi_ssid:" ",
-    wifi_pwd:" ",
     aprs_pri_sec:" ",
     aprs_symbol:" ",
     gps_on:false,

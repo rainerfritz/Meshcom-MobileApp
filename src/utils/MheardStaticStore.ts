@@ -74,6 +74,14 @@ class MheardStaticStore {
         const filtered_pos = this.cachedPos.filter(pos => pos.callSign === mh_callSign);
         return filtered_pos;
     }
+
+    clearMheards(){
+        this.mhArr_s = [];
+        MhStore.update(s=>{
+            s.mhArr = [];
+        });
+        console.log("Mheard Static Store: Clearing Mheards");
+    }
 }
 
 export default new MheardStaticStore();

@@ -18,8 +18,8 @@ class DatabaseService {
     static db: SQLiteDBConnection | null = null;
     static dbName = 'meshcom.db';
     static isInit = false;
-    static MAX_AGE_TXT_MSG = 5; // 5 days
-    static MAX_AGE_POS = 7; // 7 days
+    static MAX_AGE_TXT_MSG = 3; // 3 days
+    static MAX_AGE_POS = 5; // 5 days
     static cached_positions: PosType[] = [];
     
 

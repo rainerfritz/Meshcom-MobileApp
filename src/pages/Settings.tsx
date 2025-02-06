@@ -27,6 +27,7 @@ import AppActiveState from '../store/AppActive';
 import WifiSettingsStore from '../store/WifiSettings';
 import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
+import MheardStaticStore from '../utils/MheardStaticStore';
 
 
 
@@ -51,7 +52,7 @@ const Tab2: React.FC = () => {
   const ble_connected:boolean = useStoreState(BLEconnStore, getBLEconnStore);
 
   // wifii settings from store
-  const wifiSettings_s:WifiSettings = useStoreState(WifiSettingsStore, getWifiSettings);
+  const wifiSettings_s:WifiSettings = WifiSettingsStore.useState(s => s.wifiSettings);
 
   // node settings
   const nodeSettings:NodeSettings = useStoreState(NodeSettingsStore, s => s.nodeSettings);
@@ -93,7 +94,7 @@ const Tab2: React.FC = () => {
   const aprsCmtRef = useRef<HTMLIonInputElement>(null);
 
   // Regex for callsign check
-  const regexCallsign = /^([A-Z]{1,2}[0-9][A-Z]{1,3}|[0-9][A-Z][0-9][A-Z]{1,3})-[0-9]{1,2}$/;
+  const regexCallsign = /^([A-Z]{1,3}[0-9]{1,2}[A-Z]{0,3}|[0-9][A-Z][0-9][A-Z]{1,3})-[0-9]{1,2}$/;
 
   // switch show wifi pwd
   const [shWifiPwd, setShWifiPwd] = useState<boolean>(false);
@@ -285,14 +286,11 @@ const Tab2: React.FC = () => {
     // set min max power based on hw
     const hw_type = config_s.hw;
 
-    if(hw_type === "TBEAM V1.1 1268" || hw_type === "T-ECHO" || hw_type === "RAK4631" || hw_type === "HELTEC V3"){
+    if(hw_type === "TBEAM V1.1 1268" || hw_type === "T-ECHO" || hw_type === "RAK4631" || hw_type === "HELTEC V3" || hw_type === "EBYTE E22" || hw_type === "EBYTE E220" || hw_type === "TBEAM V1.2 1262"){
       minTXpwr.current = 2;
       maxTXpwr.current = 22;
     }
-    else if (hw_type === "EBYTE E22" || hw_type === "EBYTE E220") {
-      minTXpwr.current = 3;
-      maxTXpwr.current = 30;
-    } else {
+    else {
       minTXpwr.current = 2;
       maxTXpwr.current = 17;
     }
@@ -300,13 +298,6 @@ const Tab2: React.FC = () => {
     // 0 dBm means it was not set to flash on Node
     if(config_s.tx_pwr === 0){
       tx_pwr.current = maxTXpwr.current;
-    }
-
-    // set tx power slider to config value
-    if (hw_type === "EBYTE E22" || hw_type === "EBYTE E220"){
-      tx_pwr.current = config_s.tx_pwr + 8;
-    } else {
-      tx_pwr.current = config_s.tx_pwr;
     }
     
     const pwr_exp_w = (tx_pwr.current - 30) / 10;
@@ -628,7 +619,6 @@ const Tab2: React.FC = () => {
         // update config in store state
         ConfigStore.update(s => {
           s.config.wifi_ssid = ssidWifi_str;
-          s.config.wifi_pwd = pwdWifi_str;
         });
 
       }
@@ -695,7 +685,7 @@ const Tab2: React.FC = () => {
 
             // check if we have a wifi pw set
             if (config_s.hw !== "RAK4631") {
-              if (config_s.wifi_pwd.length > 0 && config_s.wifi_pwd !== "none") {
+              if (config_s.wifi_ssid.length > 0 && config_s.wifi_ssid !== "none") {
                 cmd_ = "--gateway on";
               } else {
                 console.log("Wifi PW not set! GW Mode not possible!");
@@ -830,13 +820,7 @@ const Tab2: React.FC = () => {
 
         let pwr = 0;
 
-        if (config_s.hw === "EBYTE E22" || config_s.hw === "EBYTE E220") {
-          pwr = tx_pwr.current - 8; // 8dB PA
-          cmd_ = "--txpower " + pwr.toString();
-
-        } else {
-          cmd_ = "--txpower " + tx_pwr.current.toString();
-        }
+        cmd_ = "--txpower " + tx_pwr.current.toString();
 
         break;
       }
@@ -1180,15 +1164,6 @@ const Tab2: React.FC = () => {
         console.log("Group 3: " + gcb3);
         console.log("Group 4: " + gcb4);
         console.log("Group 5: " + gcb5);
-        // set fields values
-        /*NodeInfoStore.update(s => {
-          s.infoData.GCH = master_grp_nr;
-          s.infoData.GCB0 = gcb0;
-          s.infoData.GCB1 = gcb1;
-          s.infoData.GCB2 = gcb2;
-          s.infoData.GCB3 = gcb3;
-          s.infoData.GCB4 = gcb4;
-        });*/
 
         let cmd_str = "--setgrc ";
         cmd_str = cmd_str + gcb0.toString() + ";" + gcb1.toString() + ";" + gcb2.toString() + ";" + gcb3.toString() + ";" + gcb4.toString() + ";" + gcb5.toString() + ";";
@@ -1580,27 +1555,27 @@ const Tab2: React.FC = () => {
               <div className='setting_wrapper'>
                 <div className='mt-3 mb-3'>Group 1</div>
                 <IonItem>
-                  <IonInput value={grp0} ref={gcb0Ref} label='Set Group 1' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp0} ref={gcb0Ref} label='Set Group 1' labelPlacement="floating" type='number' maxlength={5}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 2</div>
                 <IonItem>
-                  <IonInput value={grp1} ref={gcb1Ref} label='Set Group 2' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp1} ref={gcb1Ref} label='Set Group 2' labelPlacement="floating" type='number' maxlength={5}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 3</div>
                 <IonItem>
-                  <IonInput value={grp2} ref={gcb2Ref} label='Set Group 3' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp2} ref={gcb2Ref} label='Set Group 3' labelPlacement="floating" type='number' maxlength={5}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 4</div>
                 <IonItem>
-                  <IonInput value={grp3} ref={gcb3Ref} label='Set Group 4' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp3} ref={gcb3Ref} label='Set Group 4' labelPlacement="floating" type='number' maxlength={5}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 5</div>
                 <IonItem>
-                  <IonInput value={grp4} ref={gcb4Ref} label='Set Group 5' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp4} ref={gcb4Ref} label='Set Group 5' labelPlacement="floating" type='number' maxlength={5}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 6</div>
                 <IonItem>
-                  <IonInput value={grp5} ref={gcb5Ref} label='Set Group 6' labelPlacement="floating" type='number' maxlength={6}></IonInput>
+                  <IonInput value={grp5} ref={gcb5Ref} label='Set Group 6' labelPlacement="floating" type='number' maxlength={5}></IonInput>
                 </IonItem>
                 <div className='resetGrpBtn'>
                     <IonButton fill='solid' slot='start' onClick={() => resetGrpCall()}>Reset Groups</IonButton>
@@ -1627,7 +1602,7 @@ const Tab2: React.FC = () => {
                     <IonButton expand="block" fill={nodeSettings.GW ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("gw")}>GATEWAY</IonButton>
                   </div>
                   <div >
-                    <IonButton expand="block" fill={config_s.display_off ? 'outline' : 'solid'} slot='start' onClick={() => sendTxtCmd("display")}>DISPLAY</IonButton>
+                    <IonButton expand="block" fill={nodeSettings.DISP ? 'outline' : 'solid'} slot='start' onClick={() => sendTxtCmd("display")}>DISPLAY</IonButton>
                   </div>
                   <div >
                     <IonButton expand="block" fill={config_s.gps_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("gps")}>GPS</IonButton>
@@ -1729,9 +1704,9 @@ const Tab2: React.FC = () => {
               <div id="spacer-advTop" />
               <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>deletePositions()}>Clear received nodes </IonButton>
               <div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={DataBaseService.clearTextMessages}>Clear Text Msgs </IonButton>
+              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>DataBaseService.clearTextMessages()}>Clear Text Msgs </IonButton>
               <div id="spacer-advTop" />
-              {/* <IonButton id="settings_button" fill='outline' slot='start' onClick={clearMheards}>Clear Mheards </IonButton> */}
+              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>MheardStaticStore.clearMheards()}>Clear Mheards </IonButton>
 
             </> : <></>}
             

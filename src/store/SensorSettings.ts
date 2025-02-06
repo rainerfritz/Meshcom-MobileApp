@@ -11,7 +11,8 @@ import {SensorSettings} from "../utils/AppInterfaces";
     "811": boolean,
     LPS33: boolean,
     OW: boolean,
-    OWPIN: number
+    OWPIN: number,
+    USERPIN: number
 }*/
 
 const defaultSensorSettings:SensorSettings = {
@@ -22,7 +23,8 @@ const defaultSensorSettings:SensorSettings = {
     "811": false,
     LPS33: false,
     OW: false,
-    OWPIN: 0
+    OWPIN: 0,
+    USERPIN: 0
 }
 
 const SensorSettingsStore = new Store({

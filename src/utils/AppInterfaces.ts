@@ -41,7 +41,6 @@ export interface ConfType {
     lon:number,
     alt:number,
     wifi_ssid:string,
-    wifi_pwd:string,
     aprs_pri_sec:string,
     aprs_symbol:string,
     gps_on:boolean,
@@ -102,22 +101,12 @@ export interface GpsData {
     DIST: number,
     DIRn: number,
     DIRo: number,
-    DATE: string,
-    //UTCOFF: number
-    //GPSON: boolean,
-    //TRACKON: boolean
+    DATE: string
 }
 
 // wx sensor data interface
 // DW{"TYP":"W","TEMP":21.42065239,"TOUT":0,"HUM":50.74215317,"PRES":1001.369995,"QNH":1030.080688,"ALT":99,"GAS":54.72800064,"CO2":0}
 export interface WxData {
-    //BMEON: boolean,
-    //BMPON: boolean,
-    //BME680ON: boolean,
-    //MCU811ON: boolean,
-    //LPS33ON: boolean,
-    //OWON: boolean,
-    //OWPIN: number,
     TEMP: number,
     TOUT: number,
     HUM: number,
@@ -130,7 +119,25 @@ export interface WxData {
 
 
 // info msg interface
-// DI{"TYP":"I","FWVER":"C 4.29 d","CALL":"OE1KFR-2","ID":3215539008,"HWID":10,"MAXV":4.239999771,"ATXT":"","BLE":"short","BATP":0,"BATV":1.86}
+/**
+ * idoc["TYP"] = "I";
+    idoc["FWVER"] = fwver;
+    idoc["CALL"] = meshcom_settings.node_call;
+    idoc["ID"] = _GW_ID;
+    idoc["HWID"] = BOARD_HARDWARE;
+    idoc["MAXV"] = meshcom_settings.node_maxv;
+    idoc["ATXT"] = meshcom_settings.node_atxt;
+    idoc["BLE"] = (bBLElong ? "long" : "short");
+    idoc["BATP"] = global_proz;
+    idoc["BATV"] = global_batt/1000.0;
+    idoc["GCB0"] = meshcom_settings.node_gcb[0];
+    idoc["GCB1"] = meshcom_settings.node_gcb[1];
+    idoc["GCB2"] = meshcom_settings.node_gcb[2];
+    idoc["GCB3"] = meshcom_settings.node_gcb[3];
+    idoc["GCB4"] = meshcom_settings.node_gcb[4];
+    idoc["GCB5"] = meshcom_settings.node_gcb[5];
+    idoc["CTRY"] = ctrycode;
+ */
 export interface InfoData {
     FWVER: string,
     CALL: string,
@@ -152,7 +159,7 @@ export interface InfoData {
 
 
 // sensor settings interface
-// {"TYP":"SE","BME":false,"BMP":false,"680":true,"811":false,"LPS33":false,"OW":false,"OWPIN":4}
+// {"TYP":"SE", "BME":false,"BMP":false,"680":true,"811":false,"LPS33":false,"OW":false,"OWPIN":4,"USERPIN":22}
 export interface SensorSettings {
     TYP: string,
     BME: boolean,
@@ -161,24 +168,59 @@ export interface SensorSettings {
     "811": boolean,
     LPS33: boolean,
     OW: boolean,
-    OWPIN: number
+    OWPIN: number,
+    USERPIN: number
 }
 
 // wifi settings interface
-// {"TYP":"SW", "SSID":"string up to 30 chars?","PW":"also a long string", "IP":"192.168.1.123", "GW":"192.168.1.1", "DNS":"192.168.1.1", "SUB":"255.255.255.0"}
+/**
+ * swdoc["TYP"] = "SW";
+ * swdoc["SSID"] = meshcom_settings.node_ssid;
+ * swdoc["IP"] = meshcom_settings.node_ip;
+    swdoc["GW"] = meshcom_settings.node_gw;     // IP GW Address
+    swdoc["AP"] = bWIFIAP;
+    swdoc["DNS"] = meshcom_settings.node_dns;
+    swdoc["SUB"] = meshcom_settings.node_subnet;
+    swdoc["OWNIP"] = meshcom_settings.node_ownip;
+    swdoc["OWNGW"] = meshcom_settings.node_owngw;
+    swdoc["OWNMS"] = meshcom_settings.node_ownms;
+
+ */
 export interface WifiSettings {
     TYP: string,
     SSID: string,
-    PW: string,
     IP: string,
     GW: string,
     AP: boolean,
     DNS: string,
-    SUB: string
+    SUB: string,
+    OWNIP: string,
+    OWNGW: string,
+    OWNMS: string
 }
 
 // Node Settings interface
-// {"TYP":"SN","GW":false,"DISP":true,"BTN":false,"MSH":true,"GPS":false,"TRACK":false,"UTCOF":28.2730,"TXP":22,"MQRG":433.175,"MSF":11,"MCR":6,"MBW":250}
+/**
+ * nsetdoc["TYP"] = "SN";
+    nsetdoc["GW"] = bGATEWAY;
+    nsetdoc["WS"] = bWEBSERVER;
+    nsetdoc["WSPWD"] = meshcom_settings.node_webpwd;
+    nsetdoc["DISP"] =  bDisplayOff;
+    nsetdoc["BTN"] = bButtonCheck;
+    nsetdoc["MSH"] = bMESH;
+    nsetdoc["GPS"] = bGPSON;
+    nsetdoc["TRACK"] = bDisplayTrack;
+    nsetdoc["UTCOF"] = meshcom_settings.node_utcoff;
+    nsetdoc["TXP"] = meshcom_settings.node_power;
+    nsetdoc["MQRG"] = node_qrg;
+    nsetdoc["MSF"] = meshcom_settings.node_sf;
+    nsetdoc["MCR"] = meshcom_settings.node_cr;
+    nsetdoc["MBW"] = meshcom_settings.node_bw;
+    nsetdoc["GWNPOS"] = bGATEWAY_NOPOS;
+    nsetdoc["MHONLY"] = bMHONLY;
+    nsetdoc["NOALL"] = bNoMSGtoALL;
+    nsetdoc["BOOST"] = bBOOSTEDGAIN;
+ */
 export interface NodeSettings {
     TYP: string,
     GW: boolean,
@@ -194,7 +236,10 @@ export interface NodeSettings {
     MSF: number,
     MCR: number,
     MBW: number,
-    GWNPOS: boolean
+    GWNPOS: boolean,
+    MHONLY: boolean,
+    NOALL: boolean,
+    BOOST: boolean
 }
 
 // APRS Settings interface 

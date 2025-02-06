@@ -4,6 +4,27 @@ import {Store} from "pullstate";
 
 import {NodeSettings} from "../utils/AppInterfaces";
 
+/**
+ * TYP: string,
+    GW: boolean,
+    WS: boolean,
+    DISP: boolean,
+    BTN: boolean,
+    MSH: boolean,
+    GPS: boolean,
+    TRACK: boolean,
+    UTCOF: number,
+    TXP: number,
+    MQRG: number,
+    MSF: number,
+    MCR: number,
+    MBW: number,
+    GWNPOS: boolean,
+    MHONLY: boolean,
+    NOALL: boolean,
+    BOOST: boolean
+ */
+
 const defaultNodeSettings:NodeSettings = {
     TYP: "SN",
     GW: false,
@@ -19,7 +40,10 @@ const defaultNodeSettings:NodeSettings = {
     MSF: 0,
     MCR: 0,
     MBW: 0,
-    GWNPOS: false
+    GWNPOS: false,
+    MHONLY: false,
+    NOALL: false,
+    BOOST: false
 }
 
 const NodeSettingsStore = new Store({

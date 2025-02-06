@@ -15,8 +15,10 @@
 #define HELTEC_V2_1 10
 #define HELTEC_V1 11
 #define TBEAM_AXP2101 12
-#define HELTEC_V3 43
 #define EBYTE_E22 39
+#define HELTEC_V3 43
+#define HELTEC_E290 44
+#define TBEAM_1262 45
  */
 
 
@@ -35,5 +37,7 @@ export const hwtable: {[key: number]: string} = {
     11:"HELTEC V1",
     12:"TBEAM V1.2",
     39:"EBYTE E22",
-    43:"HELTEC V3"
+    43:"HELTEC V3",
+    44:"HELTEC E290",
+    45:"TBEAM V1.2 1262"
 } 

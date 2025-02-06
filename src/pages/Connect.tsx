@@ -541,6 +541,9 @@ const Tab1: React.FC = () => {
           s.devID = devID;
         });
 
+        // clear the MHeards - we get them new from the node
+        MheardStaticStore.mhArr_s = [];
+
         // show the conf loading progess
         if(isAppActive)
           setShLoadConf(true);
