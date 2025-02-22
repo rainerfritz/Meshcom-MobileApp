@@ -4,12 +4,12 @@ import {
     CapacitorSQLite,
   } from "@capacitor-community/sqlite";
 
-import { MsgType, PosType } from "../utils/AppInterfaces";
+import { MsgType, PosType, ChatFilterSettingsType } from "../utils/AppInterfaces";
 import PosiStore from "../store/PosiStore";
 import MsgStore from "../store/MsgStore";
 import { format, sub } from "date-fns";
 import LogS from "../utils/LogService";
-
+import ConfigObject from "../utils/ConfigObject";
 
 
 class DatabaseService {
@@ -21,6 +21,15 @@ class DatabaseService {
     static MAX_AGE_TXT_MSG = 3; // 3 days
     static MAX_AGE_POS = 5; // 5 days
     static cached_positions: PosType[] = [];
+    private static chatFilters: ChatFilterSettingsType = {
+        chat_filter_dm_grp: 0,
+        chat_filter_dm: 0,
+        chat_filter_grp: 0,
+        chat_filter_grp_num1: 0,
+        chat_filter_grp_num2: 0,
+        chat_filter_grp_num3: 0,
+        chat_filter_call_sign: ""
+    };
     
 
     static async initializeDatabase() {
@@ -48,8 +57,7 @@ class DatabaseService {
                 LogS.log(1, 'Error Database could not be opened');
             }
 
-            // Your database initialization logic here
-            // For example: Create tables if they don't exist
+            // TextMessages table
             if (DatabaseService.db) {
                 await DatabaseService.db.execute(`
                     CREATE TABLE IF NOT EXISTS TextMessages (
@@ -63,6 +71,8 @@ class DatabaseService {
                         via TEXT,
                         ack INTEGER,
                         isDM INTEGER,
+                        isGrpMsg INTEGER,
+                        grpNum INTEGER,
                         notify INTEGER
                     )
                 `).catch((err) => {
@@ -70,6 +80,17 @@ class DatabaseService {
                 });
             }
 
+            // check if we have isGrpMsg and grpNum columns in the TextMessages table
+            if (DatabaseService.db) {
+                await DatabaseService.db.query(`SELECT isGrpMsg FROM TextMessages;`).catch(async (err) => {
+                    LogS.log(1, 'Checking/adding isGrpMsg, grpNum in TextMessages table:' + err);
+                    // add isGrpMsg and grpNum columns
+                    await DatabaseService.db?.execute(`ALTER TABLE TextMessages ADD COLUMN isGrpMsg INTEGER DEFAULT 0;`);
+                    await DatabaseService.db?.execute(`ALTER TABLE TextMessages ADD COLUMN grpNum INTEGER DEFAULT 0;`);
+                });
+            }
+
+            // Positions table
             if (DatabaseService.db) {
                 await DatabaseService.db.execute(`
                     CREATE TABLE IF NOT EXISTS Positions (
@@ -94,6 +115,56 @@ class DatabaseService {
                 `).catch((err) => {
                     LogS.log(1, 'Error creating Positions table:' + err);
                 });
+            }
+
+            // app settings table
+            if (DatabaseService.db) {
+                await DatabaseService.db.execute(`
+                    CREATE TABLE IF NOT EXISTS ChatFilterTable (
+                        id INTEGER PRIMARY KEY NOT NULL, 
+                        chat_filter_dm_grp INTEGER NOT NULL DEFAULT 0,
+                        chat_filter_dm INTEGER NOT NULL DEFAULT 0,
+                        chat_filter_grp INTEGER NOT NULL DEFAULT 0,
+                        chat_filter_grp_num1 INTEGER NOT NULL DEFAULT 0,
+                        chat_filter_grp_num2 INTEGER NOT NULL DEFAULT 0,
+                        chat_filter_grp_num3 INTEGER NOT NULL DEFAULT 0,
+                        chat_filter_call_sign TEXT NOT NULL DEFAULT ""
+                    )
+                `).catch((err) => {
+                    LogS.log(1, 'Error creating ChatFilterTable:' + err);
+                });
+            }
+
+            // check if we have the ChatFilterTable table. Read the chat filter settings and update the store
+            if (DatabaseService.db) {
+                const res = await DatabaseService.db.query('SELECT * FROM ChatFilterTable WHERE id = 0;');
+                if (!res.values || res.values.length === 0) {
+                    LogS.log(0,'ChatFilterTable table is empty, adding default values');
+                    await DatabaseService.db.execute('INSERT INTO ChatFilterTable (id, chat_filter_dm_grp, chat_filter_dm, chat_filter_grp, chat_filter_grp_num1, chat_filter_grp_num2, chat_filter_grp_num3, chat_filter_call_sign) VALUES (0,0,0,0,0,0,0,"");');
+                    // update the chat filter settings
+                    this.chatFilters = {
+                        chat_filter_dm_grp: 0,
+                        chat_filter_dm: 0,
+                        chat_filter_grp: 0,
+                        chat_filter_grp_num1: 0,
+                        chat_filter_grp_num2: 0,
+                        chat_filter_grp_num3: 0,
+                        chat_filter_call_sign: ""
+                    };
+                } else {
+                    LogS.log(0,'ChatFilterTable table is available, reading values');
+                    this.chatFilters = {
+                        chat_filter_dm_grp: res.values[0].chat_filter_dm_grp,
+                        chat_filter_dm: res.values[0].chat_filter_dm,
+                        chat_filter_grp: res.values[0].chat_filter_grp,
+                        chat_filter_grp_num1: res.values[0].chat_filter_grp_num1,
+                        chat_filter_grp_num2: res.values[0].chat_filter_grp_num2,
+                        chat_filter_grp_num3: res.values[0].chat_filter_grp_num3,
+                        chat_filter_call_sign: res.values[0].chat_filter_call_sign
+                    };
+
+                    LogS.log(0, "DB Chat Filter Settings: " + JSON.stringify(this.chatFilters));
+                }
             }
 
             if (DatabaseService.db) {
@@ -129,9 +200,8 @@ class DatabaseService {
                 const escTxtMsgs = DatabaseService.escapeQuotesInArr(txtMsgs);
 
                 if (txtMsgs.length > 0) {
-                    MsgStore.update(s => {
-                        s.msgArr = escTxtMsgs;
-                    });
+                    //apply filters, updates the store then
+                    DatabaseService.applyFilters(escTxtMsgs);
                 }
 
                 // update the store with positions
@@ -189,17 +259,15 @@ class DatabaseService {
 
             try {
                 const id = Date.now();
-                const query_str = `INSERT INTO TextMessages (id,timestamp, msgNr, msgTime, fromCall, toCall, msgTXT, via, ack, isDM, notify) VALUES (?,?,?,?,?,?,?,?,?,?,?)`;
-                const values = [id, msg.timestamp, msg.msgNr, msg.msgTime, msg.fromCall, msg.toCall, msg.msgTXT, msg.via, msg.ack, msg.isDM, msg.notify];
+                const query_str = `INSERT INTO TextMessages (id,timestamp, msgNr, msgTime, fromCall, toCall, msgTXT, via, ack, isDM, isGrpMsg, grpNum, notify) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`;
+                const values = [id, msg.timestamp, msg.msgNr, msg.msgTime, msg.fromCall, msg.toCall, msg.msgTXT, msg.via, msg.ack, msg.isDM, msg.isGrpMsg, msg.grpNum, msg.notify];
                 const ret = await DatabaseService.db.run(query_str, values);
                 console.log('DB writeTxtMsg ret:' + ret.changes?.values);
                 // read back all messages
                 const txtMsgs = await DatabaseService.getTextMessages();
                 const escTxtMsgs = DatabaseService.escapeQuotesInArr(txtMsgs);
-                // update the store
-                MsgStore.update(s => {
-                    s.msgArr = escTxtMsgs;
-                });
+                //apply filters, updates the store then
+                DatabaseService.applyFilters(escTxtMsgs);
             } catch (error) {
                 LogS.log(1, 'Error writing text message:' + error);
             }
@@ -256,9 +324,8 @@ class DatabaseService {
                             const txtMsgs = await DatabaseService.getTextMessages();
                             const escTxtMsgs = DatabaseService.escapeQuotesInArr(txtMsgs);
                             if (txtMsgs.length > 0) {
-                                MsgStore.update(s => {
-                                    s.msgArr = escTxtMsgs;
-                                });
+                                //apply filters, updates the store then
+                                DatabaseService.applyFilters(escTxtMsgs);
                             }
                         }
                     }
@@ -540,6 +607,65 @@ class DatabaseService {
             LogS.log(1, 'Error housekeeping. Database not open.');
         }
     }
+
+    // FILTERING
+    // set the dm_grp filter
+    static async setChatFilters(filterSettings: ChatFilterSettingsType) {
+        this.chatFilters = filterSettings;
+        try {
+            const msgs = await this.getTextMessages();
+            this.applyFilters(msgs);
+            // write the settings to the ChatFilterTable table
+            await this.writeChatFilterSettings();
+        } catch (error) {
+            LogS.log(1, 'DB Error setting DM/Grp filter:' + error);
+        }
+    }
+
+    // get the filtersettings
+    static getChatFilters() {
+        return this.chatFilters;
+    }
+
+    // function to apply the filters and return the filtered messages. Also show always own send messages
+    static applyFilters(msgs: MsgType[]) {
+        let filtered_msgs:MsgType[] = [];
+        if (this.chatFilters.chat_filter_dm_grp === 1) {
+            filtered_msgs = msgs.filter((msg) => {
+                return msg.isDM === 1 || msg.isGrpMsg === 1 || (msg.fromCall === ConfigObject.getConf().CALL);
+            }
+        )} else if (this.chatFilters.chat_filter_dm === 1) {
+            filtered_msgs = msgs.filter((msg) => {
+                return msg.isDM === 1 && !msg.isGrpMsg || (msg.fromCall === ConfigObject.getConf().CALL);
+            }
+        )}
+        else if (this.chatFilters.chat_filter_grp === 1) {
+            filtered_msgs = msgs.filter((msg) => {
+                return msg.isGrpMsg === 1 || (msg.fromCall === ConfigObject.getConf().CALL);
+            }
+        )}
+        else {
+            filtered_msgs = msgs;
+        }
+        // update the store
+        MsgStore.update(s => {
+            s.msgArr = filtered_msgs;
+        });
+    }
+
+    // set the Chat Filter Settings in the ChatFilterTable table
+    private static async writeChatFilterSettings() {
+        if (DatabaseService.db) {
+            try {
+                await DatabaseService.db.execute(`UPDATE ChatFilterTable SET chat_filter_dm_grp = ${this.chatFilters.chat_filter_dm_grp}, chat_filter_dm = ${this.chatFilters.chat_filter_dm}, chat_filter_grp = ${this.chatFilters.chat_filter_grp}, chat_filter_grp_num1 = ${this.chatFilters.chat_filter_grp_num1}, chat_filter_grp_num2 = ${this.chatFilters.chat_filter_grp_num2}, chat_filter_grp_num3 = ${this.chatFilters.chat_filter_grp_num3}, chat_filter_call_sign = "${this.chatFilters.chat_filter_call_sign}" WHERE id = 0;`);
+            } catch (error) {
+                LogS.log(1, 'Error setting Chat Filter Settings:' + error);
+            }
+        } else {
+            LogS.log(1, 'Error setting Chat Filter Settings. Database not open.');
+        }
+    }
+
 }
 
 export default DatabaseService;

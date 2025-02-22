@@ -1,15 +1,15 @@
 import {Store} from "pullstate";
-//import { MsgType } from "../hooks/UseStorage";
+import { MsgType } from "../utils/AppInterfaces";
 
 //let msgTypeArr = <MsgType []>[];
 let msgTypeArr:MsgType[] = [];
 
-interface MsgType {
+/*interface MsgType {
     msgNr:number,
     msgTime:string,
     fromCall:string,
     msgTXT:string
-}
+}*/
 
 const MsgStore = new Store({
     msgArr:msgTypeArr
@@ -28,6 +28,9 @@ export default MsgStore
     msgTXT:string,
     via:string,
     ack:number,
-    isDM:boolean
+    isDM:number,
+    isGrpMsg:number,
+    grpNum:number,
+    notify:number
 }
  */

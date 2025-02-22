@@ -57,3 +57,8 @@
     height: 25px;
     width: auto;
 }
+#toggle_filter{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}

@@ -25,7 +25,8 @@ class ConfClass{
             "GCB3": 0,
             "GCB4": 0,
             "GCB5": 0,
-            "CTRY": "none"
+            "CTRY": "none",
+            BOOST: false
         }
         this.own_position = {
             LAT: 0,

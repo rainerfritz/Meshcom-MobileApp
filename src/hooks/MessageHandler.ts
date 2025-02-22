@@ -49,8 +49,8 @@ import UpdateFW from '../store/UpdtFW';
 import WifiSettingsStore from '../store/WifiSettings';
 import MheardStaticStore from '../utils/MheardStaticStore';
 import NodeSettingsStore from '../store/NodeSettingsStore';
-import NotifyMsgState from '../store/NotifyMsg';
 import LogS from '../utils/LogService';
+import AprsSettingsStore from '../store/AprSettingsStore';
 
 
 export function useMSG() {
@@ -112,6 +112,8 @@ export function useMSG() {
                 let dm_callsign = "";
                 let dm_call_arr: number[] = [];     // buffer for DM callsign
                 let timestamp_node = 0;
+                let isGrpMsg_ = 0;
+                let grpNum_ = 0;
                 
                 // if txt or pos msg extract callsign
                 let call_arr: number[] = [];
@@ -251,6 +253,13 @@ export function useMSG() {
                         to_callsign_ = dm_callsign;
 
                         console.log("DM Dest. Callsign: " + dm_callsign);
+
+                        // check if the dm call is a group message aka a number
+                        if(!isNaN(+dm_callsign)){
+                            isGrpMsg_ = 1;
+                            grpNum_ = +dm_callsign;
+                            console.log("Group Message Nr: " + grpNum_);
+                        }
 
                     }
                 }
@@ -545,6 +554,8 @@ export function useMSG() {
                             via: via_str,
                             ack:0,
                             isDM: isDM_,
+                            isGrpMsg: isGrpMsg_,
+                            grpNum: grpNum_,
                             notify:notify_
                         }
 
@@ -1094,15 +1105,6 @@ export function useMSG() {
                                     console.log("MHANDLER: Update Position in DB");
                                     await DatabaseService.writePos(db_pos);
                                 }
-                                
-
-                                /*ConfigStore.update(s => {
-                                    s.config.onewire_pin = wx_data.OWPIN;
-                                    s.config.onewire_on = wx_data.OWON;
-                                    s.config.lps33_on = wx_data.LPS33ON;
-                                    s.config.bme680_on = wx_data.BME680ON;
-                                    s.config.mcu811_on = wx_data.MCU811ON;
-                                });*/
 
                                 break;
                             }
@@ -1175,9 +1177,9 @@ export function useMSG() {
                                 });
 
                                 // update aprs comment store
-                                AprsCmtStore.update(s => {
+                                /*AprsCmtStore.update(s => {
                                     s.aprsCmt = aprs_cmt;
-                                });
+                                });*/
 
                                 break;
 
@@ -1292,6 +1294,7 @@ export function useMSG() {
                                 console.log("APRS Comment: " + aprs_settings.ATXT);
                                 console.log("APRS Symbol ID: " + aprs_settings.SYMID);
                                 console.log("APRS Symbol Char: " + aprs_settings.SYMCD);
+                                console.log("APRS Name: " + aprs_settings.NAME);
 
                                 // get the symbol name from the symbol char
                                 let aprs_symbol_name = "";
@@ -1310,6 +1313,11 @@ export function useMSG() {
                                     });
                                 }
 
+                                if(aprs_symbol_name === ""){
+                                    console.log("APRS Symbol not found in Symbol Table!");
+                                    aprs_symbol_name = aprs_settings.SYMCD;
+                                }
+
                                 console.log("APRS Sym Name: " + aprs_symbol_name);
 
                                 // update config store
@@ -1321,6 +1329,11 @@ export function useMSG() {
                                 // update aprs comment store
                                 AprsCmtStore.update(s => {
                                     s.aprsCmt = aprs_settings.ATXT;
+                                });
+
+                                // update aprs settings store
+                                AprsSettingsStore.update(s => {
+                                    s.aprsSettings = aprs_settings;
                                 });
 
                                 break;

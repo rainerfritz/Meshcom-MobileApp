@@ -42,8 +42,7 @@ const defaultNodeSettings:NodeSettings = {
     MBW: 0,
     GWNPOS: false,
     MHONLY: false,
-    NOALL: false,
-    BOOST: false
+    NOALL: false
 }
 
 const NodeSettingsStore = new Store({

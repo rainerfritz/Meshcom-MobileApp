@@ -143,6 +143,7 @@ ion-input.custominput{
     width: auto;
 }
 
+
 .date-panel{
     width: auto;
     height: 5%;
@@ -155,4 +156,12 @@ ion-input.custominput{
     border-radius: 6px;
     margin-top: 3px;
     margin-bottom: 10px;
+}
+#spacer_settings_top{
+    height: 45px;
+    width: auto;
+}
+#spacer_modal{
+    height: 25px;
+    width: auto;
 }

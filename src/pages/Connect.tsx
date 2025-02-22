@@ -1,7 +1,8 @@
 import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, 
   IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, IonLoading, IonModal,
 IonButtons, IonList, IonItem, IonLabel,
-useIonViewWillLeave} from '@ionic/react';
+useIonViewWillLeave,
+IonToggle} from '@ionic/react';
 
 import './Connect.css';
 
@@ -67,6 +68,7 @@ const Tab1: React.FC = () => {
   const [connFlag, setConnFlag] = useState<boolean>(false);
   const [showProgrBar, setShowProgrBar] = useState<boolean>(false);
   const connInProgress = useRef<boolean>(false);  // Flag to avoid multiple connect attempts
+  const ble_scan_devices_filtered = useRef<ScanRes[]>([]); // filtered scan devices for MC only
 
 
   // store device id
@@ -134,6 +136,9 @@ const Tab1: React.FC = () => {
 
   // remember if this page is active
   const thisPageActive = useRef<boolean>(false);
+
+  // Toggle for MC only Devices to filter at BLE scan
+  const [showMConly, setShowMConly] = useState<boolean>(true);
 
 
 
@@ -389,13 +394,52 @@ const Tab1: React.FC = () => {
       // sort the scan results by their name
       scan_res.sort((a, b) => (a.devName > b.devName) ? 1 : -1);
       const newDev = scan_res;
-      setScanDevices(newDev);
+      //setScanDevices(newDev);
       ble_scan_devices.current = newDev;
       ble_scan_ongoing.current = false;
+
+      // filter if we want to see only MC devices
+      if(showMConly){
+        const mc_filtered = newDev.filter((dev) => {
+          return dev.devName.startsWith("MC-");
+        });
+        setScanDevices(mc_filtered);
+      } else {
+        setScanDevices(newDev);
+      }
+
       return;
 
     } catch (error) {
       LogS.log(1, "Error on BLE Scan! " + error);
+      setShowProgrBar(false);
+      setAlHeader("Error on BLE Scan!");
+      const err_msg = (error as Error).message;
+      if(err_msg.includes("Permission")){
+        setAlMsg("Please enable Location Services and Bluetooth!");
+        if(pltfrm.current === "android"){
+          // check if location services are enabled
+          checkLocSettingAndroid();
+        }
+      } else {
+        setAlMsg(err_msg);
+      }
+      setShAlertCard(true);
+    }
+  }
+
+
+  // handle the filter toggle for MC only devices
+  const handleMConly = (state: boolean) => {
+    setShowMConly(state);
+    // filter if we want to see only MC devices
+    if(state){
+      const mc_filtered = ble_scan_devices.current.filter((dev) => {
+        return dev.devName.startsWith("MC-");
+      });
+      setScanDevices(mc_filtered);
+    } else {
+      setScanDevices(ble_scan_devices.current);
     }
   }
 
@@ -516,7 +560,7 @@ const Tab1: React.FC = () => {
         LogS.log(0, "Connected to Device: " + devID);
 
         // Update Recon State in DB
-        await DatabaseService.setReconState(0, devID);
+        //await DatabaseService.setReconState(0, devID);
 
         // update devID in BLE Hook
         updateDevID(devID);
@@ -621,6 +665,11 @@ const Tab1: React.FC = () => {
         }
       } 
 
+      // show alert
+      setAlHeader("Error on Connection!");
+      setAlMsg(errmsg_str);
+      setShAlertCard(true);
+
       // set connection flag to false
       const newConnState = false;
       setConnFlag(newConnState);
@@ -638,8 +687,6 @@ const Tab1: React.FC = () => {
         s.devID = devID;
       });
 
-      setShowProgrBar(false);
-      setShReconProgr(false);
       connInProgress.current = false;
     }
   }
@@ -822,29 +869,36 @@ const Tab1: React.FC = () => {
     manual_ble_disco.current = true;
     console.log("Connect Tab - Manual disco state: " + manual_ble_disco.current);
 
-    const newConnState = false;
-    setConnFlag(newConnState);
-    // update BLE connected state in BLE Hook
-    updateBLEConnected(false);
-
-    // update BLE connected state in store
-    BLEconnStore.update(s => {
-      s.ble_connected = false;
-    });
 
     try {
       await BleClient.stopNotifications(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_RXCHAR);
       await BleClient.disconnect(devID);
+
+      const newConnState = false;
+      setConnFlag(newConnState);
+      // update BLE connected state in BLE Hook
+      updateBLEConnected(false);
+
+      // update BLE connected state in store
+      BLEconnStore.update(s => {
+        s.ble_connected = false;
+      });
     } catch (error: any) {
       console.error("Error on Disconnect: " + error.message);
+      // convert the error message to string
+      const err_msg = error.message.toString();
       // reboot the node if the callsign is not set. BLE Authentication Error. 
-      if(config_s.callSign === "XX0XXX-00" || config_s.callSign === ""){
+      if (config_s.callSign === "XX0XXX-00" || config_s.callSign === "" || err_msg.includes("Authentication")) {
         // alert the user
-        setAlHeader("Please set your Callsign!");
+        setAlHeader("Please set your Callsign if not set!");
         setAlMsg("Rebooting Node to set BLE authentication!");
         setShAlertCard(true);
         console.log("Rebooting Node!");
         sendTxtCmdNode("--reboot");
+      } else {
+        setAlHeader("Error on Disconnect!");
+        setAlMsg(error.message);
+        setShAlertCard(true);
       }
     }
   }
@@ -861,15 +915,13 @@ const Tab1: React.FC = () => {
       // get the current position from GPS and send the position to the node if unconfigured
       getGpsLocation().then((res) => {
         console.log("Connect - GPS Location: " + res.lat + " " + res.lon + " " + res.alt);
-        if (config_s.callSign === "XX0XXX-00" || config_s.callSign === "") {
-          console.log("Connect - Unconfigured Node!");
+        if (config_s.callSign === "XX0XXX-00" || config_s.callSign === "" || (config_s.lat === 0 && config_s.lon === 0)) {
+          console.log("Connect - Unconfigured Node or no Location set!");
           // give the node a default location from phone
-          if (config_s.lat === 0 && config_s.lon === 0) {
-            console.log("Connect - Setting Initial Position from Phone");
-            setCurrPosGPS(true);
-            // delay to give the node time to save the position
-            setTimeout(() => { }, 2000);
-          }
+          console.log("Connect - Setting Initial Position from Phone");
+          setCurrPosGPS(true);
+          // delay to give the node time to save the position
+          setTimeout(() => { }, 2000);
         }
 
       }).catch((error) => {
@@ -1046,6 +1098,10 @@ const Tab1: React.FC = () => {
           <div id="spacer-top"></div>
 
           <div id="ionlist">
+          <div id="toggle_filter">
+              <IonToggle onIonChange={() => handleMConly(!showMConly)} checked={showMConly} color="primary" alignment="center" aria-label="Primary toggle">MeshCom only</IonToggle>
+          </div>
+          <div id="spacer_items_top"></div>
 
             {shStopReconBtn ? <>
               <IonButton expand='block' size="default" fill='solid' slot='start' color='danger' onClick={() => handleReconActive(false)}>Cancel Reconnecting</IonButton>

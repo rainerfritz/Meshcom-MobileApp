@@ -2,6 +2,7 @@ import { BleClient, numbersToDataView } from "@capacitor-community/bluetooth-le"
 import {useMSG} from './MessageHandler';
 import { useEffect, useRef, useState } from "react";
 import ConfigObject from "../utils/ConfigObject";
+import LogS from '../utils/LogService';
 
 
 const RAK_BLE_UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
@@ -93,21 +94,28 @@ export function useBLE() {
 
     // send string message to phone 
     const sendSTRtoNode = (str:string, devID:string) => {
-
-        BleClient.write(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_TXCHAR, numbersToDataView(convSTRtoARR(str)));
+        try {
+            BleClient.write(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_TXCHAR, numbersToDataView(convSTRtoARR(str)));
+        } catch (error) {
+            LogS.log(1,"BLEHANDLER: Error sending STR to Node: " + error);
+        }
 
     }
 
     // send Dataview to Node
     const sendDV = (buff:DataView, devID:string) => {
-
-        BleClient.write(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_TXCHAR, buff);
+        try {
+            BleClient.write(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_TXCHAR, buff);
+        } catch (error) {
+            LogS.log(1,"BLEHANDLER: Error sending DV to Node: " + error);
+        }
     }
 
     
     // send a text command to node
     const sendTxtCmdNode = (cmd: string) => {
-        console.log("BLEHANDLER - DevID Config Object " + ConfigObject.getBleDevId());
+        const ble_devID:string = ConfigObject.getBleDevId();
+        console.log("BLEHANDLER - DevID Config Object " + ble_devID);
 
         if (cmd !== "") {
 
@@ -125,8 +133,8 @@ export function useBLE() {
             for (let i = 0; i < txt_len; i++)
                 view1.setUint8(i + 2, enc_txt_msg[i]);
 
-            console.log("BLEHANDLER: DEVID: " + devid_ble.current);
-            sendDV(view1, devid_ble.current);
+            console.log("BLEHANDLER: DEVID: " + ble_devID);
+            sendDV(view1, ble_devID);
 
             console.log("Message to Node: " + cmd);
 

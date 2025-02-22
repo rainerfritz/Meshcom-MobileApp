@@ -20,7 +20,6 @@ import GpsDataStore from '../store/GpsData';
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
 import BLEconnStore from '../store/BLEconnected';
-import ShouldConfStore from '../store/ShouldConfNode';
 import DataBaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
 import AppActiveState from '../store/AppActive';
@@ -28,6 +27,7 @@ import WifiSettingsStore from '../store/WifiSettings';
 import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
 import MheardStaticStore from '../utils/MheardStaticStore';
+import AprsSettingsStore from '../store/AprSettingsStore';
 
 
 
@@ -57,12 +57,11 @@ const Tab2: React.FC = () => {
   // node settings
   const nodeSettings:NodeSettings = useStoreState(NodeSettingsStore, s => s.nodeSettings);
 
-  useEffect(() => {
-    LogS.log(0,"Settings Page NodeSettings updated");
-  }, [nodeSettings]);
-
   // sensor settings from store
   const sensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, s => s.sensorSettings);
+
+  // aprs settings from store
+  const aprs_settings_s = AprsSettingsStore.useState(s => s.aprsSettings);
 
   // get current AppState
   const isAppActive = AppActiveState.useState(s => s.active);
@@ -71,10 +70,7 @@ const Tab2: React.FC = () => {
   //const shouldConf = useStoreState(ShouldConfStore, s => s.shouldConf);
 
   // NodeInfos
-  //const nodeInfo:InfoData = useStoreState(NodeInfoStore, getNodeInfoStore);
-
-  // Trigger if BLE Config is finished
-  //const confFin = BleConfigFinish.useState(s => s.BleConfFin);
+  const nodeInfo_s:InfoData = NodeInfoStore.useState(s => s.infoData);
   
 
 
@@ -132,16 +128,31 @@ const Tab2: React.FC = () => {
   // reboot node 
   const [shRebootCard, setShRebootCard] = useState<boolean>(false);
 
+  // OTA Update Card Yes/No
+  const [shOTAUpdateCard, setShOTAUpdateCard] = useState<boolean>(false);
+
   // onewire pin ref
   const owPinInputRef = useRef<HTMLIonInputElement>(null);
   const owPinNr = useRef<number>(0);
   const owPinChanged = useRef<boolean>(false);
   let MAX_PIN_NUM = 50;
 
+  // userbutton pin ref
+  const userBtnInputRef = useRef<HTMLIonInputElement>(null);
+  const userBtnNr = useRef<number>(0);
+  const userBtnChanged = useRef<boolean>(false);
+  let MAX_USER_BTN_NUM = 50;
+
   // Node UTC Time-Offset setting
   const node_utc_offset = useRef<number>(0);
   const node_utc_offset_changed = useRef<boolean>(false);
   const node_utc_offset_ref = useRef<HTMLIonInputElement>(null);
+
+  // custom BLE Pairing Ping
+  const ble_pairing_pin = useRef<string>("000000");
+  const ble_pairing_pin_changed = useRef<boolean>(false);
+  const ble_pairing_pin_ref = useRef<HTMLIonInputElement>(null);
+  const ble_pairing_pin_wrong = useRef<boolean>(false);
 
   // show hide user buttons
   const [shUserBtns, setShUserBtns] = useState<boolean>(false);
@@ -169,7 +180,7 @@ const Tab2: React.FC = () => {
       s.infoData.CTRY = ctry_ev;
     });
   }
-  const ctry_list = ["EU", "EU8", "ON", "UK", "UK8", "US", "VR2", "868", "906"];
+  const ctry_list = ["EU", "EU8", "ON", "UK", "LA", "UK8", "US", "VR2", "868", "906"];
   const ctry_list_translated: {[key: string]: string} = 
   {"EU":"EU | 433.175MHz", 
   "EU8":"EU8 | 433.175MHz",
@@ -178,7 +189,8 @@ const Tab2: React.FC = () => {
   "US":"US | 433.175MHz", 
   "VR2":"VR2 | 435.775MHz", 
   "868":"868 | 869.525MHz", 
-  "906":"906 | 906.875MHz"};
+  "906":"906 | 906.875MHz",
+  "LA":"LA | 433.925MHz"};
   // set the ctry setting changed string to value when recived from node
   useEffect(()=>{
     console.log("Ctry Setting set from Node: " + ctrySetting);
@@ -188,7 +200,6 @@ const Tab2: React.FC = () => {
   // Group Call Settings
   const [shGroupCallSet, setShGroupCallSet] = useState<boolean>(false);
   const setGrpCmd = useRef<string>("");
-  const isGateWay = NodeSettingsStore.useState(s => s.nodeSettings.GW);
   const grp0 = NodeInfoStore.useState(s => s.infoData.GCB0);
   const grp1 = NodeInfoStore.useState(s => s.infoData.GCB1);
   const grp2 = NodeInfoStore.useState(s => s.infoData.GCB2);
@@ -208,6 +219,13 @@ const Tab2: React.FC = () => {
     // send to node
     sendTxtCmdNode("--setgrc");
   }
+
+  // fixed ip settings
+  const [shFixedIPSet, setShFixedIPSet] = useState<boolean>(false);
+  const fixed_ip_changed = useRef<boolean>(false);
+  const ip_addr_ref = useRef<HTMLIonInputElement>(null);
+  const ip_gw_ref = useRef<HTMLIonInputElement>(null);
+  const ip_snm_ref = useRef<HTMLIonInputElement>(null);
   
 
 
@@ -264,6 +282,8 @@ const Tab2: React.FC = () => {
 
   },[aprs_prim_sec_s]);
 
+  // handle the aprs symbol group change
+
 
 
 
@@ -281,11 +301,20 @@ const Tab2: React.FC = () => {
     console.log("Aprs Pri/Sec: " + aprs_pri_sec_char.current);
     console.log("Aprs Symbol: " + aprs_sym_char.current);
     
+    // set onewire pin number from config
+    //owPinNr.current = config_s.onewire_pin;
+    // set node utc offset from config
+    console.log("Node UTC Offset: " + config_s.node_utc_offset);
+    node_utc_offset.current = config_s.node_utc_offset;
+
+  }, [config_s]);
 
 
+  // setting txpower slider and values if nodesettings arrive
+  useEffect(()=>{
+    LogS.log(0,"Settings Page NodeSettings updated");
     // set min max power based on hw
     const hw_type = config_s.hw;
-
     if(hw_type === "TBEAM V1.1 1268" || hw_type === "T-ECHO" || hw_type === "RAK4631" || hw_type === "HELTEC V3" || hw_type === "EBYTE E22" || hw_type === "EBYTE E220" || hw_type === "TBEAM V1.2 1262"){
       minTXpwr.current = 2;
       maxTXpwr.current = 22;
@@ -296,8 +325,10 @@ const Tab2: React.FC = () => {
     }
 
     // 0 dBm means it was not set to flash on Node
-    if(config_s.tx_pwr === 0){
+    if(nodeSettings.TXP === 0){
       tx_pwr.current = maxTXpwr.current;
+    } else {
+      tx_pwr.current = nodeSettings.TXP;
     }
     
     const pwr_exp_w = (tx_pwr.current - 30) / 10;
@@ -305,14 +336,18 @@ const Tab2: React.FC = () => {
     console.log("TX Pwr (mW): " + pwr_w);
     setTxPwrW(+pwr_w);
 
+  },[nodeSettings]);
+
+
+  // set values of sensor settings when they arrive
+  useEffect(()=>{
+    LogS.log(0,"Settings Page SensorSettings updated");
+    // set userbutton pin number from sensor settings
+    userBtnNr.current = sensorSettings_s.USERPIN;
     // set onewire pin number from config
-    owPinNr.current = config_s.onewire_pin;
-    // set node utc offset from config
-    console.log("Node UTC Offset: " + config_s.node_utc_offset);
-    node_utc_offset.current = config_s.node_utc_offset;
+    owPinNr.current = sensorSettings_s.OWPIN;
 
-  }, [config_s]);
-
+  },[sensorSettings_s]);
 
 
   // sleep function for delay
@@ -1028,10 +1063,47 @@ const Tab2: React.FC = () => {
       case "otaupdate": {
         cmd_ = "--ota-update";
         setAlHeader("Booting into OTA Mode!");
-          setAlMsg("Access it via Web-Browser via <CALLSIGN.local> or in AP Mode: IP:192.168.4.1 or Meshcom-OTA.local");
-          setShAlertCard(true);
+        setAlMsg("On active Wifi connection access it after reboot via Web-Browser with " + nodeInfo_s.CALL + ".local or "+ wifiSettings_s.IP +" if in AP Mode: IP:192.168.4.1 or Meshcom-OTA.local");
+        setShAlertCard(true);
         break;
       }
+
+      case "no_allmsg_rx": {
+        if(nodeSettings.NOALL){
+          cmd_ = "--nomsgall off";
+        } else {
+          cmd_ = "--nomsgall on";
+        }
+        break;
+      }
+
+      case "userButtonPin": {
+        cmd_ = "--button gpio " + userBtnNr.current.toString();
+        break;
+      }
+
+      // custom ble paring pin
+      case "btcode": {
+        cmd_ = "--btcode " + ble_pairing_pin.current;
+        break;
+      }
+
+      // rx boost is only available on boards with a SX126x chip
+      case "rxboost": {
+        if (config_s.hw === "TBEAM V1.1 1268" || config_s.hw === "TBEAM V1.2 1262" || config_s.hw === "EBYTE E22" || config_s.hw === "HELTEC V3" || config_s.hw === "HELTEC E290") {
+          if (nodeInfo_s.BOOST) {
+            cmd_ = "--setboostedgain off";
+          } else {
+            cmd_ = "--setboostedgain on";
+          }
+        } else {
+          setAlHeader("RX Boost not supported!");
+          setAlMsg("Only on SX126x Lora chip boards available!");
+          setShAlertCard(true);
+        }
+        break;
+      }
+
     }
 
     // finally send it via textmsg
@@ -1091,17 +1163,21 @@ const Tab2: React.FC = () => {
         setAlMsg("Please check Callsign! Should be like: OE1XYZ-1 (CLIENT) or OE1XYZ-12 (GATEWAY)");
         setShAlertCard(true);
         return;
+      } else {
+        sleep(300);
       }
     }
 
     if(wifi_changed.current){
       console.log("Wifi changed");
       setWifiSetting();
+      sleep(300);
     }
 
     if(aprsSym_changed.current){
       console.log("Aprs Sym changed");
       setAprsSymbols();
+      sleep(300);
     }
 
     // when cmtChanged send it to node
@@ -1109,6 +1185,7 @@ const Tab2: React.FC = () => {
       console.log("Sending APRS Comment to Node");
       aprs_cmt_changed.current = false;
       sendTxtCmd("atxt");
+      sleep(300);
     } 
 
     // when node_utc_offset_changed send it to node
@@ -1116,6 +1193,7 @@ const Tab2: React.FC = () => {
       console.log("Sending UTC Offset to Node");
       node_utc_offset_changed.current = false;
       sendTxtCmd("utcoffset");
+      sleep(300);
     }
 
     // set the country setting to the node
@@ -1123,6 +1201,7 @@ const Tab2: React.FC = () => {
       console.log("Setting Country to Node");
       ctry_setting_changed.current = false;
       sendTxtCmd("ctry");
+      sleep(300);
     }
 
     // GROUP SETTINGS
@@ -1132,7 +1211,12 @@ const Tab2: React.FC = () => {
         // check if the value is a number
         const grp_val_nr = +grp_value;
         if(!isNaN(grp_val_nr)){
-          return grp_val_nr;
+          // check if the group number has maximum 5 digits
+          if(grp_val_nr >= 0 && grp_val_nr <= 99999){
+            return grp_val_nr;
+          } else {
+            return 0;
+          }
         } else {
           return 0;
         }
@@ -1171,12 +1255,37 @@ const Tab2: React.FC = () => {
         console.log("Group CMD: " + cmd_str);
         setGrpCmd.current = cmd_str;
         sendTxtCmd("setGroup");
+        sleep(300);
+      }
+    }
+
+    // set the userbutton pin to the node
+    if(userBtnChanged.current){
+      console.log("Setting Userbutton Pin to Node");
+      userBtnChanged.current = false;
+      sendTxtCmd("userButtonPin");
+      sleep(300);
+    }
+
+    // custom BLE Pairing Pin
+    if(ble_pairing_pin_changed.current){
+      console.log("Setting BLE Pairing Pin to Node");
+      console.log("Custom BLE Pairing Pin: " + ble_pairing_pin.current);
+      ble_pairing_pin_changed.current = false;
+
+      if (ble_pairing_pin.current.length === 6) {
+          sendTxtCmd("btcode");
+          sleep(300);
+      } else {
+        ble_pairing_pin_wrong.current = true;
+        setAlHeader("Wrong Custom Pin Number!");
+        setAlMsg("Pin Nr must have 6 digits!");
+        setShAlertCard(true);
       }
     }
 
 
-
-    // send save settings command only when call_changed or wifi_changed or aprsSym_changed - will reboot the client
+    // send save settings command only when call_changed or wifi_changed - will reboot the client
     if (call_changed.current || wifi_changed.current || aprsSym_changed.current || owPinChanged.current) {
 
       console.log("Saving Settings and reboot client");
@@ -1189,6 +1298,8 @@ const Tab2: React.FC = () => {
         console.log("Onewire Pin changed");
         owPinChanged.current = false;
         sendTxtCmd("owpin");
+      } else if (aprsSym_changed.current) {
+        console.log("Aprs Sym changed");
       } else {
         // reset command for client
         let save_buffer = new ArrayBuffer(2);
@@ -1200,10 +1311,13 @@ const Tab2: React.FC = () => {
       }
     }
 
-    // tell the user that settings are saved
-    setAlHeader("Settings saved!");
-    setAlMsg("In some cases node reboots in 15s!");
-    setShAlertCard(true);
+    // tell the user that settings are saved. This overwrites cards from before.
+    if(!ble_pairing_pin_wrong.current){
+      setAlHeader("Settings saved!");
+      setAlMsg("In some cases node reboots in 15s!");
+      setShAlertCard(true);
+    }
+    
   }
 
 
@@ -1266,6 +1380,47 @@ const Tab2: React.FC = () => {
         }
       }
     }
+  }
+
+
+  // handle userbutton pin setting
+  const setUserbutton_pin = (event:string) => {
+
+    console.log("Userbutton Pin changed!");
+    console.log("Event Pin: " + event);
+
+    // check if value from input is not undefined or null
+    if (userBtnInputRef.current!.value !== undefined && userBtnInputRef.current!.value !== null) {
+      const pin_str = userBtnInputRef.current!.value.toString();
+      const pin_nr = +pin_str;
+
+      console.log("Userbutton Pin: " + pin_nr);
+
+      if (pin_nr >= 0 && pin_nr <= MAX_USER_BTN_NUM) {
+
+        if (pin_nr !== userBtnNr.current) {
+          userBtnNr.current = pin_nr;
+          userBtnChanged.current = true;
+        }
+      } else {
+        userBtnChanged.current = false;
+        setAlHeader("Wrong Userbutton Pin Number!");
+        setAlMsg("Pin Nr not in Range!");
+        setShAlertCard(true);
+      }
+    }
+  }
+
+
+  // handle custom pairing pin setting
+  const setBLEParingPin = (event:string) => {
+
+    console.log("Custom BLE Pairing Pin changed!");
+    console.log("Event Pin: " + event);
+    if(ble_pairing_pin_ref.current!.value !== undefined && ble_pairing_pin_ref.current!.value !== null){
+      ble_pairing_pin.current = ble_pairing_pin_ref.current!.value.toString();
+    }
+    ble_pairing_pin_changed.current = true;
   }
 
   
@@ -1331,6 +1486,7 @@ const Tab2: React.FC = () => {
     }
   }
 
+
   // handle clear positions - we want to get own position from node afterwords
   const deletePositions = () => {
     console.log("Delete Positions");
@@ -1343,12 +1499,20 @@ const Tab2: React.FC = () => {
     });
   }
 
+
   // redirect to connect page if unset node
   const redirectConnect = () => {
     setShDiscoCard(false);
     if (isAppActive)
       history.push("/connect");
   }
+
+
+  // handle OTA Update Button
+  const handleOTAUpdate = () => {
+    setShOTAUpdateCard(true);
+  }
+
 
 
 
@@ -1408,6 +1572,29 @@ const Tab2: React.FC = () => {
           ]}
         />
 
+        <IonAlert
+          isOpen={shOTAUpdateCard}
+          header="OTA Update?"
+          message="Boot into OTA Mode now?"
+          buttons={[
+            {
+              text: 'Cancel',
+              handler: () => {
+                console.log('Reboot canceled');
+                setShOTAUpdateCard(false);
+              },
+            },
+            {
+              text: 'YES',
+              handler: () => {
+                console.log('Booting to OTA confirmed');
+                setShOTAUpdateCard(false);
+                sendTxtCmd("otaupdate");
+              },
+            },
+          ]}
+        />
+
         <div id="page">
           <div id="spacer-top" />
           <div className='settings_panel'>
@@ -1417,11 +1604,13 @@ const Tab2: React.FC = () => {
 
             <div className='settings_cont'>
               <div className='set_val'>QRG: {config_s.frequency} MHz</div>
-              <div className='set_val'>TX Pwr: {tx_pwr.current} dBm</div>
+              <div className='set_val'>TX Pwr: {nodeSettings.TXP} dBm</div>
             </div>
             <div className='settings_cont'>
+              <div>APRS Symbol ID: {aprs_settings_s.SYMID}</div>
               <div>APRS Symbol: {config_s.aprs_symbol}</div>
               <div>APRS Comment: {aprs_cmt_store}</div>
+              {aprs_settings_s.NAME.length > 0 && <div>APRS Name: {aprs_settings_s.NAME}</div>}
             </div>
 
             {(grp0 > 0 || grp1 > 0 || grp2 > 0 || grp3 > 0 || grp4 > 0 || grp5 > 0) && <div className='settings_cont'>
@@ -1440,9 +1629,11 @@ const Tab2: React.FC = () => {
               <div>Wifi SSID: {wifiSettings_s.SSID}</div>
               <div>Wifi IP: {wifiSettings_s.IP}</div>
               <div>Wifi GW: {wifiSettings_s.GW}</div>
+              <div>Wifi SNM: {wifiSettings_s.SUB}</div>
               </>:<> 
               <div>ETH IP: {wifiSettings_s.IP}</div>
               <div>ETH GW: {wifiSettings_s.GW}</div>
+              <div>ETH SNM: {wifiSettings_s.SUB}</div>
               </>}
               
             </div>
@@ -1509,7 +1700,25 @@ const Tab2: React.FC = () => {
             <IonText id="wifi-text">Onewire Pin</IonText>
             <div className='mb-3'></div>
             <IonItem>
-              <IonInput value={owPinNr.current} ref={owPinInputRef} label='Set Onewire Pin' labelPlacement="floating" type='number' maxlength={2} onIonInput={(ev) => setOnewire_pin(ev.detail.value!)}></IonInput>
+              <IonInput value={owPinNr.current} ref={owPinInputRef} label='Set Onewire Pin' labelPlacement="floating" type='number' maxlength={2} inputmode="numeric" onIonInput={(ev) => setOnewire_pin(ev.detail.value!)}></IonInput>
+            </IonItem>
+          </div>
+
+          <div id="spacer-buttons" />
+          <div className='setting_wrapper'>
+            <IonText id="wifi-text">Userbutton Pin</IonText>
+            <div className='mb-3'></div>
+            <IonItem>
+              <IonInput value={userBtnNr.current} ref={userBtnInputRef} label='Set Userbutton Pin' labelPlacement="floating" type='number' maxlength={2} inputmode="numeric" onIonInput={(ev) => setUserbutton_pin(ev.detail.value!)}></IonInput>
+            </IonItem>
+          </div>
+
+          <div id="spacer-buttons" />
+          <div className='setting_wrapper'>
+            <IonText id="wifi-text">Custom BLE PIN 6 Digits</IonText>
+            <div className='mb-3'></div>
+            <IonItem>
+              <IonInput value={ble_pairing_pin.current} ref={ble_pairing_pin_ref} label='Set BLE Pin' labelPlacement="floating" type='number' maxlength={6} inputmode="numeric" onIonInput={(ev) => setBLEParingPin(ev.detail.value!)}></IonInput>
             </IonItem>
           </div>
 
@@ -1555,27 +1764,27 @@ const Tab2: React.FC = () => {
               <div className='setting_wrapper'>
                 <div className='mt-3 mb-3'>Group 1</div>
                 <IonItem>
-                  <IonInput value={grp0} ref={gcb0Ref} label='Set Group 1' labelPlacement="floating" type='number' maxlength={5}></IonInput>
+                  <IonInput value={grp0} ref={gcb0Ref} label='Set Group 1' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 2</div>
                 <IonItem>
-                  <IonInput value={grp1} ref={gcb1Ref} label='Set Group 2' labelPlacement="floating" type='number' maxlength={5}></IonInput>
+                  <IonInput value={grp1} ref={gcb1Ref} label='Set Group 2' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 3</div>
                 <IonItem>
-                  <IonInput value={grp2} ref={gcb2Ref} label='Set Group 3' labelPlacement="floating" type='number' maxlength={5}></IonInput>
+                  <IonInput value={grp2} ref={gcb2Ref} label='Set Group 3' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 4</div>
                 <IonItem>
-                  <IonInput value={grp3} ref={gcb3Ref} label='Set Group 4' labelPlacement="floating" type='number' maxlength={5}></IonInput>
+                  <IonInput value={grp3} ref={gcb3Ref} label='Set Group 4' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 5</div>
                 <IonItem>
-                  <IonInput value={grp4} ref={gcb4Ref} label='Set Group 5' labelPlacement="floating" type='number' maxlength={5}></IonInput>
+                  <IonInput value={grp4} ref={gcb4Ref} label='Set Group 5' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 6</div>
                 <IonItem>
-                  <IonInput value={grp5} ref={gcb5Ref} label='Set Group 6' labelPlacement="floating" type='number' maxlength={5}></IonInput>
+                  <IonInput value={grp5} ref={gcb5Ref} label='Set Group 6' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='resetGrpBtn'>
                     <IonButton fill='solid' slot='start' onClick={() => resetGrpCall()}>Reset Groups</IonButton>
@@ -1585,7 +1794,7 @@ const Tab2: React.FC = () => {
           </div>
 
           <div id="spacer-buttons" />
-          <IonButton id="settings_button" fill='solid' slot='start' onClick={saveSettings}>Save Settings to Node</IonButton>
+            <IonButton id="settings_button" fill='solid' slot='start' onClick={saveSettings}>Save Settings to Node</IonButton>
           <div id="spacer-buttons" />
 
           <div className='dropdown_arrow'>
@@ -1606,6 +1815,9 @@ const Tab2: React.FC = () => {
                   </div>
                   <div >
                     <IonButton expand="block" fill={config_s.gps_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("gps")}>GPS</IonButton>
+                  </div>
+                  <div >
+                    <IonButton expand="block" fill={nodeInfo_s.BOOST ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("rxboost")}>RX Gain Boost</IonButton>
                   </div>
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("txpos")}>Send POS</IonButton>
@@ -1629,7 +1841,7 @@ const Tab2: React.FC = () => {
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("scani2c")}>Scan I2C</IonButton>
                   </div>
                   <div>
-                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("otaupdate")}>OTA Update</IonButton>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => handleOTAUpdate()}>OTA Update</IonButton>
                   </div>
                 </div>
                 <div className='settings_btns_r'>
@@ -1638,6 +1850,9 @@ const Tab2: React.FC = () => {
                   </div>  */}
                   <div>
                     <IonButton expand="block" fill={config_s.mesh_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("mesh_retrx")}>MESH</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={nodeSettings.NOALL ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("no_allmsg_rx")}>No ALL Msg RX</IonButton>
                   </div>
                   <div>
                     <IonButton expand="block" fill={config_s.button_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("button")}>BUTTON</IonButton>
@@ -1702,11 +1917,13 @@ const Tab2: React.FC = () => {
             </div>
             {shAdvSetting ? <>
               <div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>deletePositions()}>Clear received nodes </IonButton>
+              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>deletePositions()}>Clear received nodes</IonButton>
               <div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>DataBaseService.clearTextMessages()}>Clear Text Msgs </IonButton>
+              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>DataBaseService.clearTextMessages()}>Clear Text Msgs</IonButton>
               <div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>MheardStaticStore.clearMheards()}>Clear Mheards </IonButton>
+              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>MheardStaticStore.clearMheards()}>Clear Mheards</IonButton>
+              {/*<div id="spacer-advTop" />
+              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>DataBaseService.clearAppSettings()}>Clear App Settings</IonButton>*/}
 
             </> : <></>}
             

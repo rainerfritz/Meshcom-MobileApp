@@ -11,6 +11,8 @@ const defaultMsg:MsgType = {
     via:"",
     ack:0,
     isDM:0,
+    isGrpMsg:0,
+    grpNum:0,
     notify:0
 }   
 

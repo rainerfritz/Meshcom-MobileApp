@@ -1,6 +1,6 @@
-import { IonButton, IonActionSheet, IonContent, IonFooter, IonGrid, IonHeader, IonIcon, IonInput, IonItem, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons } from '@ionic/react';
-import { useEffect, useRef, useState } from 'react';
-import {ConfType, MsgType} from '../utils/AppInterfaces';
+import { IonButton, IonActionSheet, IonContent, IonFooter, IonGrid, IonHeader, IonIcon, IonInput, IonItem, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonModal, IonCheckbox } from '@ionic/react';
+import React,{ useEffect, useRef, useState, createRef } from 'react';
+import {ConfType, MsgType, ChatFilterSettingsType} from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
 import './Chat.css';
 import { useStoreState } from 'pullstate';
@@ -24,6 +24,10 @@ import DMfrmMapStore from '../store/DMfrmMap';
 import NotifyMsgState from '../store/NotifyMsg';
 import { useHistory } from "react-router";
 import LogS from '../utils/LogService';
+import ChatFilterSettingsStore from '../store/ChatFilterSettings';
+import DatabaseService from '../DBservices/DataBaseService';
+import { set } from 'date-fns';
+import AlertCard from '../components/AlertCard';
 
 
 const Tab3: React.FC = () => {
@@ -31,7 +35,7 @@ const Tab3: React.FC = () => {
 
   const MAX_CHAR_TEXTINPUT = 150;
   const MAX_CHAR_CALLSIGN = 11;
-  const MIN_CHAR_CALLSIGN = 3;
+  const MIN_CHAR_CALLSIGN = 1;
 
 
   const {sendDV, updateDevID, sendTxtCmdNode} = useBLE();
@@ -105,12 +109,33 @@ const Tab3: React.FC = () => {
   // remember if this page is active
   const thisPageActive = useRef<boolean>(false);
 
+  // ionmodal for filter settings
+  const [showSettingModal, setShowSettingModal] = useState(false);
+  // chat filter settings from the store are set from the Database on App start 
+  const chatFilterSettings_ref = useRef<ChatFilterSettingsType>({chat_filter_dm_grp:0, chat_filter_dm:0, chat_filter_grp:0, chat_filter_grp_num1:0, chat_filter_grp_num2:0, chat_filter_grp_num3:0, chat_filter_call_sign:""});
+  const [filter_dm_grp_s, setFilter_dm_grp_s] = useState<boolean>(false);
+  const [filter_dm_s, setFilter_dm_s] = useState<boolean>(false);
+  const [filter_grp_s, setFilter_grp_s] = useState<boolean>(false);
+
+  // alertcard handling
+  const [shAlertCard, setShAlertCard] = useState<boolean>(false);
+  const [alHeader, setAlHeader] = useState<string>("");
+  const [alMsg, setAlMsg] = useState<string>("");
 
 
-  // scroll down when we enter the chat
+
+
+
+  // Tasks we do when we entered the screen.
   useIonViewDidEnter (()=>{
     LogS.log(0,"Chat window did enter");
     thisPageActive.current = true;
+    // set the bottom reference
+    if(bottomRef.current === null) bottomRef.current = document.getElementById('bottomRefID') as HTMLDivElement;
+    // get the chat filter settings from the DB Service and set them in the ref
+    chatFilterSettings_ref.current = DatabaseService.getChatFilters();
+    console.log("Chat Filter Tab Settings from DB: "+ JSON.stringify(chatFilterSettings_ref.current));
+
     //const devid = devID_s;
     //updateDevID(devid);
     scrollToBottom();
@@ -123,8 +148,8 @@ const Tab3: React.FC = () => {
     if(thisPlatform){
       console.log("Platform at chat: " + thisPlatform);
       hasNotifyPermission();
-      //scrollToBottom();
     }
+
   });
 
   // remember that we left the page
@@ -140,7 +165,8 @@ const Tab3: React.FC = () => {
     LogS.log(0,"Chat - BLE Connected: " + ble_connected);
     console.log("Chat - BLE DevID: " + devID_s);
     // scroll down if Chat screen gets active again
-    if(isAppActive){
+    if (isAppActive) {
+
       scrollToBottom();
     } 
   }, [isAppActive]);
@@ -157,12 +183,15 @@ const Tab3: React.FC = () => {
 
   // always show last message in chat
   const scrollToBottom= async () => {
-    //document.getElementById('bottom')!.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    /*if (contentRef.current) {
-      contentRef.current.scrollToBottom(400);
-    }*/
+    if(bottomRef.current === null)
+    bottomRef.current = document.getElementById('bottomRefID') as HTMLDivElement;
     if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      for (let i = 0; i < 3; i++) {
+        await new Promise(r => setTimeout(r, 200));
+        if (bottomRef.current) {
+          bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
     }
   }
 
@@ -232,7 +261,7 @@ const Tab3: React.FC = () => {
               final_msg_str = txMsg_str;
             }
 
-            console.log("CHAT Msg: " + final_msg_str);
+            LogS.log(0,"CHAT SendMsg: " + final_msg_str);
 
             let txt_enc = new TextEncoder(); // always utf-8
             const enc_txt_msg = txt_enc.encode(final_msg_str);
@@ -349,6 +378,10 @@ const Tab3: React.FC = () => {
   useEffect(() => {
 
     if (msgArr_s && msgArr_s.length > 0) {
+      console.log("Chat - New Message Arrived");
+
+      // check if filter is set to show only DMs and update the filtered messages
+      //updateFilteredDMonly(shDMonly.current);
 
       scrollToBottom();
     }
@@ -551,6 +584,82 @@ const Tab3: React.FC = () => {
     if (isAppActive)
       history.push("/connect");
   }
+
+  // Chat Filters / Settings
+  // show only DMs/grp messages
+  const handleShowOnlyDMGrp = () => {
+    if(!ble_connected){
+      handleNoDbConnFilter();
+      return;
+    }
+    if(chatFilterSettings_ref.current.chat_filter_dm_grp === 1){
+      chatFilterSettings_ref.current.chat_filter_dm_grp = 0;
+    } else {
+      chatFilterSettings_ref.current.chat_filter_dm_grp = 1;
+      chatFilterSettings_ref.current.chat_filter_dm = 0;
+      chatFilterSettings_ref.current.chat_filter_grp = 0;
+      setFilter_grp_s(false);
+      setFilter_dm_s(false);
+    }
+    setFilter_dm_grp_s(!filter_dm_grp_s);
+    console.log("Chat Filter Settings updated: " + JSON.stringify(chatFilterSettings_ref.current));
+
+    DatabaseService.setChatFilters(chatFilterSettings_ref.current);
+  }
+
+  // show only DM messages
+  const handleShowOnlyDM = () => {
+    if(!ble_connected){
+      handleNoDbConnFilter();
+      return;
+    }
+    if(chatFilterSettings_ref.current.chat_filter_dm === 1){
+      chatFilterSettings_ref.current.chat_filter_dm = 0;
+    } else {
+      chatFilterSettings_ref.current.chat_filter_dm = 1;
+      chatFilterSettings_ref.current.chat_filter_dm_grp = 0;
+      chatFilterSettings_ref.current.chat_filter_grp = 0;
+      setFilter_dm_grp_s(false);
+      setFilter_grp_s(false);
+    }
+    setFilter_dm_s(!filter_dm_s);
+    console.log("Chat Filter Settings updated: " + JSON.stringify(chatFilterSettings_ref.current));
+
+    DatabaseService.setChatFilters(chatFilterSettings_ref.current);
+  }
+
+  // show only Group Messages
+  const handleShowOnlyGrp = () => {
+    if(!ble_connected){
+      handleNoDbConnFilter();
+      return;
+    }
+    if(chatFilterSettings_ref.current.chat_filter_grp === 1){
+      chatFilterSettings_ref.current.chat_filter_grp = 0;
+    } else {
+      chatFilterSettings_ref.current.chat_filter_grp = 1;
+      chatFilterSettings_ref.current.chat_filter_dm = 0;
+      chatFilterSettings_ref.current.chat_filter_dm_grp = 0;
+      setFilter_dm_s(false);
+      setFilter_dm_grp_s(false);
+    }
+    setFilter_grp_s(!filter_grp_s);
+    console.log("Chat Filter Settings updated: " + JSON.stringify(chatFilterSettings_ref.current));
+
+    DatabaseService.setChatFilters(chatFilterSettings_ref.current);
+  }
+
+  // handle no Db connection in offline mode - no node connected
+  const handleNoDbConnFilter = () => {
+    setAlHeader("No Database Connection");
+    setAlMsg("Filtering is only available if a node is connected!");
+    setShAlertCard(true);
+  }
+
+
+  const modalDidDismiss = () => {
+    scrollToBottom();
+  }
   
 
 
@@ -559,6 +668,11 @@ const Tab3: React.FC = () => {
       <IonHeader>
         <IonToolbar>
           <IonTitle>Messages</IonTitle>
+          <IonButtons slot="end">
+              <IonButton onClick={() => setShowSettingModal(true)}>
+                <IonIcon icon={settings} />
+              </IonButton>
+            </IonButtons>
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
@@ -579,6 +693,13 @@ const Tab3: React.FC = () => {
             },
           ]}
         />
+
+        <AlertCard
+          isOpen={shAlertCard}
+          header={alHeader}
+          message={alMsg}
+          onDismiss={() => setShAlertCard(false)}
+        />        
 
         <IonActionSheet
           isOpen={isOpenAS}
@@ -606,6 +727,25 @@ const Tab3: React.FC = () => {
           onDidDismiss={({ detail }) => handleActionSheet(detail)}
         ></IonActionSheet>
 
+        <IonModal isOpen={showSettingModal} onIonModalDidDismiss={()=>modalDidDismiss()}>
+          <IonHeader>
+            <IonToolbar>
+              <IonTitle>Chat Settings</IonTitle>
+              <IonButtons slot="end">
+                <IonButton onClick={() => setShowSettingModal(false)}>Close</IonButton>
+              </IonButtons>
+            </IonToolbar>
+          </IonHeader>
+          <IonContent className="ion-padding">
+            <div id="spacer_settings_top"/>
+              <IonCheckbox checked={filter_dm_grp_s} onIonChange={()=>handleShowOnlyDMGrp()}>Show only DMs/Group Msgs</IonCheckbox>
+            <div id="spacer_modal"/>
+              <IonCheckbox checked={filter_dm_s} onIonChange={()=>handleShowOnlyDM()}>Show only DM Msgs</IonCheckbox>
+            <div id="spacer_modal"/>
+              <IonCheckbox checked={filter_grp_s} onIonChange={()=>handleShowOnlyGrp()}>Show only Group Msgs</IonCheckbox>
+          </IonContent>
+        </IonModal>
+
         <div id="spacer-top"></div>
         <div id="msg-box" >
 
@@ -621,7 +761,7 @@ const Tab3: React.FC = () => {
                 <div key={i} onTouchStart={handleButtonPress} onTouchEnd={() => handleButtonRelease(msg.msgNr)} className={msgType(msg)}>
 
                   {msg.isDM ? <>
-                    {!isNaN(+msg.toCall) ? <>
+                    {(!isNaN(+msg.toCall) || msg.isGrpMsg) ? <>
                       <div className="ion-text-start">
                       <IonText id="msg-dm">GROUP-MESSAGE {msg.toCall}</IonText>
                     </div>
@@ -686,7 +826,7 @@ const Tab3: React.FC = () => {
 
         </div>
         <div id="bottom" style={{ height: chatBoxPadding }}/>
-        <div ref={bottomRef}/>
+        <div ref={bottomRef} id="bottomRefID"/>
       </IonContent>
 
       <IonFooter>
