@@ -10,9 +10,9 @@ import { DevIDStore } from '../store';
 import { getDevID, getSensorSettings, getBLEconnStore, getConfigStore, getScanResult, getNodeInfoStore, getBleConfFinish, getWifiSettings } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
 import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings } from '../utils/AppInterfaces';
-import { RangeValue } from '@ionic/core';
+import { iosTransitionAnimation, RangeValue } from '@ionic/core';
 import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, send, add } from 'ionicons/icons';
-import {aprs_char_table, aprs_pri_symbols, aprs_sec_symbols} from '../store/AprsSymbols';
+import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
 import AlertCard from '../components/AlertCard';
 import AprsCmtStore from '../store/AprsCmtStore';
 import { useHistory } from "react-router";
@@ -37,7 +37,7 @@ const Tab2: React.FC = () => {
   // currently settings are saved when config message comes back from phone
 
   // BLE TX function
-  const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected, addMsgQueue} = useBLE();
+  const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected} = useBLE();
 
   // history forward to page
   const history = useHistory();
@@ -99,11 +99,13 @@ const Tab2: React.FC = () => {
   const [shAdvSetting, setshAdvSetting] = useState<boolean>(false);
 
   // APRS primary Symbols
-  const [aprs_prim_sec_s, setAprs_prim_sec_s] = useState<string>("primary");
-  const [aprs_char_s, setAprs_char_s] = useState<string>("#");
-  const [aprs_symbols_mapped, setSymbols_mapped] = useState<aprs_char_table []>(aprs_pri_symbols);
-  const aprs_pri_sec_char = useRef<number>(0x2f);
+  const aprs_symbols_mapped = useRef<aprs_char_table []>(aprs_pri_symbols);
+  const aprs_pri_sec_char = useRef<string>("/");
   const aprs_sym_char = useRef<string>("#");
+  const aprs_sym_char_Input_ref = useRef<HTMLIonInputElement>(null);
+  const aprs_pri_sec_char_Input_ref = useRef<HTMLIonInputElement>(null);
+  const aprssym_valid = useRef<boolean>(true);
+  const aprs_pri_sec_valid = useRef<boolean>(true);
 
   // alertcard handling
   const [shAlertCard, setShAlertCard] = useState<boolean>(false);
@@ -152,7 +154,6 @@ const Tab2: React.FC = () => {
   const ble_pairing_pin = useRef<string>("000000");
   const ble_pairing_pin_changed = useRef<boolean>(false);
   const ble_pairing_pin_ref = useRef<HTMLIonInputElement>(null);
-  const ble_pairing_pin_wrong = useRef<boolean>(false);
 
   // show hide user buttons
   const [shUserBtns, setShUserBtns] = useState<boolean>(false);
@@ -200,19 +201,21 @@ const Tab2: React.FC = () => {
   // Group Call Settings
   const [shGroupCallSet, setShGroupCallSet] = useState<boolean>(false);
   const setGrpCmd = useRef<string>("");
-  const grp0 = NodeInfoStore.useState(s => s.infoData.GCB0);
-  const grp1 = NodeInfoStore.useState(s => s.infoData.GCB1);
-  const grp2 = NodeInfoStore.useState(s => s.infoData.GCB2);
-  const grp3 = NodeInfoStore.useState(s => s.infoData.GCB3);
-  const grp4 = NodeInfoStore.useState(s => s.infoData.GCB4);
-  const grp5 = NodeInfoStore.useState(s => s.infoData.GCB5);
+  const groupSettingChanged = useRef<boolean>(false);
   // references for the inputs
-  const gcb0Ref = useRef<HTMLIonInputElement>(null);
-  const gcb1Ref = useRef<HTMLIonInputElement>(null);
-  const gcb2Ref = useRef<HTMLIonInputElement>(null);
-  const gcb3Ref = useRef<HTMLIonInputElement>(null);
-  const gcb4Ref = useRef<HTMLIonInputElement>(null);
-  const gcb5Ref = useRef<HTMLIonInputElement>(null);
+  const gcb0Ref = useRef<number>(0);
+  const gcb1Ref = useRef<number>(0);
+  const gcb2Ref = useRef<number>(0);
+  const gcb3Ref = useRef<number>(0);
+  const gcb4Ref = useRef<number>(0);
+  const gcb5Ref = useRef<number>(0);
+  const grp0 = gcb0Ref.current = NodeInfoStore.useState(s => s.infoData.GCB0);
+  const grp1 = gcb1Ref.current = NodeInfoStore.useState(s => s.infoData.GCB1);
+  const grp2 = gcb2Ref.current = NodeInfoStore.useState(s => s.infoData.GCB2);
+  const grp3 = gcb3Ref.current = NodeInfoStore.useState(s => s.infoData.GCB3);
+  const grp4 = gcb4Ref.current = NodeInfoStore.useState(s => s.infoData.GCB4);
+  const grp5 = gcb5Ref.current = NodeInfoStore.useState(s => s.infoData.GCB5);
+  
   // reset the group call settings
   const resetGrpCall = () => {
     console.log("Reset Group Call Settings");
@@ -257,42 +260,11 @@ const Tab2: React.FC = () => {
 
 
 
-  // change symbol table according primary or secondary table
-  // more info here: http://www.aprs.net/vm/DOS/SYMBOLS.HTM
-  // TODO value comes back with quotation marks from selector
-  useEffect(()=>{
-
-    if(aprs_prim_sec_s === '"primary"'){
-
-      console.log("Aprs prim sym set");
-      const newSymbols = aprs_pri_symbols;
-      setSymbols_mapped(newSymbols);
-      aprs_pri_sec_char.current = 0x2f; // is /
-      
-    }
-
-    if(aprs_prim_sec_s === '"secondary"'){
-
-      console.log("Aprs sec sym set");
-      const newSymbols_sec = aprs_sec_symbols;
-      setSymbols_mapped(newSymbols_sec);
-      aprs_pri_sec_char.current = 0x5c; // is \
-      
-    }
-
-  },[aprs_prim_sec_s]);
-
-  // handle the aprs symbol group change
-
-
-
 
   // when config has changed update aprs symbols
   useEffect(()=>{
 
     console.log("Settings Config changed");
-    aprs_sym_char.current = config_s.aprs_symbol;
-    aprs_pri_sec_char.current = +config_s.aprs_pri_sec.charCodeAt(0);
     
     console.log("Call: " + config_s.callSign);
     console.log("Lat: " + config_s.lat);
@@ -315,13 +287,13 @@ const Tab2: React.FC = () => {
     LogS.log(0,"Settings Page NodeSettings updated");
     // set min max power based on hw
     const hw_type = config_s.hw;
-    if(hw_type === "TBEAM V1.1 1268" || hw_type === "T-ECHO" || hw_type === "RAK4631" || hw_type === "HELTEC V3" || hw_type === "EBYTE E22" || hw_type === "EBYTE E220" || hw_type === "TBEAM V1.2 1262"){
+    if(hw_type === "TBEAM V1.1 1268" || hw_type === "T-ECHO" || hw_type === "RAK4631" || hw_type === "HELTEC V3" || hw_type === "EBYTE E22" || hw_type === "EBYTE E220" || hw_type === "TBEAM V1.2 1262" || hw_type === "TBEAM Supreme L76K" || hw_type === "ESP32-S3 Ebyte"){
       minTXpwr.current = 2;
       maxTXpwr.current = 22;
     }
     else {
       minTXpwr.current = 2;
-      maxTXpwr.current = 17;
+      maxTXpwr.current = 20;
     }
 
     // 0 dBm means it was not set to flash on Node
@@ -392,7 +364,8 @@ const Tab2: React.FC = () => {
   */
 
   // max values
-  const MAX_SSID_CHARS = 70;
+  const MAX_SSID_CHARS = 33;
+  const MAX_PWD_CHARS = 64;
   const MAX_APRS_CMT_CHARS = 20;
 
    // clear textfields of server userinput
@@ -670,11 +643,14 @@ const Tab2: React.FC = () => {
   // 
   const setAprsSymbols = () => {
 
-    console.log("Aprs PriSec to Node: " + String.fromCharCode(aprs_pri_sec_char.current));
+    console.log("Aprs PriSec to Node: " + aprs_pri_sec_char.current);
     console.log("Aprs Symbol to Node: " + aprs_sym_char.current);
 
     const symbol_dec = +aprs_sym_char.current.charCodeAt(0);
     console.log("Aprs Symbol DEC: " + symbol_dec);
+    
+    const symbol_pri_sec = +aprs_pri_sec_char.current.charCodeAt(0);
+    console.log("Aprs Pri/Sec DEC: " + symbol_pri_sec);
 
     // dataview object
     const sym_len = 4;  //1B len - 1B MsgID - 1B SymPriSec - 1B AprsSymbol
@@ -683,15 +659,15 @@ const Tab2: React.FC = () => {
     let view1 = new DataView(sym_buffer);
     view1.setUint8(0, sym_len);
     view1.setUint8(1, 0x95);
-    view1.setUint8(2, aprs_pri_sec_char.current);
+    view1.setUint8(2, symbol_pri_sec);
     view1.setUint8(3, symbol_dec);
 
     sendDV(view1, devID_s);
 
-    // update config in store state
-    ConfigStore.update(s => {
-      s.config.aprs_pri_sec = String.fromCharCode(aprs_pri_sec_char.current);
-      s.config.aprs_symbol = aprs_sym_char.current;
+    sleep(300).then(() => {
+      // get the aprs settings from node
+      console.log("Get APRS Settings from Node");
+      sendTxtCmdNode("--aprsset");
     });
 
   }
@@ -1090,7 +1066,7 @@ const Tab2: React.FC = () => {
 
       // rx boost is only available on boards with a SX126x chip
       case "rxboost": {
-        if (config_s.hw === "TBEAM V1.1 1268" || config_s.hw === "TBEAM V1.2 1262" || config_s.hw === "EBYTE E22" || config_s.hw === "HELTEC V3" || config_s.hw === "HELTEC E290") {
+        if (config_s.hw === "TBEAM V1.1 1268" || config_s.hw === "TBEAM V1.2 1262" || config_s.hw === "EBYTE E22" || config_s.hw === "HELTEC V3" || config_s.hw === "HELTEC E290" || config_s.hw === "TBEAM Supreme L76K" || config_s.hw === "ESP32-S3 Ebyte") {
           if (nodeInfo_s.BOOST) {
             cmd_ = "--setboostedgain off";
           } else {
@@ -1108,7 +1084,7 @@ const Tab2: React.FC = () => {
 
     // finally send it via textmsg
     sendTxtCmdNode(cmd_);
-    LogS.log(0,"Settings Userbutton: " + cmd_);
+    LogS.log(0,"Settings Command: " + cmd_);
 
     // forward to info page when pos or wx info button pressed
     if (cmd === "posdebug" || cmd === "wx") {
@@ -1141,14 +1117,156 @@ const Tab2: React.FC = () => {
 
 
   
-  // create a function to get the value of the APRS Symbol IonSelect
+  // create a function to get the value of the APRS Symbol IonSelect. Event is Symbol Preset Name
   const aprsSymChanged = (event: string) => {
     console.log("Aprs Sym changed");
-    console.log("Aprs Sym: " + event);
-    setAprs_char_s(event);
-    aprs_sym_char.current = event;
+    console.log("Aprs Sym Name: " + event);
+    // get the symbol char and group char from the aprs symbol table
+    aprs_symbols_mapped.current.find((item) => {
+      if(item.s_name === event){
+        console.log("Aprs Sym Char: " + item.s_char);
+        console.log("Aprs Sym Group: " + item.s_group);
+        aprs_sym_char.current = item.s_char;
+        aprs_pri_sec_char.current = item.s_group;
+      }});
+
+    AprsSettingsStore.update(s => {
+      s.aprsSettings.SYMCD = aprs_sym_char.current;
+      s.aprsSettings.SYMID = aprs_pri_sec_char.current;
+    });
+    
     aprsSym_changed.current = true;
+    aprs_pri_sec_valid.current = true;
+    aprssym_valid.current = true;
   }
+
+
+  // set the aprsSym changed flag when characters manual changed
+  const aprsSymChangedManual = (event: any) => {
+    console.log("Aprs Sym manual changed");
+
+    if(event.target.value != null && event.target.value !== undefined && event.target.value !== "" && event.target.value !== " " && event.target.value.length === 1){
+      const char:string = event.target.value;
+      console.log("Aprs Sym Char: " + char);
+      aprsSym_changed.current = true;
+      // allowed values are from ! to }
+      if(char.charCodeAt(0) >= 33 && char.charCodeAt(0) <= 125){
+        console.log("Aprs Sym Char allowed: " + char);
+        aprs_sym_char.current = char;
+        aprssym_valid.current = true;
+      } else {
+        console.log("Aprs Sym Char not allowed!");
+        aprssym_valid.current = false;
+        return;
+      }
+    }
+  }
+
+  // set the aprsPriSec changed flag when characters manual changed
+  const aprsPriSecChangedManual = (event: any) => {
+    console.log("Aprs Pri/Sec manual changed");
+
+    if(event.target.value != null && event.target.value !== undefined && event.target.value !== "" && event.target.value !== " " && event.target.value.length === 1){
+      const char:string = event.target.value;
+      console.log("Aprs Pri/Sec Char: " + char);
+      aprsSym_changed.current = true;
+      // allowed values are 0-9, A-Z, / and \
+      if(char.charCodeAt(0) >= 48 && char.charCodeAt(0) <= 57 || char.charCodeAt(0) >= 65 && char.charCodeAt(0) <= 90 || char.charCodeAt(0) === 47 || char.charCodeAt(0) === 92){
+        console.log("Aprs Pri/Sec Char allowed: " + char);
+        aprs_pri_sec_char.current = char;
+        aprs_pri_sec_valid.current = true;
+      } else {
+        console.log("Aprs Pri/Sec Char not allowed!");
+        aprs_pri_sec_valid.current = false;
+        return;
+      }
+    }
+  }
+
+
+  // Group Settings
+  // If the group setting menu is not open, the Refs are not working
+  // set each group and check if it is a number and maximum 5 digits
+  // first make a function to check for valid number
+  const checkGrpInput = (grp_value:string | number | null | undefined):number => {
+    if(grp_value !== null && grp_value !== undefined && grp_value !== "" && grp_value !== " "){
+      // check if the value is a number
+      const grp_val_nr = +grp_value;
+      if(!isNaN(grp_val_nr)){
+        // check if the group number has maximum 5 digits
+        if(grp_val_nr >= 0 && grp_val_nr <= 99999){
+          return grp_val_nr;
+        } else {
+          return 0;
+        }
+      } else {
+        return 0;
+      }
+    }
+    return 0;
+  }
+
+  const grp0Changed = (event: any) => {
+    const grp0 = event.target.value;
+    if(grp0 !== null && grp0 !== undefined && grp0 !== "" && grp0 !== " "){
+      console.log("Group 0 changed: " + grp0);
+      gcb0Ref.current = checkGrpInput(grp0);
+      console.log("Group 0 nr: " + gcb0Ref.current);
+      groupSettingChanged.current = true;
+    }
+  }
+
+  const grp1Changed = (event: any) => {
+    const grp1 = event.target.value;
+    if(grp1 !== null && grp1 !== undefined && grp1 !== "" && grp1 !== " "){
+      console.log("Group 1 changed: " + grp1);
+      gcb1Ref.current = checkGrpInput(grp1);
+      console.log("Group 1 nr: " + gcb1Ref.current);
+      groupSettingChanged.current = true;
+    }
+  }
+
+  const grp2Changed = (event: any) => {
+    const grp2 = event.target.value;
+    if(grp2 !== null && grp2 !== undefined && grp2 !== "" && grp2 !== " "){
+      console.log("Group 2 changed: " + grp2);
+      gcb2Ref.current = checkGrpInput(grp2);
+      console.log("Group 2 nr: " + gcb2Ref.current);
+      groupSettingChanged.current = true;
+    }
+  }
+
+  const grp3Changed = (event: any) => {
+    const grp3 = event.target.value;
+    if(grp3 !== null && grp3 !== undefined && grp3 !== "" && grp3 !== " "){
+      console.log("Group 3 changed: " + grp3);
+      gcb3Ref.current = checkGrpInput(grp3);
+      console.log("Group 3 nr: " + gcb3Ref.current);
+      groupSettingChanged.current = true;
+    }
+  }
+
+  const grp4Changed = (event: any) => {
+    const grp4 = event.target.value;
+    if(grp4 !== null && grp4 !== undefined && grp4 !== "" && grp4 !== " "){
+      console.log("Group 4 changed: " + grp4);
+      gcb4Ref.current = checkGrpInput(grp4);
+      console.log("Group 4 nr: " + gcb4Ref.current);
+      groupSettingChanged.current = true;
+    }
+  }
+
+  const grp5Changed = (event: any) => {
+    const grp5 = event.target.value;
+    if(grp5 !== null && grp5 !== undefined && grp5 !== "" && grp5 !== " "){
+      console.log("Group 5 changed: " + grp5);
+      gcb5Ref.current = checkGrpInput(grp5);
+      console.log("Group 5 nr: " + gcb5Ref.current);
+      groupSettingChanged.current = true;
+    }
+  }
+  
+
 
 
   // save settings at node flash
@@ -1164,107 +1282,93 @@ const Tab2: React.FC = () => {
         setShAlertCard(true);
         return;
       } else {
-        sleep(300);
+        sleep(400);
       }
     }
 
     if(wifi_changed.current){
       console.log("Wifi changed");
-      setWifiSetting();
-      sleep(300);
+      sleep(400).then(() => {
+        setWifiSetting();
+      });
     }
 
     if(aprsSym_changed.current){
       console.log("Aprs Sym changed");
-      setAprsSymbols();
-      sleep(300);
+      aprsSym_changed.current = false;
+
+      if(aprs_pri_sec_valid.current && aprssym_valid.current){
+        sleep(400).then(() => {
+          setAprsSymbols();
+        });
+      } else {
+        console.log("Aprs Sym or Pri/Sec not valid!");
+        setAlHeader("Invalid APRS Symbol!");
+        setAlMsg("Group Char must be 0-9, A-Z, / and \\. Symbol Char must be ! to }");
+        setShAlertCard(true);
+        return;
+      }
     }
 
     // when cmtChanged send it to node
     if(aprs_cmt_changed.current){
       console.log("Sending APRS Comment to Node");
       aprs_cmt_changed.current = false;
-      sendTxtCmd("atxt");
-      sleep(300);
+      sleep(400).then(() => {
+        sendTxtCmd("atxt");
+      });
     } 
 
     // when node_utc_offset_changed send it to node
     if(node_utc_offset_changed.current){
       console.log("Sending UTC Offset to Node");
       node_utc_offset_changed.current = false;
-      sendTxtCmd("utcoffset");
-      sleep(300);
+      sleep(400).then(() => {
+        sendTxtCmd("utcoffset");
+      });
     }
 
     // set the country setting to the node
     if(ctry_setting_changed.current){
       console.log("Setting Country to Node");
       ctry_setting_changed.current = false;
-      sendTxtCmd("ctry");
-      sleep(300);
+      sleep(400).then(() => {
+        sendTxtCmd("ctry");
+      });
     }
 
     // GROUP SETTINGS
     // check if group settings changed and send them to node
-    const checkGrpInput = (grp_value:string | number | null | undefined):number => {
-      if(grp_value !== null && grp_value !== undefined && grp_value !== "" && grp_value !== " "){
-        // check if the value is a number
-        const grp_val_nr = +grp_value;
-        if(!isNaN(grp_val_nr)){
-          // check if the group number has maximum 5 digits
-          if(grp_val_nr >= 0 && grp_val_nr <= 99999){
-            return grp_val_nr;
-          } else {
-            return 0;
-          }
-        } else {
-          return 0;
-        }
-      }
-      return 0;
-    }
+    if (groupSettingChanged.current) {
+      groupSettingChanged.current = false;
 
-    if (shGroupCallSet) {
-      let gcb0 = 0;
-      let gcb1 = 0;
-      let gcb2 = 0;
-      let gcb3 = 0;
-      let gcb4 = 0;
-      let gcb5 = 0;
+      console.log("Group Settings changed");
+      console.log("Group 0: " + gcb0Ref.current);
+      console.log("Group 1: " + gcb1Ref.current);
+      console.log("Group 2: " + gcb2Ref.current); 
+      console.log("Group 3: " + gcb3Ref.current);
+      console.log("Group 4: " + gcb4Ref.current);
+      console.log("Group 5: " + gcb5Ref.current);
 
-      gcb0 = checkGrpInput(gcb0Ref.current!.value);
-      gcb1 = checkGrpInput(gcb1Ref.current!.value);
-      gcb2 = checkGrpInput(gcb2Ref.current!.value);
-      gcb3 = checkGrpInput(gcb3Ref.current!.value);
-      gcb4 = checkGrpInput(gcb4Ref.current!.value);
-      gcb5 = checkGrpInput(gcb5Ref.current!.value);
+      let cmd_str = "--setgrc ";
+      cmd_str = cmd_str + gcb0Ref.current.toString() + ";" + gcb1Ref.current.toString() + ";" + gcb2Ref.current.toString() + ";" + gcb3Ref.current.toString() + ";" + gcb4Ref.current.toString() + ";" + gcb5Ref.current.toString() + ";";
 
-      // check if group settings changed
-      if (gcb0 !== grp0 || gcb1 !== grp1 || gcb2 !== grp2 || gcb3 !== grp3 || gcb4 !== grp4 || gcb5 !== grp5) {
-        console.log("Group Settings changed");
-        console.log("Group 0: " + gcb0);
-        console.log("Group 1: " + gcb1);
-        console.log("Group 2: " + gcb2);
-        console.log("Group 3: " + gcb3);
-        console.log("Group 4: " + gcb4);
-        console.log("Group 5: " + gcb5);
-
-        let cmd_str = "--setgrc ";
-        cmd_str = cmd_str + gcb0.toString() + ";" + gcb1.toString() + ";" + gcb2.toString() + ";" + gcb3.toString() + ";" + gcb4.toString() + ";" + gcb5.toString() + ";";
-
-        console.log("Group CMD: " + cmd_str);
-        setGrpCmd.current = cmd_str;
+      console.log("Group CMD: " + cmd_str);
+      setGrpCmd.current = cmd_str;
+      sleep(400).then(() => {
+        console.log("Time in ms: " + Date.now());
         sendTxtCmd("setGroup");
-        sleep(300);
-      }
+      });
     }
 
     // set the userbutton pin to the node
     if(userBtnChanged.current){
       console.log("Setting Userbutton Pin to Node");
       userBtnChanged.current = false;
-      sendTxtCmd("userButtonPin");
-      sleep(300);
+      sleep(400).then(() => {
+        console.log("Time in ms: " + Date.now());
+        sendTxtCmd("userButtonPin");
+      });
     }
 
     // custom BLE Pairing Pin
@@ -1274,33 +1378,36 @@ const Tab2: React.FC = () => {
       ble_pairing_pin_changed.current = false;
 
       if (ble_pairing_pin.current.length === 6) {
+        sleep(400).then(() => {
           sendTxtCmd("btcode");
-          sleep(300);
+        });
       } else {
-        ble_pairing_pin_wrong.current = true;
         setAlHeader("Wrong Custom Pin Number!");
         setAlMsg("Pin Nr must have 6 digits!");
         setShAlertCard(true);
+        return;
       }
+    }
+
+    // set onewire pin
+    if (owPinChanged.current) {
+      console.log("Onewire Pin changed");
+      owPinChanged.current = false;
+      sleep(400).then(() => {
+        console.log("Time in ms: " + Date.now());
+        sendTxtCmd("owpin");
+      });
     }
 
 
     // send save settings command only when call_changed or wifi_changed - will reboot the client
-    if (call_changed.current || wifi_changed.current || aprsSym_changed.current || owPinChanged.current) {
+    if (call_changed.current || wifi_changed.current) {
+      sleep(1000).then(() => {
+        console.log("Saving Settings and reboot client");
 
-      console.log("Saving Settings and reboot client");
+        call_changed.current = false;
+        wifi_changed.current = false;
 
-      call_changed.current = false;
-      wifi_changed.current = false;
-      aprsSym_changed.current = false;
-
-      if (owPinChanged.current) {
-        console.log("Onewire Pin changed");
-        owPinChanged.current = false;
-        sendTxtCmd("owpin");
-      } else if (aprsSym_changed.current) {
-        console.log("Aprs Sym changed");
-      } else {
         // reset command for client
         let save_buffer = new ArrayBuffer(2);
         let view1 = new DataView(save_buffer);
@@ -1308,15 +1415,14 @@ const Tab2: React.FC = () => {
         view1.setUint8(1, 0xF0);
 
         sendDV(view1, devID_s);
-      }
+      });
     }
 
     // tell the user that settings are saved. This overwrites cards from before.
-    if(!ble_pairing_pin_wrong.current){
-      setAlHeader("Settings saved!");
-      setAlMsg("In some cases node reboots in 15s!");
-      setShAlertCard(true);
-    }
+    setAlHeader("Settings saved!");
+    setAlMsg("In some cases node reboots in 15s!");
+    setShAlertCard(true);
+
     
   }
 
@@ -1347,7 +1453,13 @@ const Tab2: React.FC = () => {
     if(txpower_slider){
       console.log("Tx-Power (dBm): " + txpower_slider);
 
-      const newTxPower = +txpower_slider!.toString();
+      let newTxPower = +txpower_slider!.toString();
+      // if we have old SX127x Chips 18 and 19 dBm are not available
+      if(config_s.hw === "TLORA V2" || config_s.hw === "TLORA V2.1.6" || config_s.hw === "TBEAM V1.1" || config_s.hw === "HELTEC V2.1" || config_s.hw === "TBEAM V1.2"){
+        if(newTxPower === 18 || newTxPower === 19){
+          newTxPower = 17;
+        }
+      }
 
       tx_pwr.current = newTxPower; 
       const pwr_exp_w = (newTxPower - 30) / 10;
@@ -1608,7 +1720,7 @@ const Tab2: React.FC = () => {
             </div>
             <div className='settings_cont'>
               <div>APRS Symbol ID: {aprs_settings_s.SYMID}</div>
-              <div>APRS Symbol: {config_s.aprs_symbol}</div>
+              <div>APRS Symbol: {aprs_settings_s.SYMCD}</div>
               <div>APRS Comment: {aprs_cmt_store}</div>
               {aprs_settings_s.NAME.length > 0 && <div>APRS Name: {aprs_settings_s.NAME}</div>}
             </div>
@@ -1658,7 +1770,7 @@ const Tab2: React.FC = () => {
               <IonInput onIonChange={event => wifiChanged(event)} ref={ssidInputRef} label='Set WiFi SSID' labelPlacement="floating" placeholder='SSID' type='text' maxlength={MAX_SSID_CHARS}></IonInput>
             </IonItem>
             <IonItem>
-              <IonInput ref={wifipwdInputRef} label='Set WiFi Password' labelPlacement="floating" placeholder='PWD' type={shWifiPwd ? 'text':'password'} maxlength={MAX_SSID_CHARS}></IonInput>
+              <IonInput ref={wifipwdInputRef} label='Set WiFi Password' labelPlacement="floating" placeholder='PWD' type={shWifiPwd ? 'text':'password'} maxlength={MAX_PWD_CHARS}></IonInput>
               <IonIcon slot='end' icon={shWifiPwd ? eyeOffOutline : eyeOutline} onClick={() => setShWifiPwd(!shWifiPwd)}></IonIcon>
             </IonItem>
           </div>
@@ -1668,24 +1780,25 @@ const Tab2: React.FC = () => {
           <div className='setting_wrapper'>
             <IonText id="wifi-text">APRS Settings</IonText><br />
 
-            <div className='mt-3 mb-3'>APRS Map Symbol:</div>
-
-            <IonItem>
-              <IonSelect value={aprs_prim_sec_s} interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="APRS Pri/Sec" onIonChange={(ev) => setAprs_prim_sec_s(JSON.stringify(ev.detail.value))}>
-                <IonSelectOption value="primary">Primary</IonSelectOption>
-                <IonSelectOption value="secondary">Secondary</IonSelectOption>
-              </IonSelect><br></br>
-            </IonItem>
+            <div className='mt-3 mb-3'>APRS Map Symbol Preset:</div>
 
             <div id="spacer-toggle" />
             <IonItem>
               <IonSelect interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="APRS Symbol" onIonChange={(ev) => aprsSymChanged(ev.detail.value)}>
-                {aprs_symbols_mapped.map((sym) => (
-                  <IonSelectOption key={sym.s_name} value={sym.s_char}>
+                {aprs_symbols_mapped.current.map((sym) => (
+                  <IonSelectOption key={sym.s_name} value={sym.s_name}>
                     {sym.s_name}
                   </IonSelectOption>
                 ))}
               </IonSelect>
+            </IonItem>
+            <div className='mt-3 mb-3'>Symbol Group Char</div>
+            <IonItem>
+              <IonInput value={aprs_settings_s.SYMID} ref={aprs_pri_sec_char_Input_ref} onIonInput={(ev) => aprsPriSecChangedManual(ev)} label='Set Group Character' labelPlacement="floating" type='text' maxlength={1}></IonInput>
+            </IonItem>
+            <div className='mt-3 mb-3'>Symbol Char</div>
+            <IonItem>
+              <IonInput value={aprs_settings_s.SYMCD} ref={aprs_sym_char_Input_ref} onIonInput={(ev) => aprsSymChangedManual(ev)} label='Set Character' labelPlacement="floating" type='text' maxlength={1}></IonInput>
             </IonItem>
 
             <div className='mt-3 mb-3'>APRS Comment:</div>
@@ -1713,14 +1826,14 @@ const Tab2: React.FC = () => {
             </IonItem>
           </div>
 
-          <div id="spacer-buttons" />
+          {/*<div id="spacer-buttons" />
           <div className='setting_wrapper'>
             <IonText id="wifi-text">Custom BLE PIN 6 Digits</IonText>
             <div className='mb-3'></div>
             <IonItem>
               <IonInput value={ble_pairing_pin.current} ref={ble_pairing_pin_ref} label='Set BLE Pin' labelPlacement="floating" type='number' maxlength={6} inputmode="numeric" onIonInput={(ev) => setBLEParingPin(ev.detail.value!)}></IonInput>
             </IonItem>
-          </div>
+          </div>*/}
 
           <div id="spacer-buttons" />
           <div className='setting_wrapper'>
@@ -1764,27 +1877,27 @@ const Tab2: React.FC = () => {
               <div className='setting_wrapper'>
                 <div className='mt-3 mb-3'>Group 1</div>
                 <IonItem>
-                  <IonInput value={grp0} ref={gcb0Ref} label='Set Group 1' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
+                  <IonInput value={grp0} onIonInput={(ev) => grp0Changed(ev)} label='Set Group 1' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 2</div>
                 <IonItem>
-                  <IonInput value={grp1} ref={gcb1Ref} label='Set Group 2' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
+                  <IonInput value={grp1} onIonInput={(ev) => grp1Changed(ev)} label='Set Group 2' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 3</div>
                 <IonItem>
-                  <IonInput value={grp2} ref={gcb2Ref} label='Set Group 3' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
+                  <IonInput value={grp2} onIonInput={(ev) => grp2Changed(ev)} label='Set Group 3' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 4</div>
                 <IonItem>
-                  <IonInput value={grp3} ref={gcb3Ref} label='Set Group 4' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
+                  <IonInput value={grp3} onIonInput={(ev) => grp3Changed(ev)} label='Set Group 4' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 5</div>
                 <IonItem>
-                  <IonInput value={grp4} ref={gcb4Ref} label='Set Group 5' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
+                  <IonInput value={grp4} onIonInput={(ev) => grp4Changed(ev)} label='Set Group 5' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Group 6</div>
                 <IonItem>
-                  <IonInput value={grp5} ref={gcb5Ref} label='Set Group 6' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
+                  <IonInput value={grp5} onIonInput={(ev) => grp5Changed(ev)} label='Set Group 6' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='resetGrpBtn'>
                     <IonButton fill='solid' slot='start' onClick={() => resetGrpCall()}>Reset Groups</IonButton>

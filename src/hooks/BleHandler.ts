@@ -22,10 +22,6 @@ export function useBLE() {
     
     // initial timer to wait after connecting to BLE
     const INIT_CONN_WAIT = 2000;
-    // timer for dequeueing messages
-    const DEQUEUE_TIMER = 2000;
-    // max messages in buffer
-    const MAX_MSG_BUFFER = 10;
 
 
 
@@ -49,68 +45,31 @@ export function useBLE() {
         console.log("BLE Hook Device ID: " + devid_ble.current);
     }
 
-    
-    // message queue
-    const msg_queue = useRef<string[]>([]);
-    const dequeue_active = useRef<boolean>(false);
-    
-    // add message to queue
-    const addMsgQueue = (msg:string) => {
-        console.log("BLEHANDLER: Adding Message to Queue: " + msg);
-        msg_queue.current.push(msg);
-        console.log("BLEHANDLER: Message Queue Length adding nr: " + msg_queue.current.length);
-        dequeueMsg();
-
-        // remove oldest message if queue is full
-        if (msg_queue.current.length >= MAX_MSG_BUFFER)
-            msg_queue.current.shift();
-    }
-
-
-    // dequeue messages
-    const dequeueMsg = () => {
-
-        console.log("BLEHANDLER: Checking Message Queue");
-        console.log("BLEHANDLER: Message Queue Length: " + msg_queue.current.length);
-
-        // send all messages in queue
-        if (ble_connected.current && msg_queue.current.length > 0 && !dequeue_active.current) {
-            
-            while (msg_queue.current.length > 0 && ble_connected.current) { 
-                dequeue_active.current = true;
-                const msg = msg_queue.current[0];
-                console.log("BLEHANDLER: Sending Message: " + msg);
-                msg_queue.current.shift();
-
-                sendTxtCmdNode(msg);
-                // wait before sending next message
-                if (msg_queue.current.length > 0)
-                    setTimeout(() => { }, DEQUEUE_TIMER);
-            }
-            dequeue_active.current = false;
-        }
-    }
-
 
     // send string message to phone 
     const sendSTRtoNode = (str:string, devID:string) => {
-        try {
-            BleClient.write(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_TXCHAR, numbersToDataView(convSTRtoARR(str)));
-        } catch (error) {
+        BleClient.write(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_TXCHAR, numbersToDataView(convSTRtoARR(str))).catch((error) => {
             LogS.log(1,"BLEHANDLER: Error sending STR to Node: " + error);
-        }
-
+        });
     }
 
     // send Dataview to Node
-    const sendDV = (buff:DataView, devID:string) => {
-        try {
-            BleClient.write(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_TXCHAR, buff);
-        } catch (error) {
+    /*const sendDV = async (buff:DataView, devID:string):Promise<void> => {
+        BleClient.write(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_TXCHAR, buff).catch((error) => {
+            // reject the promise if there is an error
             LogS.log(1,"BLEHANDLER: Error sending DV to Node: " + error);
+            throw new Error("Error sending DV to Node: " + error);
+        });
+    }*/
+    const sendDV = async (buff: DataView, devID: string): Promise<void> => {
+        try {
+            await BleClient.write(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_TXCHAR, buff);
+        } catch (error) {
+            LogS.log(1, "BLEHANDLER: Error sending DV to Node: " + error);
+            throw error; // Fehler wird weitergegeben
         }
-    }
-
+    };
+        
     
     // send a text command to node
     const sendTxtCmdNode = (cmd: string) => {
@@ -121,7 +80,7 @@ export function useBLE() {
 
             let txt_enc = new TextEncoder(); // always utf-8
             const enc_txt_msg = txt_enc.encode(cmd);
-            console.log("UTF-8 CMD Msg: " + enc_txt_msg);
+            //console.log("UTF-8 CMD Msg: " + enc_txt_msg);
 
             const txt_len = enc_txt_msg.length;
             const txt_buffer = new ArrayBuffer(txt_len + 2);
@@ -148,7 +107,6 @@ export function useBLE() {
         sendDV,
         sendTxtCmdNode,
         updateDevID,
-        addMsgQueue,
         updateBLEConnected
     }
 

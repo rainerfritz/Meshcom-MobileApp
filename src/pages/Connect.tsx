@@ -111,7 +111,7 @@ const Tab1: React.FC = () => {
 
 
   // send and parse message functions
-  const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected, addMsgQueue} = useBLE();
+  const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected} = useBLE();
   const {parseMsg, convBARRtoStr} = useMSG();
 
   // phonegps hook
@@ -601,8 +601,18 @@ const Tab1: React.FC = () => {
         view1.setUint8(1, 0x10);
         view1.setUint8(2, 0x20);
         view1.setUint8(3, 0x30);
-        sendDV(view1, devID);
-
+        try{
+          await sendDV(view1, devID);
+        } catch (error) {
+          LogS.log(1, "Error on sending Hello Msg: " + error);
+          setAlHeader("Error on setting up connection! Remove node from BLE Devices and pair newly!");
+          setAlMsg("Err: " + error);
+          setShAlertCard(true);
+          setShowProgrBar(false);
+          setShLoadConf(false);
+          return;
+        }
+        
         // update BLE connected state in BLE Hook
         updateBLEConnected(true);
         
@@ -937,7 +947,7 @@ const Tab1: React.FC = () => {
       view1.setUint8(0, len_ts);
       view1.setUint8(1, 0x20);
       view1.setInt32(2, ts, true);
-      sendDV(view1, devID_s);
+      sendTimestamp(view1, devID_s);
 
       // set the can notify flag to true
       canNotify.current = true;
@@ -949,6 +959,14 @@ const Tab1: React.FC = () => {
     }
   }, [nodeConfFin]);
 
+  const sendTimestamp = async (view1:DataView, devID:string) => {
+    // send a timestamp to phone via dataview. 4byte unix timestamp in seconds
+    try {
+      await sendDV(view1, devID);
+    } catch (error) {
+      LogS.log(1, "Error on sending Timestamp: " + error);
+    }
+  }
 
 
 

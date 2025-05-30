@@ -30,7 +30,7 @@
 //import {useStorage, PosType, MsgType, ConfType, MheardType} from './UseStorage';
 import ConfigStore from '../store/ConfStore';
 import ShouldConfStore from '../store/ShouldConfNode';
-import {aprs_char_table, aprs_pri_symbols, aprs_sec_symbols} from '../store/AprsSymbols';
+import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
 import {hwtable} from '../store/HwTable';
 import {modtable} from '../store/ModTable';
 import { format, compareAsc, isAfter, fromUnixTime, isBefore } from "date-fns";
@@ -1002,13 +1002,6 @@ export function useMSG() {
                                 altitude_ref.current = alt;*/
 
 
-                                // if default date is 2023-01-01 we have no valid date, set phone date
-                                if (DateTime_gps.startsWith("2023-01-01")) {
-                                    console.log("No valid GPS Date, set Phone Date");
-                                    DateTime_gps = date_now + " " + time;
-                                    gps_data.DATE = DateTime_gps;
-                                }
-
                                 // set the static config object
                                 ConfigObject.setOwnPosition(gps_data);
 
@@ -1140,14 +1133,6 @@ export function useMSG() {
                                 const fw_vers = info_data.FWVER;
                                 console.log("FW Version: " + fw_vers);
 
-                                const aprs_cmt = info_data.ATXT;
-                                // update comment in store
-                                AprsCmtStore.update(s => {
-                                    s.aprsCmt = aprs_cmt;
-                                });
-
-                                console.log("APRS Comment: " + aprs_cmt);
-
                                 // ID is currently not used
                                 const id = info_data.ID;
                                 console.log("ID: " + id);
@@ -1171,7 +1156,6 @@ export function useMSG() {
                                     s.config.callSign = callsign;
                                     s.config.fw_ver = fw_vers;
                                     s.config.hw = hwtable[hw_id];
-                                    s.config.comment = aprs_cmt;
                                     s.config.bat_perc = batt_perc;
                                     s.config.bat_volt = batt_volt;
                                 });
@@ -1299,15 +1283,9 @@ export function useMSG() {
                                 // get the symbol name from the symbol char
                                 let aprs_symbol_name = "";
                                 //get aprs symbol name
-                                if (aprs_settings.SYMID === "/") {
+                                if (aprs_settings.SYMID === "/" || aprs_settings.SYMID === "\\") {
                                     aprs_pri_symbols.forEach(element => {
-                                        if (element.s_char.includes(aprs_settings.SYMCD)) {
-                                            aprs_symbol_name = element.s_name
-                                        }
-                                    });
-                                } else {
-                                    aprs_sec_symbols.forEach(element => {
-                                        if (element.s_char.includes(aprs_settings.SYMCD)) {
+                                        if (element.s_char.includes(aprs_settings.SYMCD) && element.s_group === aprs_settings.SYMID) {
                                             aprs_symbol_name = element.s_name
                                         }
                                     });
@@ -1359,13 +1337,8 @@ export function useMSG() {
                                     break;
                                 }
 
-                                if(mheard.DATE === "2023-01-01"){
-                                    mheard.DATE = date_now;
-                                    mheard.TIME = time;
-                                }
-
                                 // if distance is not set from node, check if position is cached in MheardStaticStore and calc distance
-                                let calced_dist = 0;
+                                /*let calced_dist = 0;
 
                                 if(mheard.DIST === 0){
                                     const cachedPos = MheardStaticStore.getCachedPos(mheard.CALL);
@@ -1394,7 +1367,7 @@ export function useMSG() {
 
                                 if (calced_dist !== 0 && mheard.DIST === 0) {
                                     mheard.DIST = calced_dist;
-                                }
+                                }*/
 
                                 const new_mheard:MheardType = {
                                     mh_timestamp:now_timestamp,

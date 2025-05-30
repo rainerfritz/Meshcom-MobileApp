@@ -198,7 +198,7 @@ const Tab3: React.FC = () => {
   
 
   // sending a textmessage
-  const sendMsg = () => {
+  const sendMsg = async () => {
 
     if(!ble_connected){
       console.log("BLE not connected");
@@ -277,7 +277,15 @@ const Tab3: React.FC = () => {
             for(let i=0; i<txt_len; i++)
               view1.setUint8(i+2, enc_txt_msg[i]);
 
-            sendDV(view1, ConfigObject.getBleDevId());
+            try {
+              await sendDV(view1, ConfigObject.getBleDevId());
+            } catch (error) {
+              LogS.log(1,"CHAT - Error sending message to node: " + error);
+              setAlHeader("Error sending message");
+              setAlMsg("Error sending message to node: " + error);
+              setShAlertCard(true);
+              return;
+            }
 
             // add message to queue
             //addMsgQueue(final_msg_str);

@@ -48,10 +48,10 @@ const Info: React.FC = () => {
 
 
   // for updating we need access to BLE
-  const {addMsgQueue, updateDevID, updateBLEConnected} = useBLE();
+  const {sendTxtCmdNode, updateDevID, updateBLEConnected} = useBLE();
 
   // update info page with interval when page is active
-  const updateInterval = 6000; // ms
+  const updateInterval = 5000; // ms
   const updateTimerRef = useRef<number>(0);
 
   // update commands to the phone so we get the jsons etc
@@ -130,8 +130,8 @@ const Info: React.FC = () => {
       // only update if BLE is connected
       if (ble_connected) {
         if(cmd_index.current >= cmds.length) cmd_index.current = 0;
-        // add command to queue
-        addMsgQueue(cmds[cmd_index.current]);
+        // send the command via BLE
+        sendTxtCmdNode(cmds[cmd_index.current]);
         // update index
         cmd_index.current = (cmd_index.current + 1) % cmds.length;
       }
@@ -234,10 +234,10 @@ const Info: React.FC = () => {
                 <div>Temp: {wx_s.TEMP.toFixed(1)}°</div>
                 <div>TOUT: {wx_s.TOUT.toFixed(1)}°</div>
                 <div>Humidity: {wx_s.HUM.toFixed(1)} %</div>
-                <div>Press: {wx_s.PRES.toFixed(2)} hPa</div>
-                <div>QNH: {wx_s.QNH.toFixed(2)} hPa</div>
+                <div>Press: {wx_s.PRES.toFixed(1)} hPa</div>
+                <div>QNH: {wx_s.QNH.toFixed(1)} hPa</div>
                 <div>GasRes: {wx_s.GAS.toFixed(1)} k&Omega;</div>
-                <div>eCO2: {wx_s.CO2.toFixed(1)} ppm</div>
+                <div>eCO2: {wx_s.CO2.toFixed(0)} ppm</div>
                 <div>Alt Press: {wx_s.ALT.toFixed(0)} m</div>
               </div>
               <div className='lbox'>
@@ -257,7 +257,7 @@ const Info: React.FC = () => {
         <div className="info-box">
           <div>
             <div>Node FW: {config_s.fw_ver}</div>
-            <div>App Version: 4.23</div>
+            <div>App Version: 4.24</div>
           </div>
         </div>
 
