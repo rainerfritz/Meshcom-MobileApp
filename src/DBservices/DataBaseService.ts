@@ -315,6 +315,10 @@ class DatabaseService {
                                 // msg came from another node 
                                 msg.ack = 1;
                             }
+                            if (ack_type === 0x02) {
+                                // msg came from DM Node. Should 0 and 1 instead of 0 and 2
+                                msg.ack = 2;
+                            }
 
                             // update in DB
                             const query_str = `UPDATE TextMessages SET ack = ${msg.ack} WHERE msgNr = ${msgNr}`;
@@ -323,6 +327,7 @@ class DatabaseService {
                             // read back all messages
                             const txtMsgs = await DatabaseService.getTextMessages();
                             const escTxtMsgs = DatabaseService.escapeQuotesInArr(txtMsgs);
+                            //console.log("Last Message in DB:", escTxtMsgs[escTxtMsgs.length - 1]);
                             if (txtMsgs.length > 0) {
                                 //apply filters, updates the store then
                                 DatabaseService.applyFilters(escTxtMsgs);
@@ -647,6 +652,8 @@ class DatabaseService {
         else {
             filtered_msgs = msgs;
         }
+        
+        LogS.log(0, 'DB Updating Chat Message Array. Count: ' + filtered_msgs.length);
         // update the store
         MsgStore.update(s => {
             s.msgArr = filtered_msgs;
