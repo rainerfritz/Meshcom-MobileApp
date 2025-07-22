@@ -36,7 +36,7 @@ import {modtable} from '../store/ModTable';
 import { format, compareAsc, isAfter, fromUnixTime, isBefore } from "date-fns";
 import GpsDataStore from '../store/GpsData';
 import WxDataStore from '../store/WxData';
-import AprsCmtStore from '../store/AprsCmtStore';
+//import AprsCmtStore from '../store/AprsCmtStore';
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
 import { useRef } from 'react';
@@ -305,6 +305,16 @@ export function useMSG() {
                         return
                     }
 
+                    // if the message starts with [I2C- we got a I2C scan result from node
+                    if(msg_text_.startsWith("[I2C-")){
+                        console.log("I2C Scan Result received: " + msg_text_);
+
+                        // update ScanI2CStore
+                        ScanI2CStore.update(s => {s.scanresult = msg_text_});
+
+                        return;
+                    }
+
                     // Battery values
                     let bat_volt_ = 0.0;
                     let bat_perc_ = 0.0;
@@ -436,7 +446,7 @@ export function useMSG() {
                                 break;
                             }
 
-                            case "--atxt": {
+                            /*case "--atxt": {
                                 let aprs_cmt = cmd_str_arr[1];
                                 console.log("-Mhandler APRS Comment: " + aprs_cmt);
 
@@ -446,7 +456,7 @@ export function useMSG() {
 
                                 show_msg = false;
                                 break;
-                            }
+                            }*/
 
                             case "--onewire": {
                                 if(cmd_str_arr[1] === "on"){
@@ -511,27 +521,19 @@ export function useMSG() {
                                 break;
                             }
 
-                            case "--[I2C]": {
-                                console.log("I2C Info received");
-                                let scan_info = msg_text_.replace("--[I2C] ... Scanner\n", "");
-                                scan_info += "\n" + time;
-                                console.log("Scan Info: " + scan_info);
-                                // update ScanI2CStore
-                                ScanI2CStore.update(s => {s.scanresult = scan_info});
-
-                                show_msg = false;
-                                break;
-                            }
-
                             default: console.log("CMD Message Ack not known!");
                         }
                         if(!show_msg) return;
                     }
 
                     // if the message is a DM remove {number at end
-                    if(msg_text_.includes("{")){
-                        const signindex = msg_text_.indexOf("{");
-                        const slicedTxt = msg_text_.slice(0, signindex);
+                    if(msg_text_.includes("{") && isDM_ === 1. && from_callsign_ === node_call_ref.current){
+                        // if we have more than one sign, we remove the text before the last one
+                        // get the last sign index
+                        const last_sign_index = msg_text_.lastIndexOf("{");
+                        console.log("Last Sign Index: " + last_sign_index);
+                        console.log("Msg Text Len: " + msg_text_.length);   
+                        const slicedTxt = msg_text_.slice(0, last_sign_index);
                         msg_text_ = slicedTxt;
                     }
 
@@ -956,7 +958,11 @@ export function useMSG() {
 
                     case "{": {
 
-                        if (!json_str.endsWith("}")) return;
+                        if (!json_str.endsWith("}")) {
+                            LogS.log(0, "ERROR: JSON String does not end with }");
+                            console.log("JSON String: " + json_str);
+                            return;
+                        }
 
                         console.log("Json Data received!");
                         /**{"TYP":"SE","BME":false,"BMP":false,"680":true,"811":false,"LPS33":false,"OW":false,"OWPIN":4} */
@@ -1160,11 +1166,6 @@ export function useMSG() {
                                     s.config.bat_volt = batt_volt;
                                 });
 
-                                // update aprs comment store
-                                /*AprsCmtStore.update(s => {
-                                    s.aprsCmt = aprs_cmt;
-                                });*/
-
                                 break;
 
                             }
@@ -1204,7 +1205,7 @@ export function useMSG() {
 
                             case "SW": {
                                 LogS.log(0, "Wifi Settings received!");
-                                //{"TYP":"SW", "SSID":"string up to 30 chars?","PW":"also a long string", "IP":"192.168.1.123", "GW":"192.168.1.1", "DNS":"192.168.1.1", "SUB":"255.255.255.0"}
+                                //{"TYP":"SW", "SSID":"string up to 30 chars?", "IP":"192.168.1.123", "GW":"192.168.1.1", "DNS":"192.168.1.1", "SUB":"255.255.255.0"}
 
                                 const wifi_settings:WifiSettings = json_data;
 
@@ -1305,9 +1306,9 @@ export function useMSG() {
                                 });
 
                                 // update aprs comment store
-                                AprsCmtStore.update(s => {
+                                /*AprsCmtStore.update(s => {
                                     s.aprsCmt = aprs_settings.ATXT;
-                                });
+                                });*/
 
                                 // update aprs settings store
                                 AprsSettingsStore.update(s => {

@@ -2,21 +2,19 @@
 import { IonContent, IonHeader, IonPage, IonText, IonTitle, IonToolbar, IonLabel, IonInput, IonItem, IonButton, IonToggle, IonRange, IonIcon, IonRow, IonCol, IonGrid, IonSelect, IonSelectOption, useIonViewWillEnter, IonAlert, IonProgressBar, useIonViewDidEnter, useIonViewWillLeave } from '@ionic/react';
 import { useEffect, useRef, useState } from 'react';
 import {useBLE} from '../hooks/BleHandler';
-import { Geolocation } from '@capacitor/geolocation';
 
 import './Settings.css';
 import { useStoreState } from 'pullstate';
 import { DevIDStore } from '../store';
-import { getDevID, getSensorSettings, getBLEconnStore, getConfigStore, getScanResult, getNodeInfoStore, getBleConfFinish, getWifiSettings } from '../store/Selectors';
+import { getDevID, getBLEconnStore, getConfigStore, getScanResult } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
 import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings } from '../utils/AppInterfaces';
 import { iosTransitionAnimation, RangeValue } from '@ionic/core';
-import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, send, add } from 'ionicons/icons';
+import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle, send } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
 import AlertCard from '../components/AlertCard';
-import AprsCmtStore from '../store/AprsCmtStore';
+//import AprsCmtStore from '../store/AprsCmtStore';
 import { useHistory } from "react-router";
-import GpsDataStore from '../store/GpsData';
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
 import BLEconnStore from '../store/BLEconnected';
@@ -28,6 +26,8 @@ import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
 import MheardStaticStore from '../utils/MheardStaticStore';
 import AprsSettingsStore from '../store/AprSettingsStore';
+import { usePhoneGps } from '../utils/PhoneGps';
+import WxDataStore from '../store/WxData';
 
 
 
@@ -38,6 +38,9 @@ const Tab2: React.FC = () => {
 
   // BLE TX function
   const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected} = useBLE();
+
+  // get the gps functions to set current position
+  const {setCurrPosGPS} = usePhoneGps();
 
   // history forward to page
   const history = useHistory();
@@ -71,23 +74,26 @@ const Tab2: React.FC = () => {
 
   // NodeInfos
   const nodeInfo_s:InfoData = NodeInfoStore.useState(s => s.infoData);
+
+  // weatherdata
+  const wxData_s = WxDataStore.useState(s => s.wxData);
   
 
 
 
   // remember which setting changed to send it to node
-  const call_changed = useRef<boolean>(false);
-  const wifi_changed = useRef<boolean>(false);
   const aprsSym_changed = useRef<boolean>(false);
-  const aprs_cmt_changed = useRef<boolean>(false);
-  const aprs_cmt_store = useStoreState(AprsCmtStore, s => s.aprsCmt);
+  //const aprs_cmt_store = useStoreState(AprsCmtStore, s => s.aprsCmt);
 
 
   // references to the server userinput textfields 
   const callInputRef = useRef<HTMLIonInputElement>(null);
+  const callSignInputRef = useRef<string>("");
   const ssidInputRef = useRef<HTMLIonInputElement>(null);
   const wifipwdInputRef = useRef<HTMLIonInputElement>(null);
   const aprsCmtRef = useRef<HTMLIonInputElement>(null);
+  const ssidWifi_str = useRef<string>("");
+  const pwdWifi_str = useRef<string>("");
 
   // Regex for callsign check
   const regexCallsign = /^([A-Z]{1,3}[0-9]{1,2}[A-Z]{0,3}|[0-9][A-Z][0-9][A-Z]{1,3})-[0-9]{1,2}$/;
@@ -136,18 +142,15 @@ const Tab2: React.FC = () => {
   // onewire pin ref
   const owPinInputRef = useRef<HTMLIonInputElement>(null);
   const owPinNr = useRef<number>(0);
-  const owPinChanged = useRef<boolean>(false);
-  let MAX_PIN_NUM = 50;
+  let MAX_PIN_NUM = 60;
 
   // userbutton pin ref
   const userBtnInputRef = useRef<HTMLIonInputElement>(null);
   const userBtnNr = useRef<number>(0);
-  const userBtnChanged = useRef<boolean>(false);
-  let MAX_USER_BTN_NUM = 50;
+  let MAX_USER_BTN_NUM = 60;
 
   // Node UTC Time-Offset setting
   const node_utc_offset = useRef<number>(0);
-  const node_utc_offset_changed = useRef<boolean>(false);
   const node_utc_offset_ref = useRef<HTMLIonInputElement>(null);
 
   // custom BLE Pairing Ping
@@ -157,6 +160,15 @@ const Tab2: React.FC = () => {
 
   // show hide user buttons
   const [shUserBtns, setShUserBtns] = useState<boolean>(false);
+
+  // color setting for some buttons
+  const [bme680_color, setBme680_color] = useState<string>("primary");
+  const [bme280_color, setBme280_color] = useState<string>("primary");
+  const [bmp280_color, setBmp280_color] = useState<string>("primary");
+  const [bmp3_color, setBmp3_color] = useState<string>("primary");
+  const [s811_color, set811_color] = useState<string>("primary");
+  const [onewire_color, setOnewire_color] = useState<string>("primary");
+  const [aht20_color, setAht20_color] = useState<string>("primary");
 
   // I2C Scanresult
   const scanResult = useStoreState(ScanI2CStore, getScanResult);
@@ -181,10 +193,9 @@ const Tab2: React.FC = () => {
       s.infoData.CTRY = ctry_ev;
     });
   }
-  const ctry_list = ["EU", "EU8", "ON", "UK", "LA", "UK8", "US", "VR2", "868", "906"];
+  const ctry_list = ["EU8", "UK", "LA", "UK8", "US", "VR2", "868", "906"];
   const ctry_list_translated: {[key: string]: string} = 
-  {"EU":"EU | 433.175MHz", 
-  "EU8":"EU8 | 433.175MHz",
+  {"EU8":"EU8 | 433.175MHz",
   "UK":"UK | 439.9125MHz",
   "UK8":"UK8 | 439.9125MHz",
   "US":"US | 433.175MHz", 
@@ -225,11 +236,38 @@ const Tab2: React.FC = () => {
 
   // fixed ip settings
   const [shFixedIPSet, setShFixedIPSet] = useState<boolean>(false);
-  const fixed_ip_changed = useRef<boolean>(false);
   const ip_addr_ref = useRef<HTMLIonInputElement>(null);
   const ip_gw_ref = useRef<HTMLIonInputElement>(null);
   const ip_snm_ref = useRef<HTMLIonInputElement>(null);
-  
+  const ip_addr_str =useRef<string>("");
+  const ip_gw_str = useRef<string>("");
+  const ip_snm_str = useRef<string>("");
+  // make the regex simple with 4 octets and each octet is 0-255
+  const ip_regex = /^(?!0\d)(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(?!0\d)(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+  // show hide the Userbutton Pins Settings
+  const [shHwPins, setShHwPins] = useState<boolean>(false);
+
+  // Name Setting
+  const name_input_ref = useRef<HTMLIonInputElement>(null);
+  const name_str = useRef<string>("");
+  const MAX_NAME_CHARS = 15;
+
+  // temperature offset setting
+  const temp_offset_ref = useRef<HTMLIonInputElement>(null);
+  const temp_offset_str = useRef<string>("");
+  const temp_ow_offset_ref = useRef<HTMLIonInputElement>(null);
+  const [shTempOffset, setShTempOffset] = useState<boolean>(false);
+
+  // ext. UDP Interface Settings
+  const [shExtUdp, setShExtUdp] = useState<boolean>(false);
+  const ext_udp_ip_ref = useRef<HTMLIonInputElement>(null);
+  const ext_udp_IP_str = useRef<string>("");
+  const ext_udp_enable_str = useRef<string>("");
+
+
+
+
 
 
   // Tasks we need to do when we enter the page
@@ -272,12 +310,6 @@ const Tab2: React.FC = () => {
     console.log("Alt: " + config_s.alt);
     console.log("Aprs Pri/Sec: " + aprs_pri_sec_char.current);
     console.log("Aprs Symbol: " + aprs_sym_char.current);
-    
-    // set onewire pin number from config
-    //owPinNr.current = config_s.onewire_pin;
-    // set node utc offset from config
-    console.log("Node UTC Offset: " + config_s.node_utc_offset);
-    node_utc_offset.current = config_s.node_utc_offset;
 
   }, [config_s]);
 
@@ -286,8 +318,7 @@ const Tab2: React.FC = () => {
   useEffect(()=>{
     LogS.log(0,"Settings Page NodeSettings updated");
     // set min max power based on hw
-    const hw_type = config_s.hw;
-    if(hw_type === "TBEAM V1.1 1268" || hw_type === "T-ECHO" || hw_type === "RAK4631" || hw_type === "HELTEC V3" || hw_type === "EBYTE E22" || hw_type === "EBYTE E220" || hw_type === "TBEAM V1.2 1262" || hw_type === "TBEAM Supreme L76K" || hw_type === "ESP32-S3 Ebyte"){
+    if(nodeInfo_s.HWID === 5 || nodeInfo_s.HWID >= 7 && nodeInfo_s.HWID <= 9 || nodeInfo_s.HWID >= 39 && nodeInfo_s.HWID <= 49) {
       minTXpwr.current = 2;
       maxTXpwr.current = 22;
     }
@@ -308,6 +339,10 @@ const Tab2: React.FC = () => {
     console.log("TX Pwr (mW): " + pwr_w);
     setTxPwrW(+pwr_w);
 
+    // set UTC ref
+    console.log("Node UTC Offset: " + nodeSettings.UTCOF);
+    node_utc_offset.current = nodeSettings.UTCOF;
+
   },[nodeSettings]);
 
 
@@ -319,7 +354,52 @@ const Tab2: React.FC = () => {
     // set onewire pin number from config
     owPinNr.current = sensorSettings_s.OWPIN;
 
+    // set bme680 color based on sensor settings
+    if(sensorSettings_s['680F'] && sensorSettings_s[680] || !sensorSettings_s[680]){
+      setBme680_color("primary");
+    } else {
+      setBme680_color("danger");
+    }
+    // set bme280 color based on sensor settings
+    if(sensorSettings_s.BME && sensorSettings_s.BMXF || !sensorSettings_s.BME){
+      setBme280_color("primary");
+    } else {
+      setBme280_color("danger");
+    }
+    // set bmp280 color based on sensor settings
+    if(sensorSettings_s.BMP && sensorSettings_s.BMXF || !sensorSettings_s.BMP){
+      setBmp280_color("primary");
+    } else {
+      setBmp280_color("danger");
+    }
+    // set bmp3 color based on sensor settings
+    if(sensorSettings_s.BMP3 && sensorSettings_s.BMP3F || !sensorSettings_s.BMP3){
+      setBmp3_color("primary");
+    } else {
+      setBmp3_color("danger");
+    }
+    // set s811 color based on sensor settings
+    if(sensorSettings_s['811F'] && sensorSettings_s['811'] || !sensorSettings_s['811']){
+      set811_color("primary");
+    } else {
+      set811_color("danger");
+    }
+    // set onewire color based on sensor settings
+    if(sensorSettings_s.OW && sensorSettings_s.OWF || !sensorSettings_s.OW){
+      setOnewire_color("primary");
+    } else {
+      setOnewire_color("danger");
+    } 
+    // set aht20 color based on sensor settings
+    if(sensorSettings_s.AHT && sensorSettings_s.AHTF || !sensorSettings_s.AHT){
+      setAht20_color("primary");
+    } else {
+      setAht20_color("danger");
+    }
+
   },[sensorSettings_s]);
+
+
 
 
   // sleep function for delay
@@ -331,44 +411,27 @@ const Tab2: React.FC = () => {
   //send config to phone - we send a string with delimeter Config starts with "C:" 
   /**
   * 
-  * Current Config Format from Phone:
-  * 
-  * LENGTH 1B - FLAG 1B - LENCALL 1B - Callsign - LAT 8B(Double) - LON 8B(Double) - ALT 4B(INT) - 1B SSID_Length - Wifi_SSID - 1B Wifi_PWD - Wifi_PWD 
-  * - 1B APRS_PRIM_SEC - 1B APRS_SYMBOL - 4B SettingsMask - 1B HW-ID - 1B MOD-ID - 1B FW-Vers - 1B TX Pwr - 4B Frequency - 1B Comment Length - Comment - 0x00
-  * 
   * Config Messages:
   * length 1B - Msg ID 1B - Data
   * 
    * Msg ID:
    * 0x10 - Hello Message (followed by 0x20, 0x30)
    * 0x20 - Timestamp from phone
-   * 0x50 - Callsign
-   * 0x55 - Wifi SSID and PW
-   * 0x70 - Latitude
-   * 0x80 - Longitude
-   * 0x90 - Altitude
+   * 0x50 - Callsign - DEPRECATED
+   * 0x55 - Wifi SSID and PW - DEPRECATED
+   * 0x70 - Latitude - DEPRECATED
+   * 0x80 - Longitude - DEPRECATED
+   * 0x90 - Altitude - DEPRECATED
    * 0xA0 - Textmessage
    * 0xF0 - Save Settings at node flash
-     * Data:
-     * Callsign: length Callsign 1B - Callsign
-     * Latitude: 4B Float
-     * Longitude: 4B Float
-     * Altitude: 4B Integer
-   * 
-   * WiFi SSID and PWD:
-   * 1B - SSID Length - SSID - 1B PWD Length - PWD
-   * 
-     * Position Settings from phone are: length 1B | Msg ID 1B | 4B lat/lon/alt | 1B save_settings_flag
-   * Save_flag is 0x0A for save and 0x0B for don't save
-   * If phone send periodicaly position, we don't save them.
   */
 
   // max values
   const MAX_SSID_CHARS = 33;
   const MAX_PWD_CHARS = 64;
-  const MAX_APRS_CMT_CHARS = 20;
+  const MAX_APRS_CMT_CHARS = 15;
 
-   // clear textfields of server userinput
+   // clear textfield of callsign input
    const clearInput = () => {
     callInputRef.current!.value = "";
   };
@@ -376,7 +439,7 @@ const Tab2: React.FC = () => {
 
   // send new callsign to node
   // returns true if regex of callsign is correct
-  const setCallSign = ():boolean => {
+  const setCallSign = async () => {
 
     const nodeCall = callInputRef.current!.value;
 
@@ -393,62 +456,42 @@ const Tab2: React.FC = () => {
         if (!regexCallsign.test(call_s)) {
           console.log("Invalid Callsign!");
           clearInput();
-          return false;
+          setAlHeader("Invalid Callsign!");
+          setAlMsg("Please enter a valid Callsign like OE1KFR-1");
+          setShAlertCard(true);
+          return;
         }
 
         let cal_len = call_s.length;
         console.log("Callsign len: " + cal_len);
-        if (cal_len > 11) cal_len = 11;
-
-        // dataview object
-        let call_buffer = new ArrayBuffer(cal_len + 3);
         
-        let view1 = new DataView(call_buffer);
-        view1.setUint8(0, cal_len + 3);
-        view1.setUint8(1, 0x50);
-        view1.setUint8(2, cal_len);
-        for(let i=0; i<cal_len; i++)
-          view1.setUint8(i+3, call_s.charCodeAt(i));
-        //console.log("Store: " + devID_s);
-        sendDV(view1, devID_s);
+        if (cal_len > 11) {
+          console.log("Callsign too long!");
+          clearInput();
+          setAlHeader("Callsign too long!");
+          setAlMsg("Please enter a valid Callsign with max 11 characters");
+          setShAlertCard(true);
+          return;
+        }
 
+        // set the callsign ref
+        callSignInputRef.current = call_s;
+
+        // send to node
+        sendTxtCmd("setcall");
 
         // update config in store state
         ConfigStore.update(s => {
           s.config.callSign = call_s;
         });
+
+        setAlHeader("Callsign set!");
+        setAlMsg("Setting saved to node! Will reboot in 15s.");
+        setShAlertCard(true);
       }
     }
     clearInput();
-    return true;
-  }
 
-
-  // get current position from GPS
-  /**
-   * {"timestamp":1678863572074,"coords":{"heading":-1,"longitude":16.316705541217758,"latitude":48.23804867177001,"speed":-1,
-   * "altitudeAccuracy":16.129304885864258,"accuracy":8.02911993815469,"altitude":244.1603012084961}}
-   */
-
-  const getGpsData = async (): Promise<{lat:number, lon:number, alt:number, timestamp:number}>  => {
-
-    const coordinates = await Geolocation.getCurrentPosition();
-    
-    const timestamp_ = coordinates.timestamp;
-    let lon_gps = coordinates.coords.longitude;
-    let lat_gps = coordinates.coords.latitude;
-    let alt_gps = coordinates.coords.altitude;
-    if(alt_gps === null) alt_gps = 0;
-
-    //limit decimal 
-    lon_gps = Math.round(lon_gps * 100000) / 100000;
-    lat_gps = Math.round(lat_gps * 100000) / 100000;
-    alt_gps = Math.trunc(alt_gps);
-  
-    console.log('Current position:', coordinates);
-
-
-    return {lat:lat_gps, lon:lon_gps, alt:alt_gps, timestamp:timestamp_}
   }
 
 
@@ -456,130 +499,21 @@ const Tab2: React.FC = () => {
   /**
    * send / configure position on node
    * 
-   * Position Settings from phone are: length 1B | Msg ID 1B | 4B lat/lon/alt | 1B save_settings_flag
-   * Save_flag is 0x0A for save and 0x0B for don't save on node
    */
-  const setCurrentPosGPS = async (save_setting_flag:boolean) => {
+  const setCurrentPosGPS = async () => {
+    console.log("Setting Current Position GPS");
 
-    const posObjGPS = await getGpsData();
-
-    // send it directly to the phone
-    if(posObjGPS.lat){
-
-        console.log("Latitude to Node: " + posObjGPS.lat); 
-        // dataview object
-        const lat_len = 7;
-        let lat_buffer = new ArrayBuffer(lat_len);
-        let view1 = new DataView(lat_buffer);
-        view1.setUint8(0, lat_len);
-        view1.setUint8(1, 0x70);
-        view1.setFloat32(2, posObjGPS.lat, true);
-
-        if(save_setting_flag === true){
-          view1.setUint8(6, 0x0A);
-        } else {
-          view1.setUint8(6, 0x0B);
-        }
-        
-        sendDV(view1, devID_s);
-
-        // update config in store state
-        GpsDataStore.update(s => {
-           s.gpsData.LAT = posObjGPS.lat;
-        });
-
-    }
-
-    if(posObjGPS.lon){
-
-        console.log("Longitude to Node: " + posObjGPS.lon); 
-        // dataview object
-        const lon_len = 7;
-        let lon_buffer = new ArrayBuffer(lon_len);
-        let view1 = new DataView(lon_buffer);
-        view1.setUint8(0, lon_len);
-        view1.setUint8(1, 0x80);
-        view1.setFloat32(2, posObjGPS.lon, true);
-
-        if(save_setting_flag === true){
-          view1.setUint8(6, 0x0A);
-        } else {
-          view1.setUint8(6, 0x0B);
-        }
-
-        sendDV(view1, devID_s);
-
-        // update config in store state
-        GpsDataStore.update(s => {
-          s.gpsData.LON = posObjGPS.lon;
-        });
-    }
-
-    if(posObjGPS.alt){
-
-      console.log("Altitude to Node: " + posObjGPS.alt); 
-        // dataview object
-        const alt_len = 7;
-        let alt_buffer = new ArrayBuffer(alt_len);
-        let view1 = new DataView(alt_buffer);
-        view1.setUint8(0, alt_len);
-        view1.setUint8(1, 0x90);
-        view1.setInt32(2, posObjGPS.alt, true);
-
-        if(save_setting_flag === true){
-          view1.setUint8(6, 0x0A);
-        } else {
-          view1.setUint8(6, 0x0B);
-        }
-
-        sendDV(view1, devID_s);
-
-        // update config in store state
-        GpsDataStore.update(s => {
-          s.gpsData.ALT = posObjGPS.alt;
-        });
-    }
-
-    // if we send periodic position to node -> update config (pos) in DB for Map
-    // if position is set as base setting, config gets updated when config message comes back from node
-    if(!save_setting_flag){
-
-      console.log("Updating Position on Screen");
-
-      let curr_config = config_s;
-
-      curr_config.lat = posObjGPS.lat;
-      curr_config.lon = posObjGPS.lon;
-      curr_config.alt = posObjGPS.alt;
-
-      // add config to DB
-      //addCONF(curr_config);
-
-    }
+    await setCurrPosGPS(false);
   };
 
-
-  // show user alert that gps pos was set and send setting to node
-  const shPosOkCard = () =>{
-
-    setCurrentPosGPS(true);
-    setAlHeader("Setting Position successful!");
-    setAlMsg("Please save Settings!");
-    setShAlertCard(true);
-
-  }
 
 
 
   /**
    * send Wifi Settings to Node
-   * Msg ID: 0x55
-   * Data:
-   * WiFi SSID and PWD:
-	 * 1B - SSID Length - SSID - 1B PWD Length - PWD
    * */
 
-  const setWifiSetting = () =>{
+  const setWifiSetting = async () =>{
 
     console.log("Setting Wifi Settings");
 
@@ -588,51 +522,22 @@ const Tab2: React.FC = () => {
     
     if(ssidWifi && pwdWifi){
 
-      const ssidWifi_str = ssidWifi!.toString();
-      const pwdWifi_str = pwdWifi!.toString();
+      ssidWifi_str.current = ssidWifi!.toString();
+      pwdWifi_str.current = pwdWifi!.toString();
 
       // special case reset wifissid to none without pw
-      if(ssidWifi_str !== "" && pwdWifi_str !== ""){
+      if(ssidWifi_str.current !== "" && pwdWifi_str.current !== "" && ssidWifi_str.current.length <= MAX_SSID_CHARS && pwdWifi_str.current.length <= MAX_PWD_CHARS) {
 
-        const ssid_len = ssidWifi_str!.length;
-        const pwd_len = pwdWifi_str!.length;
-        const wifi_conf_len = ssid_len + pwd_len + 4;
-
-        console.log("ssid_len: " + ssid_len);
-        console.log("pwd_len: " + pwd_len);
-        console.log("wifi_conf_len: " + wifi_conf_len);
-        console.log("Wifi SSID: " + ssidWifi_str);
-        console.log("Wifi PWD: " + pwdWifi_str);
-
-        //assemble message for node
-        // dataview object
-        let wifi_buffer = new ArrayBuffer(wifi_conf_len);
-
-        let view1 = new DataView(wifi_buffer);
-        view1.setUint8(0, wifi_conf_len);
-        view1.setUint8(1, 0x55);
-        view1.setUint8(2, ssid_len);
-        // fill ssid into buffer
-        for(let i=0; i<ssid_len; i++)
-          view1.setUint8(i+3, ssidWifi_str.charCodeAt(i));
-        // set pwd len
-        view1.setUint8(ssid_len + 3, pwd_len);
-        // fill pwd into buffer
-        for(let i=0; i<pwd_len; i++)
-          view1.setUint8((i + ssid_len + 4), pwdWifi_str.charCodeAt(i));
-
-        // send to node
-        sendDV(view1, devID_s);
-
-        // update config in store state
-        ConfigStore.update(s => {
-          s.config.wifi_ssid = ssidWifi_str;
-        });
+        console.log("Wifi SSID: " + ssidWifi_str.current);
+        console.log("Wifi PWD: " + pwdWifi_str.current);
+        sendTxtCmd("setwifi");
+        setAlHeader("Wifi Settings set!");
+        setAlMsg("Setting saved to node! Will reboot in 15s.");
+        setShAlertCard(true);
 
       }
 
       // reset inputs
-      ssidInputRef.current!.value = "";
       wifipwdInputRef.current!.value = "";
     }
 
@@ -640,35 +545,34 @@ const Tab2: React.FC = () => {
 
 
   // set APRS Symbol Config
-  // 
   const setAprsSymbols = () => {
 
-    console.log("Aprs PriSec to Node: " + aprs_pri_sec_char.current);
-    console.log("Aprs Symbol to Node: " + aprs_sym_char.current);
+    if (aprs_pri_sec_valid.current && aprssym_valid.current) {
 
-    const symbol_dec = +aprs_sym_char.current.charCodeAt(0);
-    console.log("Aprs Symbol DEC: " + symbol_dec);
-    
-    const symbol_pri_sec = +aprs_pri_sec_char.current.charCodeAt(0);
-    console.log("Aprs Pri/Sec DEC: " + symbol_pri_sec);
+      if (aprsSym_changed.current) {
 
-    // dataview object
-    const sym_len = 4;  //1B len - 1B MsgID - 1B SymPriSec - 1B AprsSymbol
+        aprsSym_changed.current = false;
+        console.log("Aprs PriSec to Node: " + aprs_pri_sec_char.current);
+        console.log("Aprs Symbol to Node: " + aprs_sym_char.current);
 
-    let sym_buffer = new ArrayBuffer(sym_len);
-    let view1 = new DataView(sym_buffer);
-    view1.setUint8(0, sym_len);
-    view1.setUint8(1, 0x95);
-    view1.setUint8(2, symbol_pri_sec);
-    view1.setUint8(3, symbol_dec);
+        const symbol_dec = +aprs_sym_char.current.charCodeAt(0);
+        console.log("Aprs Symbol DEC: " + symbol_dec);
 
-    sendDV(view1, devID_s);
+        const symbol_pri_sec = +aprs_pri_sec_char.current.charCodeAt(0);
+        console.log("Aprs Pri/Sec DEC: " + symbol_pri_sec);
 
-    sleep(300).then(() => {
-      // get the aprs settings from node
-      console.log("Get APRS Settings from Node");
-      sendTxtCmdNode("--aprsset");
-    });
+        // send the aprssym to node
+        sendTxtCmd("setAprsChars");
+
+      }
+
+    } else {
+      console.log("Aprs Sym or Pri/Sec not valid!");
+      setAlHeader("Invalid APRS Symbol!");
+      setAlMsg("Group Char must be 0-9, A-Z, / and \\. Symbol Char must be ! to }");
+      setShAlertCard(true);
+      return;
+    }
 
   }
 
@@ -745,11 +649,11 @@ const Tab2: React.FC = () => {
 
       case "bmp": {
 
-        if (config_s.bmp_on) {
+        if (sensorSettings_s.BMP) {
           cmd_ = "--bmx off";
         } else {
-          if (config_s.bme_on || config_s.bme680_on) {
-            setAlHeader("Switch BME280/BME680 off please!");
+          if (sensorSettings_s.BME || sensorSettings_s['680'] || sensorSettings_s.BMP3) {
+            setAlHeader("Switch BME280/BMP390/BME680 off please!");
             setAlMsg("");
             setShAlertCard(true);
           } else {
@@ -761,10 +665,10 @@ const Tab2: React.FC = () => {
 
       case "680": {
 
-        if (config_s.bme680_on) {
+        if (sensorSettings_s['680']) {
           cmd_ = "--680 off";
         } else {
-          if (config_s.bme_on || config_s.bmp_on) {
+          if (sensorSettings_s.BME || sensorSettings_s.BMP || sensorSettings_s.BMP3) {
             setAlHeader("Please switch BME/BMP off!");
             setAlMsg("");
             setShAlertCard(true);
@@ -775,9 +679,25 @@ const Tab2: React.FC = () => {
         break;
       }
 
+      case "bmp3": {
+
+        if (sensorSettings_s.BMP3) {
+          cmd_ = "--bmx off";
+        } else {
+          if (sensorSettings_s.BME || sensorSettings_s.BMP || sensorSettings_s['680']) {
+            setAlHeader("Please switch BME280/BMP/BME680 off!");
+            setAlMsg("");
+            setShAlertCard(true);
+          } else {
+            cmd_ = "--390 on";
+          }
+        }
+        break;
+      }
+
       case "mcu811": {
 
-        if (config_s.mcu811_on) {
+        if (sensorSettings_s['811']) {
           cmd_ = "--811 off";
         } else {
           cmd_ = "--811 on";
@@ -957,9 +877,6 @@ const Tab2: React.FC = () => {
       case "utcoffset": {
         console.log("UTC Offset: " + node_utc_offset.current);
         cmd_ = "--utcoff " + node_utc_offset.current.toString();
-        /*addMsgQueue(cmd_);
-        addMsgQueue("--pos");
-        cmd_ = "";*/
         break;
       }
 
@@ -1066,7 +983,7 @@ const Tab2: React.FC = () => {
 
       // rx boost is only available on boards with a SX126x chip
       case "rxboost": {
-        if (config_s.hw === "TBEAM V1.1 1268" || config_s.hw === "TBEAM V1.2 1262" || config_s.hw === "EBYTE E22" || config_s.hw === "HELTEC V3" || config_s.hw === "HELTEC E290" || config_s.hw === "TBEAM Supreme L76K" || config_s.hw === "ESP32-S3 Ebyte") {
+        if (nodeInfo_s.HWID === 5 || nodeInfo_s.HWID >= 7 && nodeInfo_s.HWID <= 9 || nodeInfo_s.HWID >= 39 && nodeInfo_s.HWID <= 49) {
           if (nodeInfo_s.BOOST) {
             cmd_ = "--setboostedgain off";
           } else {
@@ -1080,6 +997,76 @@ const Tab2: React.FC = () => {
         break;
       }
 
+      // aht20 sensor on / off
+      case "aht20": {
+        if (sensorSettings_s.AHT) {
+          cmd_ = "--aht20 off";
+        } else {
+          cmd_ = "--aht20 on";
+        }
+        break;
+      }
+
+      // set callsign
+      case "setcall": {
+        let call_s = callSignInputRef.current;
+        if (call_s && call_s !== "") {
+          console.log("Setting Callsign to node: " + call_s);
+          cmd_ = "--setcall " + call_s;
+          call_s = ""; // clear callsign input
+        }
+        break;
+      }
+
+      // set fixed IP setting all at once
+      case "setFixedIP": {
+        cmd_ = "--setownip " + ip_addr_str.current + " --setownms " + ip_snm_str.current + " --setowngw " + ip_gw_str.current;
+        console.log("IP CMD to node: " + cmd_);
+        break;
+      }
+
+      // set the wifi settings
+      case "setwifi": {
+        cmd_ = "--setssid " + ssidWifi_str.current + " --setpwd " + pwdWifi_str.current;
+        console.log("Wifi CMD to node: " + cmd_);
+        break;
+      }
+
+      // set aprs id (table) and symbol
+      case "setAprsChars": {
+        console.log("Setting APRS Symbol and Pri/Sec Char to node");
+        cmd_ = "--symid " + aprs_pri_sec_char.current + " --symcd " + aprs_sym_char.current;
+        console.log("APRS CMD to node: " + cmd_);
+        break;
+      }
+
+      // set the name 
+      case "name": {
+        cmd_ = "--setname " + name_str.current;
+        console.log("Name CMD to node: " + cmd_);
+        break;
+      }
+
+      // temp offests
+      case "setTempOffset": {
+        cmd_ = temp_offset_str.current;
+        console.log("Temp Offset CMD to node: " + cmd_);
+        break;
+      }
+
+      // ext udp setting toggle
+      case "extUdpToggle": {
+        cmd_ = ext_udp_enable_str.current;
+        console.log("Ext UDP CMD to node: " + cmd_);
+        break;
+      }
+
+      // ext udp ip setting
+      case "extUdpIP": {
+        cmd_ = ext_udp_IP_str.current;
+        console.log("Ext UDP IP CMD to node: " + cmd_);
+        break;
+      }
     }
 
     // finally send it via textmsg
@@ -1094,29 +1081,7 @@ const Tab2: React.FC = () => {
 
 
 
-  // set flag that we have new callsign to send to node
-  const callChanged = (event: any) => {
-    console.log("Call Input changed");
-    call_changed.current = true;
-  }
-
-
-  // set flag that we have new aprs symbols to send to node
-  const wifiChanged = (event: any) => {
-    console.log("Wifi changed");
-    wifi_changed.current = true;
-  }
-
-
-
-  // flag that aprs comment changed in input field
-  const cmtChanged = (event: any) => {
-    aprs_cmt_changed.current = true;
-    console.log("Aprs Comment changed");
-  }
-
-
-  
+  /////// APRS Symbol Settings ///////
   // create a function to get the value of the APRS Symbol IonSelect. Event is Symbol Preset Name
   const aprsSymChanged = (event: string) => {
     console.log("Aprs Sym changed");
@@ -1184,7 +1149,267 @@ const Tab2: React.FC = () => {
   }
 
 
-  // Group Settings
+  
+
+  ////// Setter for Settings Buttons //////
+  // set the APRS comment
+  const setAPRScomment = () => {
+    
+    if(aprsCmtRef.current!.value !== null && aprsCmtRef.current!.value !== undefined && aprsCmtRef.current!.value !== "" && aprsCmtRef.current!.value !== " "){
+      const cmt_txt = aprsCmtRef.current!.value;
+      LogS.log(0, "Setting APRS Comment: " + cmt_txt);
+      sendTxtCmd("atxt");
+      // clear input field
+      aprsCmtRef.current!.value = "";
+    }
+  }
+  
+    
+  // set the UTC Time Offset
+  const setUTCOffset = () => {
+
+    if (node_utc_offset_ref.current!.value !== undefined && node_utc_offset_ref.current!.value !== null) {
+
+      const offset_str = node_utc_offset_ref.current!.value.toString();
+      const offset_nr = +offset_str;
+
+      // check if the offset is +/-14 max or > 28 and fire alert card if needed
+      if (offset_nr >= -15 && offset_nr <= 28) {
+          node_utc_offset.current = offset_nr;
+          console.log("Setting UTC Offset: " + node_utc_offset.current);
+          sendTxtCmd("utcoffset");
+          setAlHeader("UTC Offset set!");
+          setAlMsg("Setting saved to node!");
+          setShAlertCard(true);
+      } else {
+        console.log("UTC Offset not set!");
+        setAlHeader("UTC Offset not set!");
+        setAlMsg("Please enter a valid UTC Offset!");
+        setShAlertCard(true);
+      }
+    }
+  }
+
+
+  // set the onewire pin number
+  const setOnewirePin = () => {
+
+    if (owPinInputRef.current!.value !== undefined && owPinInputRef.current!.value !== null) {
+      const pin_str = owPinInputRef.current!.value.toString();
+      const pin_nr = +pin_str;
+
+      console.log("Setting Onewire Pin: " + pin_nr);
+
+      if (pin_nr >= 0 && pin_nr <= MAX_PIN_NUM) {
+          owPinNr.current = pin_nr;
+          sendTxtCmd("owpin");
+          setAlHeader("Onewire Pin set!");
+          setAlMsg("Setting saved to node!");
+          setShAlertCard(true);
+      } else {
+        console.log("Onewire Pin not set!");
+        setAlHeader("Onewire Pin not set!");
+        setAlMsg("Please enter a valid Onewire Pin Number!");
+        setShAlertCard(true);
+      }
+    }
+  }
+
+
+
+  // set the user button pin number
+  const setUserButtonPin = async () => {
+
+    if (userBtnInputRef.current!.value !== undefined && userBtnInputRef.current!.value !== null) {
+      const pin_str = userBtnInputRef.current!.value.toString();
+      const pin_nr = +pin_str;
+
+      console.log("Setting Userbutton Pin: " + pin_nr);
+
+      if (pin_nr >= 0 && pin_nr <= MAX_USER_BTN_NUM) {
+          userBtnNr.current = pin_nr;
+          sendTxtCmd("userButtonPin");
+          setAlHeader("User Button Pin set!");
+          setAlMsg("Setting saved to node!");
+          setShAlertCard(true);
+      } else {
+        setAlHeader("Wrong Userbutton Pin Number!");
+        setAlMsg("Pin Nr not in Range!");
+        setShAlertCard(true);
+      }
+    } 
+  } 
+
+
+
+  // set the country setting
+  const setCountrySetting = async () => {
+    if (ctry_setting_changed_str.current !== "" && ctry_setting_changed_str.current !== " ") {
+      console.log("Setting Country: " + ctry_setting_changed_str.current);
+      sendTxtCmd("ctry");
+    } else {
+      console.log("Country setting not set!");
+      setAlHeader("Country setting not set!");
+      setAlMsg("Please enter a valid Country Code!");
+      setShAlertCard(true);
+    }
+  }
+
+
+  // set the fixed IP adresses 
+  const setFixedIP = () => {
+    console.log("Setting Fixed IP Adresses");
+    // check if the IP adresses are valid
+    if(ip_addr_ref.current !== null && ip_addr_ref.current !== undefined &&
+       ip_snm_ref.current !== null && ip_snm_ref.current !== undefined &&
+       ip_gw_ref.current !== null && ip_gw_ref.current !== undefined) {
+
+      ip_addr_str.current = ip_addr_ref.current!.value!.toString();
+      ip_snm_str.current = ip_snm_ref.current!.value!.toString();
+      ip_gw_str.current = ip_gw_ref.current!.value!.toString();
+      console.log("IP Address: " + ip_addr_str.current);
+      console.log("IP Subnet Mask: " + ip_snm_str.current);
+      console.log("IP Gateway: " + ip_gw_str.current);
+
+      // check if the IP adresses are valid
+      if(ip_addr_str && ip_snm_str && ip_gw_str) {
+        if(ip_regex.test(ip_addr_str.current) && ip_regex.test(ip_snm_str.current) && ip_regex.test(ip_gw_str.current)) {
+          // all IP adresses are valid
+          console.log("IP Adresses are valid");
+          // send the IP adresses to the node
+          sendTxtCmd("setFixedIP");
+        } else {
+          console.log("IP Adresses not valid!");
+          setAlHeader("IP Adresses not valid!");
+          setAlMsg("Please enter a valid IP Address, Subnet Mask and Gateway!");
+          setShAlertCard(true);
+        }
+      }
+    }
+  }
+
+
+  // set the name setting from namesetting ref
+  const setNameSetting = () => {
+    if (name_input_ref.current !== null && name_input_ref.current !== undefined) {
+      name_str.current = name_input_ref.current.value!.toString();
+      if(name_str.current !== "" && name_str.current !== " " && name_str.current.length <= MAX_NAME_CHARS) {
+        name_str.current = name_str.current.trim();
+        console.log("Setting Name: " + name_str.current);
+        sendTxtCmd("name");
+        setAlHeader("Name set!");
+        setAlMsg("Setting saved to node!");
+        setShAlertCard(true);
+      } else {
+        console.log("Name setting not set!");
+        setAlHeader("Name setting not set!");
+        setAlMsg("Please enter a valid Name!");
+        setShAlertCard(true);
+      }
+    }
+  }
+
+
+    // set the temperature offset 
+  const setTempOffset = () => {
+    if (temp_offset_ref.current !== null && temp_offset_ref.current !== undefined && temp_ow_offset_ref.current !== null && temp_ow_offset_ref.current !== undefined) {
+      const temp_offset_ = temp_offset_ref.current.value!.toString();
+      const temp_offset_ow_ = temp_ow_offset_ref.current.value!.toString();
+      // check if the offset is a number
+      const temp_offset_nr = +temp_offset_;
+      const temp_offset_ow_nr = +temp_offset_ow_;
+      if (!isNaN(temp_offset_nr) && !isNaN(temp_offset_ow_nr)) {
+        console.log("Setting Temperature Offset: " + temp_offset_nr + " and Onewire Offset: " + temp_offset_ow_nr);
+        // check if the offset is in range -50 to 50
+        if (temp_offset_nr >= -50 && temp_offset_nr <= 50 && temp_offset_ow_nr >= -50 && temp_offset_ow_nr <= 50) {
+          // set the offsets
+          temp_offset_str.current = "--tempoff in " + temp_offset_ + " --tempoff out " + temp_offset_ow_;
+          sendTxtCmd("setTempOffset");
+          setAlHeader("Temperature Offset set!");
+          setAlMsg("Setting saved to node!");
+          setShAlertCard(true);
+        } else {
+          console.log("Temperature Offset not set!");
+          setAlHeader("Temperature Offset not set!");
+          setAlMsg("Please enter a valid Temperature Offset between -50 and 50!");
+          setShAlertCard(true);
+        }
+      } else {
+        console.log("Temperature Offset not set!");
+        setAlHeader("Temperature Offset not set!");
+        setAlMsg("Please enter a valid Temperature Offset!");
+        setShAlertCard(true);
+      }
+    }
+  }
+
+
+  // set the external UDP Settings
+  const setExtUdpIP = () => {
+    if (ext_udp_ip_ref.current !== null && ext_udp_ip_ref.current !== undefined) {
+      const ext_udp_ip = ext_udp_ip_ref.current.value!.toString();
+      console.log("Ext UDP IP: " + ext_udp_ip);
+      // check if the IP is valid with regex
+      if (ip_regex.test(ext_udp_ip) && ext_udp_ip !== "" && ext_udp_ip !== " " && ext_udp_ip !== "0.0.0.0") {
+        // set the ext UDP IP in the store
+        console.log("Ext UDP IP is valid");
+        ext_udp_IP_str.current = "--extudpip " + ext_udp_ip;
+        sendTxtCmd("extUdpIP");
+        setAlHeader("Ext UDP IP set!");
+        setAlMsg("Ext UDP IP Address set: " + ext_udp_ip);
+        setShAlertCard(true);
+      } else {
+        console.log("Ext UDP IP is not valid");
+        setAlHeader("Ext UDP IP not valid!");
+        setAlMsg("Please enter a valid IP Address for the Ext UDP IF!");
+        setShAlertCard(true);
+        return;
+      }
+    }
+  }
+
+  // enabling the ext UDP IF with toggle. Getting Ion-Event
+  const enableExtUDP = (ev:any) => {
+    console.log("Enable Ext UDP: " + ev.detail.checked);
+    if (ev.detail.checked) {
+      // check if the ext UDP IP is set correctly with regex
+      if (ext_udp_ip_ref.current !== null && ext_udp_ip_ref.current !== undefined) {
+        const ext_udp_ip = ext_udp_ip_ref.current.value!.toString();
+        console.log("Ext UDP IP: " + ext_udp_ip);
+        // check if the IP is valid with regex
+        if (ip_regex.test(ext_udp_ip) && ext_udp_ip !== "" && ext_udp_ip !== " " && ext_udp_ip !== "0.0.0.0") {
+          // set the ext UDP IP in the store
+          console.log("Ext UDP IP is valid");
+          ext_udp_enable_str.current = "--extudp on";
+          sendTxtCmd("extUdpToggle");
+          setAlHeader("Ext UDP IF enabled!");
+          setAlMsg("Ext UDP Interface enabled!");
+          setShAlertCard(true);
+        } else {
+          console.log("Ext UDP IP is not valid");
+          setAlHeader("Ext UDP IP not valid!");
+          setAlMsg("Please enter a valid IP Address for the Ext UDP IF!");
+          setShAlertCard(true);
+          // set the toggle back to false
+          WifiSettingsStore.update(s => {
+            s.wifiSettings.EUDP = false;
+          });
+          return;
+        }
+      }
+    } else {
+      // disable the ext UDP IF
+      console.log("Disabling Ext UDP IF");
+      ext_udp_enable_str.current = "--extudp off";
+      sendTxtCmd("extUdpToggle");
+      setAlHeader("Ext UDP IF disabled!");
+      setAlMsg("Ext UDP Interface disabled!");
+      setShAlertCard(true);
+    }
+  }
+
+
+  /////// Group Settings ///////
   // If the group setting menu is not open, the Refs are not working
   // set each group and check if it is a number and maximum 5 digits
   // first make a function to check for valid number
@@ -1266,80 +1491,13 @@ const Tab2: React.FC = () => {
     }
   }
   
+  // set the group settings when the group settings are changed
+  const setGroupSettings = () => {
 
-
-
-  // save settings at node flash
-  const saveSettings = () => {
-
-    console.log("Saving Settings");
-
-    if(call_changed.current){
-      console.log("Call changed");
-      if(!setCallSign()) {
-        setAlHeader("Invalid Callsign Setting!");
-        setAlMsg("Please check Callsign! Should be like: OE1XYZ-1 (CLIENT) or OE1XYZ-12 (GATEWAY)");
-        setShAlertCard(true);
-        return;
-      } else {
-        sleep(400);
-      }
-    }
-
-    if(wifi_changed.current){
-      console.log("Wifi changed");
-      sleep(400).then(() => {
-        setWifiSetting();
-      });
-    }
-
-    if(aprsSym_changed.current){
-      console.log("Aprs Sym changed");
-      aprsSym_changed.current = false;
-
-      if(aprs_pri_sec_valid.current && aprssym_valid.current){
-        sleep(400).then(() => {
-          setAprsSymbols();
-        });
-      } else {
-        console.log("Aprs Sym or Pri/Sec not valid!");
-        setAlHeader("Invalid APRS Symbol!");
-        setAlMsg("Group Char must be 0-9, A-Z, / and \\. Symbol Char must be ! to }");
-        setShAlertCard(true);
-        return;
-      }
-    }
-
-    // when cmtChanged send it to node
-    if(aprs_cmt_changed.current){
-      console.log("Sending APRS Comment to Node");
-      aprs_cmt_changed.current = false;
-      sleep(400).then(() => {
-        sendTxtCmd("atxt");
-      });
-    } 
-
-    // when node_utc_offset_changed send it to node
-    if(node_utc_offset_changed.current){
-      console.log("Sending UTC Offset to Node");
-      node_utc_offset_changed.current = false;
-      sleep(400).then(() => {
-        sendTxtCmd("utcoffset");
-      });
-    }
-
-    // set the country setting to the node
-    if(ctry_setting_changed.current){
-      console.log("Setting Country to Node");
-      ctry_setting_changed.current = false;
-      sleep(400).then(() => {
-        sendTxtCmd("ctry");
-      });
-    }
-
-    // GROUP SETTINGS
-    // check if group settings changed and send them to node
+    // check if any group setting changed
     if (groupSettingChanged.current) {
+
+      console.log("Setting Group Settings");
       groupSettingChanged.current = false;
 
       console.log("Group Settings changed");
@@ -1355,76 +1513,14 @@ const Tab2: React.FC = () => {
 
       console.log("Group CMD: " + cmd_str);
       setGrpCmd.current = cmd_str;
-      sleep(400).then(() => {
-        console.log("Time in ms: " + Date.now());
-        sendTxtCmd("setGroup");
-      });
+
+      console.log("Time in ms: " + Date.now());
+      sendTxtCmd("setGroup");
+      
     }
-
-    // set the userbutton pin to the node
-    if(userBtnChanged.current){
-      console.log("Setting Userbutton Pin to Node");
-      userBtnChanged.current = false;
-      sleep(400).then(() => {
-        console.log("Time in ms: " + Date.now());
-        sendTxtCmd("userButtonPin");
-      });
-    }
-
-    // custom BLE Pairing Pin
-    if(ble_pairing_pin_changed.current){
-      console.log("Setting BLE Pairing Pin to Node");
-      console.log("Custom BLE Pairing Pin: " + ble_pairing_pin.current);
-      ble_pairing_pin_changed.current = false;
-
-      if (ble_pairing_pin.current.length === 6) {
-        sleep(400).then(() => {
-          sendTxtCmd("btcode");
-        });
-      } else {
-        setAlHeader("Wrong Custom Pin Number!");
-        setAlMsg("Pin Nr must have 6 digits!");
-        setShAlertCard(true);
-        return;
-      }
-    }
-
-    // set onewire pin
-    if (owPinChanged.current) {
-      console.log("Onewire Pin changed");
-      owPinChanged.current = false;
-      sleep(400).then(() => {
-        console.log("Time in ms: " + Date.now());
-        sendTxtCmd("owpin");
-      });
-    }
-
-
-    // send save settings command only when call_changed or wifi_changed - will reboot the client
-    if (call_changed.current || wifi_changed.current) {
-      sleep(1000).then(() => {
-        console.log("Saving Settings and reboot client");
-
-        call_changed.current = false;
-        wifi_changed.current = false;
-
-        // reset command for client
-        let save_buffer = new ArrayBuffer(2);
-        let view1 = new DataView(save_buffer);
-        view1.setUint8(0, 2);
-        view1.setUint8(1, 0xF0);
-
-        sendDV(view1, devID_s);
-      });
-    }
-
-    // tell the user that settings are saved. This overwrites cards from before.
-    setAlHeader("Settings saved!");
-    setAlMsg("In some cases node reboots in 15s!");
-    setShAlertCard(true);
-
-    
   }
+
+
 
 
   // load CSS for the Action Sheet
@@ -1471,57 +1567,8 @@ const Tab2: React.FC = () => {
   }, [txpower_slider]);
 
 
-  // handle onewire pin setting
-  const setOnewire_pin = (event:string) => {
-
-    console.log("Onewire Pin changed!");
-    console.log("Event Pin: " + event);
-
-    // check if value from input is not undefined or null
-    if (owPinInputRef.current!.value !== undefined && owPinInputRef.current!.value !== null) {
-      const pin_str = owPinInputRef.current!.value.toString();
-      const pin_nr = +pin_str;
-
-      console.log("Onewire Pin: " + pin_nr);
-
-      if (pin_nr >= 0 && pin_nr <= MAX_PIN_NUM) {
-
-        if (pin_nr !== owPinNr.current) {
-          owPinNr.current = pin_nr;
-          owPinChanged.current = true;
-        }
-      }
-    }
-  }
 
 
-  // handle userbutton pin setting
-  const setUserbutton_pin = (event:string) => {
-
-    console.log("Userbutton Pin changed!");
-    console.log("Event Pin: " + event);
-
-    // check if value from input is not undefined or null
-    if (userBtnInputRef.current!.value !== undefined && userBtnInputRef.current!.value !== null) {
-      const pin_str = userBtnInputRef.current!.value.toString();
-      const pin_nr = +pin_str;
-
-      console.log("Userbutton Pin: " + pin_nr);
-
-      if (pin_nr >= 0 && pin_nr <= MAX_USER_BTN_NUM) {
-
-        if (pin_nr !== userBtnNr.current) {
-          userBtnNr.current = pin_nr;
-          userBtnChanged.current = true;
-        }
-      } else {
-        userBtnChanged.current = false;
-        setAlHeader("Wrong Userbutton Pin Number!");
-        setAlMsg("Pin Nr not in Range!");
-        setShAlertCard(true);
-      }
-    }
-  }
 
 
   // handle custom pairing pin setting
@@ -1535,31 +1582,7 @@ const Tab2: React.FC = () => {
     ble_pairing_pin_changed.current = true;
   }
 
-  
-  // handle utc offset setting
-  const setNodeUTCoffSet = (event:string) => {
 
-    console.log("UTC Offset changed!");
-    console.log("Event Offset: " + event);
-
-    // check if value from input is not undefined or null
-    if (node_utc_offset_ref.current!.value !== undefined && node_utc_offset_ref.current!.value !== null) {
-
-      const offset_str = node_utc_offset_ref.current!.value.toString();
-      const offset_nr = +offset_str;
-
-      // TODO: check if the offset is +/-14 max or > 28 and fire alert card if needed
-      if (offset_nr >= -15 && offset_nr <= 30) {
-
-        if (offset_nr !== node_utc_offset.current) {
-          node_utc_offset.current = offset_nr;
-          node_utc_offset_changed.current = true;
-        }
-      }
-
-      console.log("UTC Offset: " + offset_nr);
-    }
-  }
 
 
   // open an Alert Card if ScanI2C changed
@@ -1721,7 +1744,7 @@ const Tab2: React.FC = () => {
             <div className='settings_cont'>
               <div>APRS Symbol ID: {aprs_settings_s.SYMID}</div>
               <div>APRS Symbol: {aprs_settings_s.SYMCD}</div>
-              <div>APRS Comment: {aprs_cmt_store}</div>
+              <div>APRS Comment: {aprs_settings_s.ATXT}</div>
               {aprs_settings_s.NAME.length > 0 && <div>APRS Name: {aprs_settings_s.NAME}</div>}
             </div>
 
@@ -1753,24 +1776,39 @@ const Tab2: React.FC = () => {
 
           <div id="spacer-buttons" />
           <div className='setting_wrapper'>
-
-          <IonItem>
-            <IonInput onIonChange={event=>callChanged(event)} ref={callInputRef} label='Set Node Callsign' labelPlacement="floating" placeholder="eg. OE1KFR-1" type='text' maxlength={12}></IonInput>
-          </IonItem>
+            <div className="flex-row mb-3">
+              <div>
+                <IonText id="wifi-text">Callsign</IonText>
+              </div>
+              <div>
+                <IonButton size="small" fill="outline" color='success' onClick={() => setCallSign()}>
+                  <IonIcon icon={checkmarkCircle} ></IonIcon>
+                </IonButton>
+              </div>
+            </div>
+            <IonItem>
+              <IonInput ref={callInputRef} label='Set Node Callsign' labelPlacement="floating" placeholder="eg. OE1KFR-1" type='text' maxlength={12}></IonInput>
+            </IonItem>
           </div>
 
           <div id="spacer-buttons" />
-          <IonButton id="settings_button" fill='outline' slot='start' onClick={() => shPosOkCard()}>Set Location - Phone GPS</IonButton>
 
-          <div id="spacer-buttons" />
           <div className='setting_wrapper'>
-
-            <IonText id="wifi-text">WiFi Settings</IonText><br /><br />
+            <div className="flex-row mb-3">
+              <div>
+                <IonText id="wifi-text">WiFi Settings</IonText>
+              </div>
+              <div>
+                <IonButton size="small" fill="outline" color='success' onClick={() => setWifiSetting()}>
+                  <IonIcon icon={checkmarkCircle} ></IonIcon>
+                </IonButton>
+              </div>
+            </div>
             <IonItem>
-              <IonInput onIonChange={event => wifiChanged(event)} ref={ssidInputRef} label='Set WiFi SSID' labelPlacement="floating" placeholder='SSID' type='text' maxlength={MAX_SSID_CHARS}></IonInput>
+              <IonInput ref={ssidInputRef} value={wifiSettings_s.SSID} label='Set WiFi SSID' labelPlacement="floating" placeholder='SSID' type='text' maxlength={MAX_SSID_CHARS}></IonInput>
             </IonItem>
             <IonItem>
-              <IonInput ref={wifipwdInputRef} label='Set WiFi Password' labelPlacement="floating" placeholder='PWD' type={shWifiPwd ? 'text':'password'} maxlength={MAX_PWD_CHARS}></IonInput>
+              <IonInput ref={wifipwdInputRef} label='Set WiFi Password' labelPlacement="floating" placeholder='PWD' type={shWifiPwd ? 'text' : 'password'} maxlength={MAX_PWD_CHARS}></IonInput>
               <IonIcon slot='end' icon={shWifiPwd ? eyeOffOutline : eyeOutline} onClick={() => setShWifiPwd(!shWifiPwd)}></IonIcon>
             </IonItem>
           </div>
@@ -1778,7 +1816,16 @@ const Tab2: React.FC = () => {
           <div id="spacer-buttons" />
 
           <div className='setting_wrapper'>
-            <IonText id="wifi-text">APRS Settings</IonText><br />
+            <div className="flex-row mb-3">
+              <div>
+                <IonText id="wifi-text">APRS Symbol</IonText>
+              </div>
+              <div>
+                <IonButton size="small" fill="outline" color='success' onClick={() => setAprsSymbols()}>
+                  <IonIcon icon={checkmarkCircle} ></IonIcon>
+                </IonButton>
+              </div>
+            </div>
 
             <div className='mt-3 mb-3'>APRS Map Symbol Preset:</div>
 
@@ -1800,31 +1847,51 @@ const Tab2: React.FC = () => {
             <IonItem>
               <IonInput value={aprs_settings_s.SYMCD} ref={aprs_sym_char_Input_ref} onIonInput={(ev) => aprsSymChangedManual(ev)} label='Set Character' labelPlacement="floating" type='text' maxlength={1}></IonInput>
             </IonItem>
+            </div>
 
-            <div className='mt-3 mb-3'>APRS Comment:</div>
+            <div id="spacer-buttons" />
 
+          <div className='setting_wrapper'>
+            <div className="flex-row mb-3">
+              <div>
+                <IonText id="wifi-text">APRS Comment</IonText>
+              </div>
+              <div>
+                <IonButton size="small" fill="outline" color='success' onClick={() => setAPRScomment()}>
+                  <IonIcon icon={checkmarkCircle} ></IonIcon>
+                </IonButton>
+              </div>
+            </div>
             <IonItem>
-              <IonInput onInput={(event) => cmtChanged(event)} ref={aprsCmtRef} label='Set Comment' labelPlacement="floating" type='text' maxlength={MAX_APRS_CMT_CHARS}></IonInput>
+              <IonInput ref={aprsCmtRef} label='Set Comment' labelPlacement="floating" type='text' maxlength={MAX_APRS_CMT_CHARS}></IonInput>
             </IonItem>
           </div>
 
           <div id="spacer-buttons" />
+
           <div className='setting_wrapper'>
-            <IonText id="wifi-text">Onewire Pin</IonText>
-            <div className='mb-3'></div>
+            <div className="flex-row mb-3">
+              <div>
+                <IonText id="wifi-text">APRS Name</IonText>
+              </div>
+              <div>
+                <IonButton size="small" fill="outline" color='success' onClick={() => setNameSetting()}>
+                  <IonIcon icon={checkmarkCircle} ></IonIcon>
+                </IonButton>
+              </div>
+            </div>
             <IonItem>
-              <IonInput value={owPinNr.current} ref={owPinInputRef} label='Set Onewire Pin' labelPlacement="floating" type='number' maxlength={2} inputmode="numeric" onIonInput={(ev) => setOnewire_pin(ev.detail.value!)}></IonInput>
+              <IonInput
+                ref={name_input_ref}
+                value={aprs_settings_s.NAME}
+                label='Set APRS Name'
+                labelPlacement="floating"
+                type='text'
+                maxlength={MAX_NAME_CHARS}
+              ></IonInput>
             </IonItem>
           </div>
 
-          <div id="spacer-buttons" />
-          <div className='setting_wrapper'>
-            <IonText id="wifi-text">Userbutton Pin</IonText>
-            <div className='mb-3'></div>
-            <IonItem>
-              <IonInput value={userBtnNr.current} ref={userBtnInputRef} label='Set Userbutton Pin' labelPlacement="floating" type='number' maxlength={2} inputmode="numeric" onIonInput={(ev) => setUserbutton_pin(ev.detail.value!)}></IonInput>
-            </IonItem>
-          </div>
 
           {/*<div id="spacer-buttons" />
           <div className='setting_wrapper'>
@@ -1837,11 +1904,24 @@ const Tab2: React.FC = () => {
 
           <div id="spacer-buttons" />
           <div className='setting_wrapper'>
-            <IonText id="wifi-text">Node UTC Time-Offset</IonText>
-            <div className='mb-3'></div>
+            <div className="flex-row mb-3">
+              <div>
+                <IonText id="wifi-text">Node UTC-Time-Offset</IonText>
+              </div>
+              <div>
+                <IonButton size="small" fill="outline" color='success' onClick={() => setUTCOffset()}>
+                  <IonIcon icon={checkmarkCircle} ></IonIcon>
+                </IonButton>
+              </div>
+            </div>
             <IonItem>
-              <IonInput value={node_utc_offset.current} ref={node_utc_offset_ref} label='Set UTC Offset' labelPlacement="floating" type='number' maxlength={2} onIonInput={(ev) => setNodeUTCoffSet(ev.detail.value!)}></IonInput>
+              <IonInput value={node_utc_offset.current} ref={node_utc_offset_ref} label='Set UTC Offset' labelPlacement="floating" type='text' maxlength={3}></IonInput>
             </IonItem>
+          </div>
+
+          <div id="spacer-buttons" />
+          <div className='txt-center'>
+            <IonButton id="settings_button" fill='outline' slot='start' onClick={() => setCurrentPosGPS()}>Set Location - Phone GPS</IonButton>
           </div>
 
           <div id="spacer-buttons" />
@@ -1860,7 +1940,11 @@ const Tab2: React.FC = () => {
                     {ctry_list_translated[ctry]}
                   </IonSelectOption>
                 ))}
-              </IonSelect><br></br>
+                
+              </IonSelect>
+              <IonButton size="small" fill="solid" color='success' onClick={() => setCountrySetting()}>
+                  <IonIcon icon={checkmarkCircle} ></IonIcon>
+                </IonButton><br></br>
             </IonItem>
             }
           </div>
@@ -1899,17 +1983,18 @@ const Tab2: React.FC = () => {
                 <IonItem>
                   <IonInput value={grp5} onIonInput={(ev) => grp5Changed(ev)} label='Set Group 6' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
-                <div className='resetGrpBtn'>
-                    <IonButton fill='solid' slot='start' onClick={() => resetGrpCall()}>Reset Groups</IonButton>
+                <div className='resetGrpBtn txt-left flex-row'>
+                    <IonButton fill='solid' slot='start' size="small" onClick={() => resetGrpCall()}>Reset Groups</IonButton>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setGroupSettings()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
                 </div>
               </div>
             }
           </div>
 
+          
           <div id="spacer-buttons" />
-            <IonButton id="settings_button" fill='solid' slot='start' onClick={saveSettings}>Save Settings to Node</IonButton>
-          <div id="spacer-buttons" />
-
           <div className='dropdown_arrow'>
             <div className='dropdown_arrow_header'>
               <div id="advIcon">
@@ -1927,34 +2012,10 @@ const Tab2: React.FC = () => {
                     <IonButton expand="block" fill={nodeSettings.DISP ? 'outline' : 'solid'} slot='start' onClick={() => sendTxtCmd("display")}>DISPLAY</IonButton>
                   </div>
                   <div >
-                    <IonButton expand="block" fill={config_s.gps_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("gps")}>GPS</IonButton>
-                  </div>
-                  <div >
                     <IonButton expand="block" fill={nodeInfo_s.BOOST ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("rxboost")}>RX Gain Boost</IonButton>
                   </div>
                   <div>
-                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("txpos")}>Send POS</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.bme_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("bme")}>BME280</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.bme680_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("680")}>BME680</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.onewire_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("owon")}>One Wire</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("wx")}>WX-Info</IonButton>
-                  </div>
-                  <div>
                     <IonButton expand="block" fill={nodeSettings.WS ? 'solid' : 'outline'} onClick={() => sendTxtCmd("websrv")}>Webserver</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("scani2c")}>Scan I2C</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill='outline' slot='start' onClick={() => handleOTAUpdate()}>OTA Update</IonButton>
                   </div>
                 </div>
                 <div className='settings_btns_r'>
@@ -1965,32 +2026,93 @@ const Tab2: React.FC = () => {
                     <IonButton expand="block" fill={config_s.mesh_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("mesh_retrx")}>MESH</IonButton>
                   </div>
                   <div>
-                    <IonButton expand="block" fill={nodeSettings.NOALL ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("no_allmsg_rx")}>No ALL Msg RX</IonButton>
+                    <IonButton expand="block" fill={nodeSettings.NOALL ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("no_allmsg_rx")}>No ALL Msgs</IonButton>
                   </div>
                   <div>
                     <IonButton expand="block" fill={config_s.button_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("button")}>BUTTON</IonButton>
                   </div>
+                  <div>
+                    <IonButton expand="block" fill={wifiSettings_s.AP ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("wifi_ap")}>Wifi AP</IonButton>
+                  </div>
+
+                </div>
+              </div>
+
+              <IonText color="primary" class='txt-center'>
+                <h3>GPS - Position</h3>
+              </IonText>
+              <div className='settings_btns'>
+                <div className='settings_btns_l'>
+                  <div >
+                    <IonButton expand="block" fill={config_s.gps_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("gps")}>GPS</IonButton>
+                  </div>
                   <div >
                     <IonButton expand="block" fill={config_s.track_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("track")}>TRACK</IonButton>
                   </div>
+                </div>
+                <div className='settings_btns_r'>
                   <div>
-                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("txtrack")}>Send TRACK</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.bmp_on? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("bmp")}>BMP280</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.mcu811_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("mcu811")}>MCU-811</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.lps33_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("lps33")}>LPS33</IonButton>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("txpos")}>Send POS</IonButton>
                   </div>
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("posdebug")}>POS-Info</IonButton>
                   </div>
+                  {/* <div>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("txtrack")}>Send TRACK</IonButton>
+                  </div> */}
+                </div>
+              </div>
+
+              <IonText color="primary" class='txt-center'>
+                <h3>Sensors</h3>
+              </IonText>
+              <div className='settings_btns'>
+                <div className='settings_btns_l'>
                   <div>
-                    <IonButton expand="block" fill={wifiSettings_s.AP ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("wifi_ap")}>Wifi AP</IonButton>
+                    <IonButton expand="block" fill={config_s.bme_on ? 'solid' : 'outline'} slot='start' color={bme280_color} onClick={() => sendTxtCmd("bme")}>BME280</IonButton>
                   </div>
+                  <div>
+                    <IonButton expand="block" fill={config_s.bme680_on ? 'solid' : 'outline'} slot='start' color={bme680_color} onClick={() => sendTxtCmd("680")}>BME680</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={sensorSettings_s.AHT ? 'solid' : 'outline'} slot='start' color={aht20_color} onClick={() => sendTxtCmd("aht20")}>AHT-20</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={config_s.onewire_on ? 'solid' : 'outline'} slot='start' color={onewire_color} onClick={() => sendTxtCmd("owon")}>One Wire</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("wx")}>WX-Info</IonButton>
+                  </div>
+                </div>
+                <div className='settings_btns_r'>
+                  <div>
+                    <IonButton expand="block" fill={config_s.bmp_on ? 'solid' : 'outline'} slot='start' color={bmp280_color} onClick={() => sendTxtCmd("bmp")}>BMP280</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={sensorSettings_s.BMP3 ? 'solid' : 'outline'} slot='start' color={bmp3_color} onClick={() => sendTxtCmd("bmp3")}>BMP390</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={config_s.mcu811_on ? 'solid' : 'outline'} slot='start' color={s811_color} onClick={() => sendTxtCmd("mcu811")}>MCU-811</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={config_s.lps33_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("lps33")}>LPS33</IonButton>
+                  </div>
+                </div>
+              </div>
+
+              <IonText color="primary" class='txt-center'>
+                <h3>Utilities</h3>
+              </IonText>
+              <div className='settings_btns'>
+                <div className='settings_btns_l'>
+                  <div>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("scani2c")}>Scan I2C</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => handleOTAUpdate()}>OTA Update</IonButton>
+                  </div>
+                </div>
+                <div className='settings_btns_r'>
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => setShRebootCard(true)}>REBOOT</IonButton>
                   </div>
@@ -2017,7 +2139,147 @@ const Tab2: React.FC = () => {
                 <IonLabel>Tx-Pwr: {tx_pwr.current} dBm / {tx_pwr_w}mW</IonLabel>
               </div>
             </> : <></>}
-          </div>  
+          </div>
+
+
+          <div id="spacer-buttons" />
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shHwPins ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShHwPins(!shHwPins)} />
+              </div>
+              <IonText>Hardware Pins</IonText>
+            </div>
+            {shHwPins &&
+              <div className='setting_wrapper'>
+                <div className="flex-row mb-3">
+                  <div>
+                    <IonText id="wifi-text">Userbutton Pin</IonText>
+                  </div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setUserButtonPin()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={userBtnNr.current} ref={userBtnInputRef} label='Set Userbutton Pin' labelPlacement="floating" type='number' maxlength={2} inputmode="numeric"></IonInput>
+                </IonItem>
+                <div className="flex-row mb-3 mt-3">
+                  <div>
+                    <IonText id="wifi-text">OneWire Pin</IonText>
+                  </div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setOnewirePin()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={owPinNr.current} ref={owPinInputRef} label='Set Onewire Pin' labelPlacement="floating" type='number' maxlength={2} inputmode="numeric"></IonInput>
+                </IonItem>
+              </div>
+            }
+          </div>
+
+          <div id="spacer-buttons" />
+            {/*Temperature Offset Settings*/}
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shTempOffset ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShTempOffset(!shTempOffset)} />
+              </div>
+              <IonText >Temperature Offset</IonText>
+            </div>
+            {shTempOffset &&
+              <div className='setting_wrapper'>
+                <div className="flex-row mb-3">
+                  <div>
+                    <IonText id="wifi-text">BME/BMP Offset</IonText>
+                  </div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setTempOffset()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={wxData_s.TOFFI} ref={temp_offset_ref} label='Set BME/BMP Offset' labelPlacement="floating" type='text' maxlength={5} inputmode="text"></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Onewire Offset</div>
+                    <IonItem>
+                      <IonInput value={wxData_s.TOFFO} ref={temp_ow_offset_ref} label='Set Onewire Offset' labelPlacement="floating" type='text' maxlength={5} inputmode="text"></IonInput>
+                    </IonItem>
+              </div>
+            }
+          </div>
+
+          <div id="spacer-buttons" />
+
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shFixedIPSet ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShFixedIPSet(!shFixedIPSet)} />
+              </div>
+              <IonText >Fixed IP Settings</IonText>
+            </div>
+            {shFixedIPSet &&
+              <div className='setting_wrapper'>
+                <div className="flex-row mb-3">
+                  <div>
+                    <IonText id="wifi-text">IP Address</IonText>
+                  </div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setFixedIP()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={wifiSettings_s.OWNIP} ref={ip_addr_ref} label='Set IP Adress' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Subnet Mask</div>
+                <IonItem>
+                  <IonInput value={wifiSettings_s.OWNMS} ref={ip_snm_ref} label='Set NMS' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Gateway</div>
+                <IonItem>
+                  <IonInput value={wifiSettings_s.OWNGW} ref={ip_gw_ref} label='Set Gateway' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                </IonItem>
+              </div>
+            }
+          </div>
+
+          <div id="spacer-buttons" />
+          {/*ext. UDP Settings with one toggle to switch on/off and a text input for the ip address*/}
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shExtUdp ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShExtUdp(!shExtUdp)} />
+              </div>
+              <IonText >Ext. UDP Interface</IonText>
+            </div>
+            {shExtUdp && <>
+              <div className='setting_wrapper'>
+                <div className="flex-row mb-3">
+                  <div>
+                    <IonText id="wifi-text">UDP Dest. Addr.</IonText>
+                  </div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setExtUdpIP()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={wifiSettings_s.EUDPIP} ref={ext_udp_ip_ref} label='Set UDP IP' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                </IonItem>
+                <IonItem>
+                  <IonToggle enableOnOffLabels={true} checked={wifiSettings_s.EUDP} onIonChange={(ev) => enableExtUDP(ev)}>Enable</IonToggle>
+                </IonItem>
+              </div>
+            </>}
+          </div>
 
           <div id="spacer-buttons" />
 

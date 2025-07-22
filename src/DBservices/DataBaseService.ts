@@ -653,7 +653,6 @@ class DatabaseService {
             filtered_msgs = msgs;
         }
         
-        LogS.log(0, 'DB Updating Chat Message Array. Count: ' + filtered_msgs.length);
         // update the store
         MsgStore.update(s => {
             s.msgArr = filtered_msgs;

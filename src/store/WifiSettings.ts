@@ -12,12 +12,14 @@ import {WifiSettings} from "../utils/AppInterfaces";
     SUB: string,
     OWNIP: string,
     OWNGW: string,
-    OWNMS: string
+    OWNMS: string,
+    EUDP: boolean,
+    EUDPIP: string
  */
 
 const defaultWifiSettings:WifiSettings = {
     TYP: "SW",
-    SSID: "none",
+    SSID: "",
     IP: "0.0.0.0",
     GW: "0.0.0.0",
     AP: false,
@@ -25,7 +27,9 @@ const defaultWifiSettings:WifiSettings = {
     SUB: "255.255.255.0",
     OWNIP: "0.0.0.0",
     OWNGW: "0.0.0.0",
-    OWNMS: "255.255.255.0"
+    OWNMS: "255.255.255.0",
+    EUDP: false,
+    EUDPIP: "0.0.0.0"
 }
 
 const WifiSettingsStore = new Store({

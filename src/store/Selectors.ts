@@ -27,7 +27,7 @@ export const getGpsData = createSelector(getState, state => state.gpsData);
 
 export const getWxData = createSelector(getState, state => state.wxData);
 
-export const getAprsCmt = createSelector(getState, state => state.aprsCmt);
+//export const getAprsCmt = createSelector(getState, state => state.aprsCmt);
 
 export const getScanResult = createSelector(getState, state => state.scanresult);
 

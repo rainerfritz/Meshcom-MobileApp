@@ -239,15 +239,24 @@ const Info: React.FC = () => {
                 <div>GasRes: {wx_s.GAS.toFixed(1)} k&Omega;</div>
                 <div>eCO2: {wx_s.CO2.toFixed(0)} ppm</div>
                 <div>Alt Press: {wx_s.ALT.toFixed(0)} m</div>
+                {SensorSettings_s.INA226 && <>
+                  <div>VBUS: {wx_s.VBUS.toFixed(1)} V</div>
+                  <div>VSHUNT: {wx_s.VSHUNT.toFixed(1)} V</div>
+                  <div>VAMP: {wx_s.VAMP.toFixed(1)} A</div>
+                  <div>VPOW: {wx_s.VPOW.toFixed(1)} W</div>
+                </>}
               </div>
               <div className='lbox'>
                 <div>BME280: {SensorSettings_s.BME ? 'ON' : 'OFF'}</div>
                 <div>BMP280: {SensorSettings_s.BMP ? 'ON' : 'OFF'}</div>
+                <div>BMP390: {SensorSettings_s.BMP3 ? 'ON' : 'OFF'}</div>
                 <div>BME680: {SensorSettings_s[680] ? 'ON' : 'OFF'}</div>
                 <div>MCU811: {SensorSettings_s[811] ? 'ON' : 'OFF'}</div>
                 <div>LPS: {SensorSettings_s.LPS33 ? 'ON' : 'OFF'}</div>
                 <div>OneWire: {SensorSettings_s.OW ? 'ON' : 'OFF'}</div>
                 <div>OneWire Pin: {SensorSettings_s.OWPIN}</div>
+                <div>AHT-20: {SensorSettings_s.AHT ? 'ON' : 'OFF'}</div>
+                { SensorSettings_s.INA226 ? <div>INA226: ON</div> : <div>INA226: OFF</div>}
               </div>
             </div>
           </IonCardContent>

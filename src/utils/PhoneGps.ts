@@ -3,12 +3,13 @@ import { Geolocation } from '@capacitor/geolocation';
 import {useBLE} from '../hooks/BleHandler';
 import ConfigObject from './ConfigObject';
 import GpsDataStore from '../store/GpsData';
+import LogS from './LogService';
 
 
 
 export function usePhoneGps() {
 
-  const {sendDV} = useBLE();
+  const {sendDV, sendTxtCmdNode} = useBLE();
   
 
   // get current position from GPS
@@ -49,10 +50,24 @@ export function usePhoneGps() {
   const setCurrPosGPS = async (save_setting_flag:boolean) => {
 
       const posObjGPS = await getGpsLocation();
+      let cmd_str = "";
       const devID_s = ConfigObject.getBleDevId();
+
+      if(posObjGPS.alt !== undefined && posObjGPS.lat !== undefined && posObjGPS.lon !== undefined){
+
+        console.log("Phone GPS Latitude: " + posObjGPS.lat + ", Longitude: " + posObjGPS.lon + ", Altitude: " + posObjGPS.alt);
+        cmd_str = "--setlat " + posObjGPS.lat + " --setlon " + posObjGPS.lon + " --setalt " + posObjGPS.alt;
+
+        // send command to node
+        sendTxtCmdNode(cmd_str);
+        
+      } else {
+        LogS.log(1, "Phone GPS: Position data is incomplete. Cannot set position on node.");
+        return;
+      }
   
       // send it directly to the phone
-      if(posObjGPS.lat){
+      /*if(posObjGPS.lat){
   
           console.log("Latitude to Node: " + posObjGPS.lat); 
           // dataview object
@@ -143,7 +158,7 @@ export function usePhoneGps() {
         // add config to DB
         //addCONF(curr_config);*/
   
-      }
+      
     };
 
     return {getGpsLocation, setCurrPosGPS};

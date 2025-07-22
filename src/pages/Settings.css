@@ -170,5 +170,18 @@
 .resetGrpBtn{
    margin-top: 5px;
    margin-bottom: 3px;
+}
+.txt-center{
    text-align: center;
+}
+.txt-right{
+   text-align: right;
+}
+.txt-left{
+   text-align: left;
+}
+.flex-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }

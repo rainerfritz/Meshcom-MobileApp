@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
   plugins: {
       Keyboard: {
         resize: 'ionic',
-        resizeOnFullScreen: true,
+        resizeOnFullScreen: false,
       },
       CapacitorSQLite: {
         iosDatabaseLocation: 'Library/CapacitorDatabase',

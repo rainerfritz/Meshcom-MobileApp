@@ -5,6 +5,7 @@ import {GpsData} from "../utils/AppInterfaces";
 
 /*
 export interface GpsData {
+    TYP: string,
     LAT: number,
     LON: number,
     ALT: number,
@@ -16,14 +17,12 @@ export interface GpsData {
     DIST: number,
     DIRn: number,
     DIRo: number,
-    DATE: string,
-    UTCOFF: number,
-    GPSON: boolean,
-    TRACKON: boolean
+    DATE: string
 }
 */
 
 const defaultGpsData:GpsData = {
+    TYP: "G",
     LAT: 0,
     LON: 0,
     ALT: 0,
@@ -35,10 +34,7 @@ const defaultGpsData:GpsData = {
     DIST: 0,
     DIRn: 0,
     DIRo: 0,
-    DATE: "",
-    //UTCOFF: 0,
-    //GPSON: false,
-    //TRACKON: false
+    DATE: ""
 }
 
 const GpsDataStore = new Store({

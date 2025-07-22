@@ -92,6 +92,7 @@ export interface ReconType {
 // gpsdata interface
 // DG{"TYP":"G","LAT":48.23804855,"LON":16.31670952,"ALT":244,"SAT":0,"SFIX":false,"HDOP":0,"RATE":1200,"NEXT":1195,"DIST":0,"DIRn":0,"DIRo":0,"DATE":"2024-01-27 12:10:22"}
 export interface GpsData {
+    TYP: string,
     LAT: number,
     LON: number,
     ALT: number,
@@ -107,16 +108,39 @@ export interface GpsData {
 }
 
 // wx sensor data interface
-// DW{"TYP":"W","TEMP":21.42065239,"TOUT":0,"HUM":50.74215317,"PRES":1001.369995,"QNH":1030.080688,"ALT":99,"GAS":54.72800064,"CO2":0}
+/**
+ * wdoc["TYP"] = "W";
+            wdoc["TEMP"] = meshcom_settings.node_temp;
+            wdoc["TOFFI"] = meshcom_settings.node_tempi_off;
+            wdoc["TOUT"] = meshcom_settings.node_temp2;
+            wdoc["TOFFO"] = meshcom_settings.node_tempo_off;
+            wdoc["HUM"] = meshcom_settings.node_hum;
+            wdoc["PRES"] = meshcom_settings.node_press;
+            wdoc["QNH"] = meshcom_settings.node_press_asl;
+            wdoc["ALT"] = meshcom_settings.node_press_alt;
+            wdoc["GAS"] = meshcom_settings.node_gas_res;
+            wdoc["CO2"] = meshcom_settings.node_co2;
+            wdoc["VBUS"] = meshcom_settings.node_vbus;
+            wdoc["VSHUNT"] = meshcom_settings.node_vshunt;
+            wdoc["VAMP"] = meshcom_settings.node_vcurrent;
+            wdoc["VPOW"] = meshcom_settings.node_vpower;
+ */
 export interface WxData {
+    TYP: string,
     TEMP: number,
+    TOFFI: number,
     TOUT: number,
+    TOFFO: number,
     HUM: number,
     PRES: number,
     QNH: number,
     ALT: number,
     GAS: number,
-    CO2: number
+    CO2: number,
+    VBUS: number,
+    VSHUNT: number,
+    VAMP: number,
+    VPOW: number
 }
 
 
@@ -143,12 +167,12 @@ export interface WxData {
 
  */
 export interface InfoData {
+    TYP: string,
     FWVER: string,
     CALL: string,
     ID: string,
     HWID: number,
     MAXV: number,
-    ATXT: string,
     BLE: string,
     BATP: number,
     BATV: number,
@@ -168,27 +192,44 @@ export interface InfoData {
  * sensdoc["TYP"] = "SE";
         sensdoc["BME"] = bBMEON;
         sensdoc["BMP"] = bBMPON;
+        sensdoc["BMP3"] = bBMP3ON;
+        sensdoc["BMP3F"] = bmp3_found;
+        sensdoc["AHT"] = bAHT20ON;
+        sensdoc["AHTF"] = aht20_found;
+        sensdoc["BMXF"] = bmx_found;
         sensdoc["680"] = bBME680ON;
+        sensdoc["680F"] = bme680_found;
         sensdoc["811"] = bMCU811ON;
-        sensdoc["SMALL"] = bSMALLDISPLAY;
+        sensdoc["811F"] = mcu811_found;
         sensdoc["SS"] = bSOFTSERON;
         sensdoc["LPS33"] = bLPS33;
         sensdoc["OW"] = bONEWIRE;
         sensdoc["OWPIN"] = meshcom_settings.node_owgpio;
-        sensdoc["USERPIN"] = meshcom_settings.node_button_pin;
-        sensdoc["MHONLY"] = bMHONLY;
-        sensdoc["NOALL"] = bNoMSGtoALL;
+        sensdoc["OWF"] = one_found;
+        sensdoc["USERPIN"] = ibt;
+        sensdoc["INA"] = bINA226ON;
+        sensdoc["INAF"] = ina226_found;
  */
 export interface SensorSettings {
     TYP: string,
     BME: boolean,
     BMP: boolean,
+    BMP3: boolean,
+    BMP3F: boolean,
+    AHT: boolean,
+    AHTF: boolean,
+    BMXF: boolean,
     "680": boolean,
+    "680F": boolean,
     "811": boolean,
+    "811F": boolean,
+    SS: boolean,
     LPS33: boolean,
     OW: boolean,
     OWPIN: number,
-    USERPIN: number
+    OWF: boolean,
+    USERPIN: number,
+    INA226: boolean
 }
 
 // wifi settings interface
@@ -196,13 +237,15 @@ export interface SensorSettings {
  * swdoc["TYP"] = "SW";
  * swdoc["SSID"] = meshcom_settings.node_ssid;
  * swdoc["IP"] = meshcom_settings.node_ip;
-    swdoc["GW"] = meshcom_settings.node_gw;     // IP GW Address
-    swdoc["AP"] = bWIFIAP;
-    swdoc["DNS"] = meshcom_settings.node_dns;
-    swdoc["SUB"] = meshcom_settings.node_subnet;
-    swdoc["OWNIP"] = meshcom_settings.node_ownip;
-    swdoc["OWNGW"] = meshcom_settings.node_owngw;
-    swdoc["OWNMS"] = meshcom_settings.node_ownms;
+        swdoc["GW"] = meshcom_settings.node_gw;     // IP GW Address
+        swdoc["AP"] = bWIFIAP;
+        swdoc["DNS"] = meshcom_settings.node_dns;
+        swdoc["SUB"] = meshcom_settings.node_subnet;
+        swdoc["OWNIP"] = meshcom_settings.node_ownip;
+        swdoc["OWNGW"] = meshcom_settings.node_owngw;
+        swdoc["OWNMS"] = meshcom_settings.node_ownms;
+        swdoc["EUDP"] = bEXTUDP;
+        swdoc["EUDPIP"] = meshcom_settings.node_extern;
 
  */
 export interface WifiSettings {
@@ -215,7 +258,9 @@ export interface WifiSettings {
     SUB: string,
     OWNIP: string,
     OWNGW: string,
-    OWNMS: string
+    OWNMS: string,
+    EUDP: boolean,
+    EUDPIP: string
 }
 
 // Node Settings interface

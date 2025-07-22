@@ -7,7 +7,8 @@ import {
   IonTabBar,
   IonTabButton,
   IonTabs,
-  setupIonicReact
+  setupIonicReact,
+  isPlatform
 } from '@ionic/react';
 import { IonReactRouter } from '@ionic/react-router';
 import { chatboxEllipses, bluetooth, settings, globe, move, informationCircleOutline } from 'ionicons/icons';
@@ -54,6 +55,7 @@ import { useEffect } from 'react';
 import { App } from '@capacitor/app';
 
 import DataBaseService from './DBservices/DataBaseService';
+import { EdgeToEdge } from '@capawesome/capacitor-android-edge-to-edge-support';
 
 
 
@@ -62,9 +64,32 @@ setupIonicReact();
 const Appl: React.FC = () => {
   
 
+    // set background for the edge to edge support header
+  const setBackgroundColor = async () => {
+    await EdgeToEdge.setBackgroundColor({ color: '#000000' });
+    //await StatusBar.setStyle({ style: Style.Light });
+  };
 
   // set initial app is axctive state and add event listener
   useEffect(() => {
+
+    // set the edge to edge background color when darkmode is enabled
+    if(isPlatform('android')) {
+      const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+      if (isDarkMode) {
+        console.log('Dark mode is enabled');
+        // set the background color for the edge to edge support
+        setBackgroundColor().then(() => {
+          console.log("Edge to Edge Background Color set to black");
+        }).catch((error) => {
+          console.log(1, "Error setting Edge to Edge Background Color: " + error);
+        });
+      } else {
+        console.log('Light mode is enabled');
+      }
+    }
+
     // init DB
     const initDB = async () => {
       console.log('Initializing Database');

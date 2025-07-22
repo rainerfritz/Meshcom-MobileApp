@@ -35,6 +35,7 @@ import NotifyMsgState from '../store/NotifyMsg';
 import LogS from '../utils/LogService';
 
 
+
 export interface ScanRes {
   devName:string,
   rssi_:string,
@@ -169,6 +170,7 @@ const Tab1: React.FC = () => {
       await BleClient.openLocationSettings();
     }
   }
+
 
   
 
