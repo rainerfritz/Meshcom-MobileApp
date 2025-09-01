@@ -4,7 +4,7 @@ import {MsgType, PosType} from '../utils/AppInterfaces';
 
 export const test_msgs : MsgType [] =
   [
-    {
+    /*{
         timestamp:0,
         msgNr:1,
         msgTime:"12:00:00",
@@ -51,7 +51,7 @@ export const test_msgs : MsgType [] =
         ack:0,
         isDM:0,
         notify:0
-    }
+    }*/
   ]
 
 

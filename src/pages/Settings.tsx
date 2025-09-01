@@ -8,7 +8,7 @@ import { useStoreState } from 'pullstate';
 import { DevIDStore } from '../store';
 import { getDevID, getBLEconnStore, getConfigStore, getScanResult } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
-import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings } from '../utils/AppInterfaces';
+import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1 } from '../utils/AppInterfaces';
 import { iosTransitionAnimation, RangeValue } from '@ionic/core';
 import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle, send } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
@@ -28,6 +28,8 @@ import MheardStaticStore from '../utils/MheardStaticStore';
 import AprsSettingsStore from '../store/AprSettingsStore';
 import { usePhoneGps } from '../utils/PhoneGps';
 import WxDataStore from '../store/WxData';
+import SensorSettingsS1Store from '../store/SensorSettingsS1';
+import { set } from 'date-fns';
 
 
 
@@ -62,6 +64,8 @@ const Tab2: React.FC = () => {
 
   // sensor settings from store
   const sensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, s => s.sensorSettings);
+
+  const sensorSettingsS1_s:SensorSettingsS1 = SensorSettingsS1Store.useState(s => s.sensorSettingsS1);
 
   // aprs settings from store
   const aprs_settings_s = AprsSettingsStore.useState(s => s.aprsSettings);
@@ -169,6 +173,7 @@ const Tab2: React.FC = () => {
   const [s811_color, set811_color] = useState<string>("primary");
   const [onewire_color, setOnewire_color] = useState<string>("primary");
   const [aht20_color, setAht20_color] = useState<string>("primary");
+  const [sht21_color, setSht21_color] = useState<string>("primary");
 
   // I2C Scanresult
   const scanResult = useStoreState(ScanI2CStore, getScanResult);
@@ -396,8 +401,14 @@ const Tab2: React.FC = () => {
     } else {
       setAht20_color("danger");
     }
+    // set sht21 color based on sensor settings
+    if(sensorSettingsS1_s.SHT && sensorSettingsS1_s.SHTF || !sensorSettingsS1_s.SHT){
+      setSht21_color("primary");
+    } else {
+      setSht21_color("danger");
+    }
 
-  },[sensorSettings_s]);
+  },[sensorSettings_s, sensorSettingsS1_s]);
 
 
 
@@ -563,6 +574,10 @@ const Tab2: React.FC = () => {
 
         // send the aprssym to node
         sendTxtCmd("setAprsChars");
+
+        setAlHeader("APRS Symbol set!");
+        setAlMsg("Setting saved to node!");
+        setShAlertCard(true);
 
       }
 
@@ -775,6 +790,10 @@ const Tab2: React.FC = () => {
             console.log("APRS CMD: " + cmt_str_);
             cmd_ = "--atxt " + cmt_str_;
             aprsCmtRef.current!.value = "";
+
+            setAlHeader("APRS Comment set!");
+            setAlMsg("Setting saved to node!");
+            setShAlertCard(true);
           }
         }
         break;
@@ -903,7 +922,14 @@ const Tab2: React.FC = () => {
         if (nodeSettings.WS) {
           cmd_ = "--webserver off";
         } else {
-          cmd_ = "--webserver on";
+          // check if wifi ssid is longer than 0 and not none
+          if (config_s.wifi_ssid.length > 0 && config_s.wifi_ssid !== "none") {
+            cmd_ = "--webserver on";
+          } else {
+            setAlHeader("Wifi Settings not set!");
+            setAlMsg("Please set a valid Wifi SSID and PW!");
+            setShAlertCard(true);
+          }
         }
         break;
       }
@@ -1065,6 +1091,50 @@ const Tab2: React.FC = () => {
       case "extUdpIP": {
         cmd_ = ext_udp_IP_str.current;
         console.log("Ext UDP IP CMD to node: " + cmd_);
+        break;
+      }
+
+      // rest wifi ssid and pwd
+      case "RST_WIFI_SSID_PW": {
+        console.log("Resetting Wifi SSID and PW to none");
+        cmd_ = "--setssid none --setpwd none";
+        setAlHeader("Wifi Settings reset!");
+        setAlMsg("Wifi Settings reset to none! Will reboot in 15s.");
+        setShAlertCard(true);
+        break;
+      }
+
+      // reset aprs name
+      case "RST_APRS_NAME": {
+        console.log("Resetting APRS Name to none");
+        cmd_ = "--setname none";
+        break;
+      }
+
+      // reset aprs comment
+      case "RST_APRS_COMMENT": {
+        console.log("Resetting APRS Comment to none");
+        cmd_ = "--atxt none";
+        break;
+      }
+
+      // reset fixed ip settings
+      case "RST_FIXED_IP": {
+        console.log("Resetting Fixed IP Settings to none");
+        cmd_ = "--setownip none --setownms none --setowngw none";
+        setAlHeader("Fixed IP Settings reset!");
+        setAlMsg("Fixed IP Settings reset to none! Will reboot in 15s.");
+        setShAlertCard(true);
+        break;  
+      }
+
+      // sht-21 sensor on off
+      case "sht21": {
+        if(sensorSettingsS1_s.SHT){
+          cmd_ = "--sht21 off";
+        } else {
+          cmd_ = "--sht21 on";
+        }
         break;
       }
     }
@@ -1516,6 +1586,10 @@ const Tab2: React.FC = () => {
 
       console.log("Time in ms: " + Date.now());
       sendTxtCmd("setGroup");
+
+      setAlHeader("Group Settings set!");
+      setAlMsg("Group Settings saved to node!");
+      setShAlertCard(true);
       
     }
   }
@@ -1798,10 +1872,15 @@ const Tab2: React.FC = () => {
               <div>
                 <IonText id="wifi-text">WiFi Settings</IonText>
               </div>
-              <div>
-                <IonButton size="small" fill="outline" color='success' onClick={() => setWifiSetting()}>
-                  <IonIcon icon={checkmarkCircle} ></IonIcon>
-                </IonButton>
+              <div className='rst-set-btns'>
+                <div>
+                  <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_WIFI_SSID_PW")}>RST</IonButton>
+                </div>
+                <div>
+                  <IonButton size="small" fill="outline" color='success' onClick={() => setWifiSetting()}>
+                    <IonIcon icon={checkmarkCircle} ></IonIcon>
+                  </IonButton>
+                </div>
               </div>
             </div>
             <IonItem>
@@ -1856,14 +1935,19 @@ const Tab2: React.FC = () => {
               <div>
                 <IonText id="wifi-text">APRS Comment</IonText>
               </div>
-              <div>
-                <IonButton size="small" fill="outline" color='success' onClick={() => setAPRScomment()}>
-                  <IonIcon icon={checkmarkCircle} ></IonIcon>
-                </IonButton>
+              <div className='rst-set-btns'>
+                <div>
+                  <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_APRS_COMMENT")}>RST</IonButton>
+                </div>
+                <div>
+                  <IonButton size="small" fill="outline" color='success' onClick={() => setAPRScomment()}>
+                    <IonIcon icon={checkmarkCircle} ></IonIcon>
+                  </IonButton>
+                </div>
               </div>
             </div>
             <IonItem>
-              <IonInput ref={aprsCmtRef} label='Set Comment' labelPlacement="floating" type='text' maxlength={MAX_APRS_CMT_CHARS}></IonInput>
+              <IonInput value={aprs_settings_s.ATXT} ref={aprsCmtRef} label='Set Comment' labelPlacement="floating" type='text' maxlength={MAX_APRS_CMT_CHARS}></IonInput>
             </IonItem>
           </div>
 
@@ -1875,9 +1959,16 @@ const Tab2: React.FC = () => {
                 <IonText id="wifi-text">APRS Name</IonText>
               </div>
               <div>
-                <IonButton size="small" fill="outline" color='success' onClick={() => setNameSetting()}>
-                  <IonIcon icon={checkmarkCircle} ></IonIcon>
-                </IonButton>
+                <div className='rst-set-btns'>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_APRS_NAME")}>RST</IonButton>
+                  </div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setNameSetting()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
               </div>
             </div>
             <IonItem>
@@ -1984,7 +2075,7 @@ const Tab2: React.FC = () => {
                   <IonInput value={grp5} onIonInput={(ev) => grp5Changed(ev)} label='Set Group 6' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
                 <div className='resetGrpBtn txt-left flex-row'>
-                    <IonButton fill='solid' slot='start' size="small" onClick={() => resetGrpCall()}>Reset Groups</IonButton>
+                    <IonButton fill='outline' slot='start' size="small" color='success' onClick={() => resetGrpCall()}>RST</IonButton>
                     <IonButton size="small" fill="outline" color='success' onClick={() => setGroupSettings()}>
                       <IonIcon icon={checkmarkCircle} ></IonIcon>
                     </IonButton>
@@ -2096,6 +2187,9 @@ const Tab2: React.FC = () => {
                   </div>
                   <div>
                     <IonButton expand="block" fill={config_s.lps33_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("lps33")}>LPS33</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={sensorSettingsS1_s.SHT ? 'solid' : 'outline'} slot='start' color={sht21_color} onClick={() => sendTxtCmd("sht21")}>SHT21</IonButton>
                   </div>
                 </div>
               </div>
@@ -2229,10 +2323,15 @@ const Tab2: React.FC = () => {
                   <div>
                     <IonText id="wifi-text">IP Address</IonText>
                   </div>
-                  <div>
-                    <IonButton size="small" fill="outline" color='success' onClick={() => setFixedIP()}>
-                      <IonIcon icon={checkmarkCircle} ></IonIcon>
-                    </IonButton>
+                  <div className='rst-set-btns'>
+                    <div>
+                      <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_FIXED_IP")}>RST</IonButton>
+                    </div>
+                    <div>
+                      <IonButton size="small" fill="outline" color='success' onClick={() => setFixedIP()}>
+                        <IonIcon icon={checkmarkCircle} ></IonIcon>
+                      </IonButton>
+                    </div>
                   </div>
                 </div>
                 <IonItem>

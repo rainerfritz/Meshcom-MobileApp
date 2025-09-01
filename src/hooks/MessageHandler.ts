@@ -40,7 +40,7 @@ import WxDataStore from '../store/WxData';
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
 import { useRef } from 'react';
-import { PosType, MsgType, ConfType, MheardType, SensorSettings, WxData, GpsData, WifiSettings, InfoData, NodeSettings, AprsSettings, Mheard } from '../utils/AppInterfaces';
+import { PosType, MsgType, ConfType, MheardType, SensorSettings, WxData, GpsData, WifiSettings, InfoData, NodeSettings, AprsSettings, Mheard, SensorSettingsS1 } from '../utils/AppInterfaces';
 import ConfigObject from '../utils/ConfigObject';
 import DatabaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
@@ -51,6 +51,7 @@ import MheardStaticStore from '../utils/MheardStaticStore';
 import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
 import AprsSettingsStore from '../store/AprSettingsStore';
+import SensorSettingsS1Store from '../store/SensorSettingsS1';
 
 
 export function useMSG() {
@@ -1385,6 +1386,23 @@ export function useMSG() {
                                 }
 
                                 return (new_mheard);
+                            }
+
+                            case "S1": {
+                                LogS.log(0, "Sensor Settings S1 received!");
+                                // update the SensorSettingsS1Store with the new settings
+
+                                const sensor_settings_s1:SensorSettingsS1 = json_data;
+                                console.log("Sensor Settings S1: " + JSON.stringify(sensor_settings_s1));
+                                console.log("INA226: " + sensor_settings_s1.INA226);
+                                console.log("SHUNT: " + sensor_settings_s1.SHUNT);
+                                console.log("IMAX: " + sensor_settings_s1.IMAX);
+                                console.log("SAMP: " + sensor_settings_s1.SAMP);
+
+                                SensorSettingsS1Store.update(s => {
+                                    s.sensorSettingsS1 = sensor_settings_s1;
+                                });
+                                break;
                             }
 
                             case "CONFFIN": {

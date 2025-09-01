@@ -100,14 +100,35 @@ export function useBLE() {
         }
     }
 
-    
+    // timesync function
+    const syncTimestampToDevice = async (deviceId: string): Promise<void> => {
+        try {
+            const ts = Math.trunc(Date.now() / 1000);
+            console.log("TimeSync: sending Timestamp to device:", deviceId, ts);
+
+            const len_ts = 6;
+            const ts_buffer = new ArrayBuffer(len_ts);
+            const view = new DataView(ts_buffer);
+            view.setUint8(0, len_ts);
+            view.setUint8(1, 0x20);
+            view.setInt32(2, ts, true);
+
+            await sendDV(view, deviceId);
+        } catch (error) {
+            console.error("TimeSync error:", error);
+        }
+    };
+
+
+
     return {
 
         sendSTRtoNode,
         sendDV,
         sendTxtCmdNode,
         updateDevID,
-        updateBLEConnected
+        updateBLEConnected,
+        syncTimestampToDevice
     }
 
 }

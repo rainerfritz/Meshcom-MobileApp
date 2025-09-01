@@ -44,8 +44,7 @@ const defaultSensorSettings:SensorSettings = {
     OW: false,
     OWPIN: 0,
     OWF: false,
-    USERPIN: 0,
-    INA226: false
+    USERPIN: 0
 }
 
 const SensorSettingsStore = new Store({

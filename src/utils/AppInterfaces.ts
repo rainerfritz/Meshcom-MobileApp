@@ -228,8 +228,26 @@ export interface SensorSettings {
     OW: boolean,
     OWPIN: number,
     OWF: boolean,
-    USERPIN: number,
-    INA226: boolean
+    USERPIN: number
+}
+
+
+// sensor settings additional interface
+/**
+ * sensdoc1["TYP"] = "S1";
+        sensdoc1["INA226"] = ina226_found;
+        sensdoc1["SHUNT"] = meshcom_settings.node_shunt;
+        sensdoc1["IMAX"] = meshcom_settings.node_imax;
+        sensdoc1["SAMP"] = meshcom_settings.node_isamp;
+ */
+export interface SensorSettingsS1 {
+    TYP: string,
+    INA226: boolean,
+    SHUNT: number,
+    IMAX: number,
+    SAMP: number,
+    SHT: boolean,
+    SHTF: boolean
 }
 
 // wifi settings interface

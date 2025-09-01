@@ -4,7 +4,7 @@ import { IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardT
 import { useStoreState } from 'pullstate';
 import { getConfigStore, getGpsData, getSensorSettings, getWxData, getDevID, getBLEconnStore, getAppActiveState } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
-import { ConfType, GpsData, WxData, SensorSettings } from '../utils/AppInterfaces';
+import { ConfType, GpsData, WxData, SensorSettings, SensorSettingsS1 } from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
 import AppActiveState  from '../store/AppActive';
 import { DevIDStore } from '../store';
@@ -18,7 +18,7 @@ import SensorSettingsStore from '../store/SensorSettings';
 import BLEconnStore from '../store/BLEconnected';
 import ConfigObject from '../utils/ConfigObject';
 import LogS from '../utils/LogService';
-
+import SensorSettingsS1Store from '../store/SensorSettingsS1';
 
 
 
@@ -38,6 +38,8 @@ const Info: React.FC = () => {
 
   // Sensor Settings
   const SensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, getSensorSettings);
+
+  const sensorSettingsS1_s:SensorSettingsS1 = SensorSettingsS1Store.useState(s => s.sensorSettingsS1);
 
   // app active state
   const app_active_s:boolean = AppActiveState.useState(s => s.active);
@@ -184,10 +186,10 @@ const Info: React.FC = () => {
       </IonHeader>
       <IonContent className="ion-padding">
         <IonHeader collapse="condense">
+          <IonToolbar>
+            <IonTitle size="large">Info</IonTitle>
+          </IonToolbar>
         </IonHeader>
-        <IonToolbar>
-          <IonTitle size="large">Info</IonTitle>
-        </IonToolbar>
 
         <div className="info-box">
           <div className='iBox'>
@@ -239,7 +241,7 @@ const Info: React.FC = () => {
                 <div>GasRes: {wx_s.GAS.toFixed(1)} k&Omega;</div>
                 <div>eCO2: {wx_s.CO2.toFixed(0)} ppm</div>
                 <div>Alt Press: {wx_s.ALT.toFixed(0)} m</div>
-                {SensorSettings_s.INA226 && <>
+                {sensorSettingsS1_s.INA226 && <>
                   <div>VBUS: {wx_s.VBUS.toFixed(1)} V</div>
                   <div>VSHUNT: {wx_s.VSHUNT.toFixed(1)} V</div>
                   <div>VAMP: {wx_s.VAMP.toFixed(1)} A</div>
@@ -256,7 +258,7 @@ const Info: React.FC = () => {
                 <div>OneWire: {SensorSettings_s.OW ? 'ON' : 'OFF'}</div>
                 <div>OneWire Pin: {SensorSettings_s.OWPIN}</div>
                 <div>AHT-20: {SensorSettings_s.AHT ? 'ON' : 'OFF'}</div>
-                { SensorSettings_s.INA226 ? <div>INA226: ON</div> : <div>INA226: OFF</div>}
+                { sensorSettingsS1_s.INA226 ? <div>INA226: ON</div> : <div>INA226: OFF</div>}
               </div>
             </div>
           </IonCardContent>

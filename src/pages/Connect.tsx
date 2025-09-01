@@ -33,6 +33,7 @@ import { usePhoneGps } from '../utils/PhoneGps';
 import DataBaseService from '../DBservices/DataBaseService';
 import NotifyMsgState from '../store/NotifyMsg';
 import LogS from '../utils/LogService';
+import TimeSyncManager from '../utils/TimeSyncService';
 
 
 
@@ -61,6 +62,7 @@ const Tab1: React.FC = () => {
   const RAK_BLE_UART_TXCHAR = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
   const LEGACY_DFU_SERVICE = '00001530-1212-efde-1523-785feabcd123';
   const BLE_WAIT_SCAN = 5000; // sleep time we wait for a scan to finish
+  const TIMESYNC_INTERVAL = 20000; // 20 seconds interval for timesync
 
   const [scanDevices, setScanDevices] = useState<ScanRes[]>([]);
   const ble_scan_devices = useRef<ScanRes[]>([]); // scan devices ref for reconnect etc.
@@ -112,7 +114,7 @@ const Tab1: React.FC = () => {
 
 
   // send and parse message functions
-  const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected} = useBLE();
+  const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected, syncTimestampToDevice} = useBLE();
   const {parseMsg, convBARRtoStr} = useMSG();
 
   // phonegps hook
@@ -245,6 +247,19 @@ const Tab1: React.FC = () => {
       console.log("Connect - App active: " + isAppActive_Ref.current);
       console.log("Recon Count: " + recon_count.current);
       LogS.log(0, "App active: " + isAppActive_Ref.current);
+
+      // if the app goes to background stop the timesync
+      if (!isAppActive_Ref.current) {
+        TimeSyncManager.getInstance().stopSync();
+        LogS.log(0, "Connect - App in background, stop TimeSync");
+      } else {
+        // if the app comes back to foreground we start the timesync again
+        if (connFlag) {
+          LogS.log(0, "Connect - App active and connected, start TimeSync");
+          TimeSyncManager.getInstance().startSync(devID_s, TIMESYNC_INTERVAL);
+        }
+      }
+
       // check if we are in reconnect state
       console.log("Reconnect State: " + doReconnect.current);
       if (doReconnect.current) {
@@ -709,6 +724,10 @@ const Tab1: React.FC = () => {
   async function onDisconnect(deviceId: string) {
 
     LogS.log(0,"Device disconnected callback from DevID: " + deviceId);
+
+    // stop Timesync Service
+    TimeSyncManager.getInstance().stopSync();
+
     const newConnState = false;
     setConnFlag(newConnState);
 
@@ -940,16 +959,10 @@ const Tab1: React.FC = () => {
         console.log("Connect - GPS Error: " + error);
       });
 
-      // send a timestamp to phone via dataview. 4byte unix timestamp in seconds
-      const ts = Math.trunc(Date.now() / 1000);
-      console.log("Connect - sending Timestamp to Phone: " + ts);
-      const len_ts = 6;
-      const ts_buffer = new ArrayBuffer(len_ts);
-      const view1 = new DataView(ts_buffer);
-      view1.setUint8(0, len_ts);
-      view1.setUint8(1, 0x20);
-      view1.setInt32(2, ts, true);
-      sendTimestamp(view1, devID_s);
+      // start the TimeSync Manager
+      LogS.log(0, "Connect - Starting TimeSyncManager with Timestamp: ");
+      TimeSyncManager.getInstance().initialize(syncTimestampToDevice);
+      TimeSyncManager.getInstance().startSync(devID_s, TIMESYNC_INTERVAL);
 
       // set the can notify flag to true
       canNotify.current = true;

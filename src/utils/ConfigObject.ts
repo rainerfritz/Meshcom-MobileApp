@@ -10,12 +10,12 @@ class ConfClass{
 
     constructor() {
         this.infodata_obj = {
+            TYP: "I",
             FWVER: "0.0.0",
             CALL: "",
             ID: "00",
             HWID: 0,
             MAXV: 0,
-            ATXT: "none",
             BLE: "none",
             BATP: 0,
             BATV: 0,
@@ -29,6 +29,7 @@ class ConfClass{
             BOOST: false
         }
         this.own_position = {
+            TYP: "G",
             LAT: 0,
             LON: 0,
             ALT: 0,
