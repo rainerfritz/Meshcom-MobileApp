@@ -1,17 +1,16 @@
-import { IonButton, IonActionSheet, IonContent, IonFooter, IonGrid, IonHeader, IonIcon, IonInput, IonItem, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonModal, IonCheckbox } from '@ionic/react';
+import { IonButton, IonActionSheet, IonContent, IonFooter, IonGrid, IonHeader, IonIcon, IonInput, IonItem, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonModal, IonCheckbox, IonSegmentButton, IonLabel, IonSegment, IonTextarea } from '@ionic/react';
 import React,{ useEffect, useRef, useState, createRef } from 'react';
-import {ConfType, MsgType, ChatFilterSettingsType} from '../utils/AppInterfaces';
+import {ConfType, MsgType, InfoData} from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
 import './Chat.css';
 import { useStoreState } from 'pullstate';
 import { DevIDStore } from '../store';
-import { getConfigStore, getDevID, getLastNotifyID, getMsgStore, getPlatformStore } from '../store/Selectors';
+import { getConfigStore, getDevID, getMsgStore, getPlatformStore } from '../store/Selectors';
 import MsgStore from '../store/MsgStore';
 import ConfigStore from '../store/ConfStore';
 import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle, settings} from 'ionicons/icons';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import PlatformStore from '../store/PlatformStore';
-import LastNotifyID from '../store/LastNotifyID';
 import { Keyboard } from '@capacitor/keyboard';
 import { Clipboard } from '@capacitor/clipboard';
 import type { OverlayEventDetail } from '@ionic/core';
@@ -24,10 +23,10 @@ import DMfrmMapStore from '../store/DMfrmMap';
 import NotifyMsgState from '../store/NotifyMsg';
 import { useHistory } from "react-router";
 import LogS from '../utils/LogService';
-import ChatFilterSettingsStore from '../store/ChatFilterSettings';
 import DatabaseService from '../DBservices/DataBaseService';
 import { set } from 'date-fns';
 import AlertCard from '../components/AlertCard';
+import NodeInfoStore from '../store/NodeInfoStore';
 
 
 const Tab3: React.FC = () => {
@@ -59,6 +58,9 @@ const Tab3: React.FC = () => {
   // reference to text input field
   const textInputRef = useRef<HTMLIonInputElement>(null);
 
+  // reference to the textarea input field
+  const textAreaInputRef = useRef<HTMLIonTextareaElement>(null);
+
   // get platform info
   const thisPlatform = useStoreState(PlatformStore, getPlatformStore);
 
@@ -68,15 +70,14 @@ const Tab3: React.FC = () => {
   // flag we got a new message to fire notification - has full new message object
   const notifyMsg_s = useStoreState(NotifyMsgState, s => s.notifyMsg);
 
-  // store last MsgID in gloabl State to avoid notifies on page change
-  const lastNotifyID_s = useStoreState(LastNotifyID, getLastNotifyID);
-
   // state to show callsign on DMs at Textinput
   const [shCallsign, setShCallsign] = useState<boolean>(false);
   // inputref for to callsign
   const callsignInputRef = useRef<HTMLIonInputElement>(null);
   // remember last dm to callsign
   const toCallsign_ = useRef<string>("");
+  // last callsign when DM segment was active
+  const lastDMcallsign = useRef<string>("");
 
   // longpress event
   const MIN_PRESS_TIME = 800; //ms
@@ -109,19 +110,19 @@ const Tab3: React.FC = () => {
   // remember if this page is active
   const thisPageActive = useRef<boolean>(false);
 
-  // ionmodal for filter settings
-  const [showSettingModal, setShowSettingModal] = useState(false);
-  // chat filter settings from the store are set from the Database on App start 
-  const chatFilterSettings_ref = useRef<ChatFilterSettingsType>({chat_filter_dm_grp:0, chat_filter_dm:0, chat_filter_grp:0, chat_filter_grp_num1:0, chat_filter_grp_num2:0, chat_filter_grp_num3:0, chat_filter_call_sign:""});
-  const [filter_dm_grp_s, setFilter_dm_grp_s] = useState<boolean>(false);
-  const [filter_dm_s, setFilter_dm_s] = useState<boolean>(false);
-  const [filter_grp_s, setFilter_grp_s] = useState<boolean>(false);
-
   // alertcard handling
   const [shAlertCard, setShAlertCard] = useState<boolean>(false);
   const [alHeader, setAlHeader] = useState<string>("");
   const [alMsg, setAlMsg] = useState<string>("");
 
+  // Nodeinfostore to get the groups subscribed on the node
+  const nodeInfo_s:InfoData = useStoreState(NodeInfoStore, s => s.infoData);
+
+  // Segment chat filter state
+  const [segmentFilter, setSegmentFilter] = useState<string>("ALL");
+
+  // Flag that we send an DM. This should be active when we are in DM segment and in a group segment
+  const [sendDMGrpFlag, setSendDMGrpFlag] = useState<boolean>(false);
 
 
 
@@ -132,9 +133,20 @@ const Tab3: React.FC = () => {
     thisPageActive.current = true;
     // set the bottom reference
     if(bottomRef.current === null) bottomRef.current = document.getElementById('bottomRefID') as HTMLDivElement;
-    // get the chat filter settings from the DB Service and set them in the ref
-    chatFilterSettings_ref.current = DatabaseService.getChatFilters();
-    console.log("Chat Filter Tab Settings from DB: "+ JSON.stringify(chatFilterSettings_ref.current));
+
+    // check if we have segmentbuttons to set from initialChatSegmentMarkers
+    const initSegs: string[] = ConfigObject.getInitChatSegmentMarkers();
+    if(initSegs.length > 0){
+      initSegs.forEach(seg => {
+        if(seg !== segmentFilter){
+          const Seqgmentbutton = document.getElementById(seg) as HTMLIonSegmentButtonElement;
+          if(Seqgmentbutton){
+            Seqgmentbutton.classList.add('segmentbutton_green');
+          }
+        }
+      });
+      ConfigObject.clearInitChatSegmentMarkers();
+    }
 
     //const devid = devID_s;
     //updateDevID(devid);
@@ -207,9 +219,11 @@ const Tab3: React.FC = () => {
     }
     console.log("Sending Message");
     console.log("shCallsign: " + shCallsign);
+    console.log("sendDMGrpFlag: " + sendDMGrpFlag);
     let isDM = false;
     let toCallsign_str_u = "";
 
+    // only active when we are in the DM segment
     if (shCallsign) {
       // check if we have a DM and remember callsign. we only send the DM when the DM button is active
       if (callsignInputRef !== null) {
@@ -229,6 +243,7 @@ const Tab3: React.FC = () => {
 
               toCallsign_str_u = toCallsign_str.toUpperCase();
               toCallsign_.current = toCallsign_str_u;
+              lastDMcallsign.current = toCallsign_str_u;
               isDM = true;
 
               console.log("To Callsign: " + toCallsign_str_u);
@@ -238,11 +253,18 @@ const Tab3: React.FC = () => {
         }
       }
     }
+
+    // sending of group message when in group segment as DM
+    if(sendDMGrpFlag){
+      isDM = true;
+      toCallsign_str_u = toCallsign_.current;
+      console.log("Group Message to Group: " + toCallsign_str_u);
+    }
     
 
-    if(textInputRef !== null){
+    if(textAreaInputRef !== null){
       
-      const txMsg = textInputRef.current!.value;
+      const txMsg = textAreaInputRef.current!.value;
 
       if(txMsg){
 
@@ -291,7 +313,8 @@ const Tab3: React.FC = () => {
             //addMsgQueue(final_msg_str);
 
             // clear input
-            textInputRef.current!.value = "";
+            //textInputRef.current!.value = "";
+            textAreaInputRef.current!.value = "";
 
             // close dm input
             //setShCallsign(false);
@@ -386,13 +409,11 @@ const Tab3: React.FC = () => {
   useEffect(() => {
 
     if (msgArr_s && msgArr_s.length > 0) {
-      console.log("Chat - New Message Arrived");
-
-      // check if filter is set to show only DMs and update the filtered messages
-      //updateFilteredDMonly(shDMonly.current);
+      console.log("Chat - New Message Arrived");          
 
       scrollToBottom();
     }
+
   }, [msgArr_s]);
 
 
@@ -402,6 +423,32 @@ const Tab3: React.FC = () => {
     console.log(notifyMsg_s);
     const notify_title = "New Message from " + notifyMsg_s.fromCall;
     notifyMsgUser(notify_title, notifyMsg_s.msgTXT);
+
+    // if a message arrives in another segment than the current one set the background color class to indicate new message
+    if (notifyMsg_s.isDM !== undefined && notifyMsg_s.isGrpMsg !== undefined) {
+
+      let msgType = "ALL";
+
+      if (notifyMsg_s.isDM === 0 && notifyMsg_s.isGrpMsg === 0) {
+        msgType = "ALL";
+      }
+      else if (notifyMsg_s.isDM === 1 && notifyMsg_s.isGrpMsg === 0) {
+        msgType = "DM";
+      }
+      else if (notifyMsg_s.isGrpMsg === 1 && notifyMsg_s.isDM === 1) {
+        msgType = notifyMsg_s.grpNum.toString();
+      }
+
+      console.log("Message Type: " + msgType);
+
+      if (msgType !== segmentFilter) {
+        const Seqgmentbutton = document.getElementById(msgType) as HTMLIonSegmentButtonElement;
+        if (Seqgmentbutton) {
+          Seqgmentbutton.classList.add('segmentbutton_green');
+        }
+      }
+    }
+
   }, [notifyMsg_s.msgNr]);
 
 
@@ -534,8 +581,15 @@ const Tab3: React.FC = () => {
         
         console.log("DM to Callsign: " + selCall);
         toCallsign_.current = selCall;
+        lastDMcallsign.current = selCall;
         setIsOpenAS(false);
+
+        if(segmentFilter === "ALL"){
+          handleSegmentChange("DM", false);
+        }
+
         setShCallsign(true);
+        
       }
     }
     setIsOpenAS(false);
@@ -593,69 +647,6 @@ const Tab3: React.FC = () => {
       history.push("/connect");
   }
 
-  // Chat Filters / Settings
-  // show only DMs/grp messages
-  const handleShowOnlyDMGrp = () => {
-    if(!ble_connected){
-      handleNoDbConnFilter();
-      return;
-    }
-    if(chatFilterSettings_ref.current.chat_filter_dm_grp === 1){
-      chatFilterSettings_ref.current.chat_filter_dm_grp = 0;
-    } else {
-      chatFilterSettings_ref.current.chat_filter_dm_grp = 1;
-      chatFilterSettings_ref.current.chat_filter_dm = 0;
-      chatFilterSettings_ref.current.chat_filter_grp = 0;
-      setFilter_grp_s(false);
-      setFilter_dm_s(false);
-    }
-    setFilter_dm_grp_s(!filter_dm_grp_s);
-    console.log("Chat Filter Settings updated: " + JSON.stringify(chatFilterSettings_ref.current));
-
-    DatabaseService.setChatFilters(chatFilterSettings_ref.current);
-  }
-
-  // show only DM messages
-  const handleShowOnlyDM = () => {
-    if(!ble_connected){
-      handleNoDbConnFilter();
-      return;
-    }
-    if(chatFilterSettings_ref.current.chat_filter_dm === 1){
-      chatFilterSettings_ref.current.chat_filter_dm = 0;
-    } else {
-      chatFilterSettings_ref.current.chat_filter_dm = 1;
-      chatFilterSettings_ref.current.chat_filter_dm_grp = 0;
-      chatFilterSettings_ref.current.chat_filter_grp = 0;
-      setFilter_dm_grp_s(false);
-      setFilter_grp_s(false);
-    }
-    setFilter_dm_s(!filter_dm_s);
-    console.log("Chat Filter Settings updated: " + JSON.stringify(chatFilterSettings_ref.current));
-
-    DatabaseService.setChatFilters(chatFilterSettings_ref.current);
-  }
-
-  // show only Group Messages
-  const handleShowOnlyGrp = () => {
-    if(!ble_connected){
-      handleNoDbConnFilter();
-      return;
-    }
-    if(chatFilterSettings_ref.current.chat_filter_grp === 1){
-      chatFilterSettings_ref.current.chat_filter_grp = 0;
-    } else {
-      chatFilterSettings_ref.current.chat_filter_grp = 1;
-      chatFilterSettings_ref.current.chat_filter_dm = 0;
-      chatFilterSettings_ref.current.chat_filter_dm_grp = 0;
-      setFilter_dm_s(false);
-      setFilter_dm_grp_s(false);
-    }
-    setFilter_grp_s(!filter_grp_s);
-    console.log("Chat Filter Settings updated: " + JSON.stringify(chatFilterSettings_ref.current));
-
-    DatabaseService.setChatFilters(chatFilterSettings_ref.current);
-  }
 
   // handle no Db connection in offline mode - no node connected
   const handleNoDbConnFilter = () => {
@@ -668,6 +659,44 @@ const Tab3: React.FC = () => {
   const modalDidDismiss = () => {
     scrollToBottom();
   }
+
+  // CHAT FIlterING with Segment Buttons
+  // handle the Seqgmentbutton for chat filtering and set filtering in the database-service
+  const handleSegmentChange = (val: string, isGrp: boolean) => {
+    console.log("Chat Filter Change to: " + val);
+    setSegmentFilter(val);
+
+    DatabaseService.setChatFilters(val);
+
+    // if we are in ALL segment close the to callsign input field and reset DM flag
+    if (val === "ALL") {
+      setShCallsign(false);
+      setSendDMGrpFlag(false);
+    }
+
+    // show the to callsign input only if we are in DM segment
+    if (val === "DM") {
+      // remember the last DM callsign
+      toCallsign_.current = lastDMcallsign.current;
+      setShCallsign(true);
+    } else {
+      setShCallsign(false);
+    }
+
+    // if we are in a group segment set the DM flag and set the destination call to the group number
+    if (isGrp) {
+      setSendDMGrpFlag(true);
+      toCallsign_.current = val;
+    } else {
+      setSendDMGrpFlag(false);
+    }
+
+    // remove the green background class from the segment button as we are now in this segment
+    const Seqgmentbutton = document.getElementById(val) as HTMLIonSegmentButtonElement;
+    if(Seqgmentbutton){
+      Seqgmentbutton.classList.remove('segmentbutton_green');
+    }
+  }
   
 
 
@@ -675,20 +704,47 @@ const Tab3: React.FC = () => {
     <IonPage>
       <IonHeader>
         <IonToolbar>
-          <IonTitle>Messages</IonTitle>
-          <IonButtons slot="end">
-              <IonButton onClick={() => setShowSettingModal(true)}>
-                <IonIcon icon={settings} />
-              </IonButton>
-            </IonButtons>
+            <IonSegment value={segmentFilter} scrollable={true}>
+              <IonSegmentButton value="ALL" onClick={() => handleSegmentChange("ALL", false)} id='ALL'>
+                <IonLabel>All</IonLabel>
+              </IonSegmentButton>
+              <IonSegmentButton value="DM" onClick={() => handleSegmentChange("DM", false)} id='DM'>
+                <IonLabel>DM</IonLabel>
+              </IonSegmentButton>
+              {nodeInfo_s.GCB0 !== 0 &&
+              <IonSegmentButton value={nodeInfo_s.GCB0.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB0.toString(), true)} id={nodeInfo_s.GCB0.toString()}>
+                <IonLabel>{nodeInfo_s.GCB0.toString()}</IonLabel>
+              </IonSegmentButton>
+              }
+              {nodeInfo_s.GCB1 !== 0 &&
+              <IonSegmentButton value={nodeInfo_s.GCB1.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB1.toString(), true)} id={nodeInfo_s.GCB1.toString()}>
+                <IonLabel>{nodeInfo_s.GCB1.toString()}</IonLabel>
+              </IonSegmentButton>
+              }
+              {nodeInfo_s.GCB2 !== 0 &&
+              <IonSegmentButton value={nodeInfo_s.GCB2.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB2.toString(), true)} id={nodeInfo_s.GCB2.toString()}>
+                <IonLabel>{nodeInfo_s.GCB2.toString()}</IonLabel>
+              </IonSegmentButton>
+              }
+              {nodeInfo_s.GCB3 !== 0 &&
+              <IonSegmentButton value={nodeInfo_s.GCB3.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB3.toString(), true)} id={nodeInfo_s.GCB3.toString()}>
+                <IonLabel>{nodeInfo_s.GCB3.toString()}</IonLabel>
+              </IonSegmentButton>
+              }
+              {nodeInfo_s.GCB4 !== 0 &&
+              <IonSegmentButton value={nodeInfo_s.GCB4.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB4.toString(), true)} id={nodeInfo_s.GCB4.toString()}>
+                <IonLabel>{nodeInfo_s.GCB4.toString()}</IonLabel>
+              </IonSegmentButton>
+              }
+              {nodeInfo_s.GCB5 !== 0 &&
+              <IonSegmentButton value={nodeInfo_s.GCB5.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB5.toString(), true)} id={nodeInfo_s.GCB5.toString()}>
+                <IonLabel>{nodeInfo_s.GCB5.toString()}</IonLabel>
+              </IonSegmentButton>
+              }
+            </IonSegment>
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
-        <IonHeader collapse="condense">
-          <IonToolbar>
-            <IonTitle size="large">Messages</IonTitle>
-          </IonToolbar>
-        </IonHeader>
 
         <IonAlert
           isOpen={shDiscoCard}
@@ -718,12 +774,12 @@ const Tab3: React.FC = () => {
                 action: 'copy',
               },
             },
-            {
+            ...((segmentFilter === "ALL" || segmentFilter === "DM") ? [{
               text: 'Direct Message',
               data: {
                 action: 'sendDM',
               },
-            },
+            }] : []),
             {
               text: 'Cancel',
               role: 'cancel',
@@ -735,24 +791,6 @@ const Tab3: React.FC = () => {
           onDidDismiss={({ detail }) => handleActionSheet(detail)}
         ></IonActionSheet>
 
-        <IonModal isOpen={showSettingModal} onIonModalDidDismiss={()=>modalDidDismiss()}>
-          <IonHeader>
-            <IonToolbar>
-              <IonTitle>Chat Settings</IonTitle>
-              <IonButtons slot="end">
-                <IonButton onClick={() => setShowSettingModal(false)}>Close</IonButton>
-              </IonButtons>
-            </IonToolbar>
-          </IonHeader>
-          <IonContent className="ion-padding">
-            <div id="spacer_settings_top"/>
-              <IonCheckbox checked={filter_dm_grp_s} onIonChange={()=>handleShowOnlyDMGrp()}>Show only DMs/Group Msgs</IonCheckbox>
-            <div id="spacer_modal"/>
-              <IonCheckbox checked={filter_dm_s} onIonChange={()=>handleShowOnlyDM()}>Show only DM Msgs</IonCheckbox>
-            <div id="spacer_modal"/>
-              <IonCheckbox checked={filter_grp_s} onIonChange={()=>handleShowOnlyGrp()}>Show only Group Msgs</IonCheckbox>
-          </IonContent>
-        </IonModal>
 
         <div id="spacer-top"></div>
         <div id="msg-box" >
@@ -840,23 +878,14 @@ const Tab3: React.FC = () => {
       <IonFooter>
         <div className="send-text">
 
-          <div className='dm_btn'>
-            <IonButton 
-              slot='start' 
-              onClick={() => setShCallsign(!shCallsign)} 
-              size='small' 
-              fill="outline" {...{ color: shCallsign ? "success" : "primary" }}>DM</IonButton>
-          </div>
-
           <div className='input_bar'>
             {shCallsign &&
-              <div className="dm_call">
+              <div className="textarea_field">
                 <IonItem>
                   <IonInput
                     className='custominput'
                     ref={callsignInputRef}
-                    label='To Callsign or Group'
-                    labelPlacement="stacked"
+                    placeholder='To Callsign'
                     type='text'
                     maxlength={MAX_CHAR_CALLSIGN}
                     onIonInput={(ev) => handleInput(ev)}
@@ -866,18 +895,19 @@ const Tab3: React.FC = () => {
                 </IonItem>
               </div>}
 
-            <div>
+            <div className="textarea_field">
               <IonItem>
-                <IonInput
-                  className='custominput'
-                  ref={textInputRef}
-                  label='Type Message'
-                  labelPlacement="stacked"
-                  type='text'
-                  autocorrect='on'
-                  disabled={!ble_connected}
-                  maxlength={MAX_CHAR_TEXTINPUT}>
-                </IonInput>
+                <IonTextarea 
+                  className='customTextAreaInput'
+                  ref={textAreaInputRef}
+                  autoCorrect='on' 
+                  spellcheck={true} 
+                  autoGrow={true} 
+                  maxlength={MAX_CHAR_TEXTINPUT} 
+                  rows={1}
+                  placeholder='Type Message'
+                  disabled={!ble_connected}>
+                </IonTextarea>
               </IonItem>
             </div>
           </div>

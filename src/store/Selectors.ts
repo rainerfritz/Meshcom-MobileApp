@@ -17,8 +17,6 @@ export const getRedirChatStore = createSelector(getState, state => state.redirCh
 
 export const getPlatformStore = createSelector(getState, state => state.platformState);
 
-export const getLastNotifyID = createSelector(getState, state => state.lastMsgID);
-
 export const getAppActiveState = createSelector(getState, state => state.AppActiveState);
 
 export const getMheards = createSelector(getState, state => state.mhArr);

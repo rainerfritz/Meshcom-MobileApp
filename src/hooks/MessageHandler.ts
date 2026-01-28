@@ -40,7 +40,7 @@ import WxDataStore from '../store/WxData';
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
 import { useRef } from 'react';
-import { PosType, MsgType, ConfType, MheardType, SensorSettings, WxData, GpsData, WifiSettings, InfoData, NodeSettings, AprsSettings, Mheard, SensorSettingsS1 } from '../utils/AppInterfaces';
+import { PosType, MsgType, ConfType, MheardType, SensorSettings, WxData, GpsData, WifiSettings, InfoData, NodeSettings, AprsSettings, Mheard, SensorSettingsS1, WifiSettings2 } from '../utils/AppInterfaces';
 import ConfigObject from '../utils/ConfigObject';
 import DatabaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
@@ -52,6 +52,7 @@ import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
 import AprsSettingsStore from '../store/AprSettingsStore';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
+import WifiSettingsStore2 from '../store/WiFiSettings2';
 
 
 export function useMSG() {
@@ -873,10 +874,11 @@ export function useMSG() {
                             alt_press: alt_press_
                         }
 
+                        LogS.log(0, `Pos Msg from ${from_callsign_} via ${via_str}: Lat ${lat_degree_final} Lon ${lon_degree_final} Alt ${alt_nr_meter}m`);
                         return (newPosDB);
 
                     } else {
-                        console.log("Discarding Pos Msg! Lat or Long not provided.")
+                        LogS.log(1, "Discarding Pos Msg! Lat or Long not provided.")
                     }
                 }
 
@@ -1226,6 +1228,35 @@ export function useMSG() {
                                     s.config.wifi_ssid = wifi_settings.SSID;
                                 });
 
+                                break;
+                            }
+
+                            case "S2": {
+                                LogS.log(0, "Wifi Settings 2 received!");
+                                /**
+                                    TYP: string,
+                                    OWNIP: string,
+                                    OWNGW: string,
+                                    OWNMS: string,
+                                    OWNDNS: string,
+                                    EUDP: boolean,
+                                    EUDPIP: string,
+                                    TXPOW: number
+                                */
+                                const wifi_settings_2:WifiSettings2 = json_data;
+                                
+                                console.log("Wifi Own IP: " + wifi_settings_2.OWNIP);
+                                console.log("Wifi Own GW: " + wifi_settings_2.OWNGW);
+                                console.log("Wifi Own MS: " + wifi_settings_2.OWNMS);
+                                console.log("Wifi Own DNS: " + wifi_settings_2.OWNDNS);
+                                console.log("Wifi EUDP: " + wifi_settings_2.EUDP);
+                                console.log("Wifi EUDP IP: " + wifi_settings_2.EUDPIP);
+                                console.log("Wifi TX Power: " + wifi_settings_2.TXPOW);
+
+                                // update wifi settings 2 store
+                                WifiSettingsStore2.update(s => {
+                                    s.wifiSettings2 = wifi_settings_2;
+                                });
                                 break;
                             }
 

@@ -38,7 +38,7 @@
     margin-bottom: 3%;
 }
 .input_bar{
-    width: 65%;
+    width: 85%;
 }
 .dm_btn{
     padding-left: 3%;
@@ -47,7 +47,11 @@
 }
 
 ion-input.custominput{
-    height: 65px;
+    height: 60px;
+    font-size: 1.1em;
+    --padding-end: 7px;
+}
+ion-textarea.customTextAreaInput{
     font-size: 1.1em;
     --padding-end: 7px;
 }
@@ -164,4 +168,10 @@ ion-input.custominput{
 #spacer_modal{
     height: 25px;
     width: auto;
+}
+.segmentbutton_green{
+    --background: green;
+}
+.textarea_field{
+    margin-top: 5px;
 }

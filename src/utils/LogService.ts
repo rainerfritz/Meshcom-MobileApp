@@ -10,7 +10,7 @@
 class LogS {
 
     public static logs: string[] = [];
-    private static MAX_LOG_MSGS = 200;
+    private static MAX_LOG_MSGS = 250;
     
     /**
      * @param level 0 -> log, 1 -> error

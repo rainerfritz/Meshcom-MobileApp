@@ -26,6 +26,9 @@
 #define TBEAM_SUPREME_L76K 47
 #define ESP32_S3_EBYTE_E22 48
 #define TLORA_PAGER 49
+#define T_DECK_PRO 50
+#define T_BEAM_1W 51
+
  */
 
 
@@ -53,5 +56,7 @@ export const hwtable: {[key: number]: string} = {
     46:"T-DECK+",
     47:"TBEAM Supreme",
     48:"EBYTE E22 S3",
-    49:"TLORA Pager"
+    49:"TLORA Pager",
+    50:"T-DECK Pro",
+    51:"TBEAM 1W"
 } 

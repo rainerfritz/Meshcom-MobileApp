@@ -524,7 +524,7 @@ const Tab1: React.FC = () => {
       }
 
       //connect to device
-      await BleClient.connect(devID, (deviceId) => onDisconnect(deviceId));
+      await BleClient.connect(devID, (deviceId) => onDisconnect(deviceId),{timeout:15000});
       
       //get services of the device
       const services = await BleClient.getServices(devID);
@@ -552,7 +552,7 @@ const Tab1: React.FC = () => {
             if (res !== undefined && 'msgTXT' in res) {
               // escape all quotation marks
               LogS.log(0,"Connect - Txt Msg: " + res.msgTXT);
-              await DatabaseService.writeTxtMsg(res);
+              await DatabaseService.writeTxtMsg(res, !canNotify.current);  // we need to send a flag if this is during init load on node connection or normal msg for marking segmentbuttons in chat
               // do the notification if from another callsign
               const curr_call = ConfigObject.getConf().CALL;
               if (res.fromCall !== curr_call && (!res.msgTXT.startsWith("--")) && canNotify.current) {
@@ -621,12 +621,16 @@ const Tab1: React.FC = () => {
         try{
           await sendDV(view1, devID);
         } catch (error) {
-          LogS.log(1, "Error on sending Hello Msg: " + error);
-          setAlHeader("Error on setting up connection! Remove node from BLE Devices and pair newly!");
-          setAlMsg("Err: " + error);
-          setShAlertCard(true);
-          setShowProgrBar(false);
-          setShLoadConf(false);
+          // if the pairing / bonding process is running on android we get here an error if we try to send data
+          // but the hello message is then received on the node
+          if(pltfrm.current !== "android"){
+            LogS.log(1, "Error on sending Hello Msg: " + error);
+            setAlHeader("Error on setting up connection! Remove node from BLE Devices and pair newly!");
+            setAlMsg("Err: " + error);
+            setShAlertCard(true);
+            setShowProgrBar(false);
+            setShLoadConf(false);
+          }
           return;
         }
         
@@ -940,24 +944,18 @@ const Tab1: React.FC = () => {
   // BLE Config Fin state
   useEffect(() => {
     if (nodeConfFin > 0) {
-      console.log("Node Config Finished!");
+      console.log("Connect - Node Config Finished!");
       setShLoadConf(false);
 
-      // get the current position from GPS and send the position to the node if unconfigured
-      getGpsLocation().then((res) => {
-        console.log("Connect - GPS Location: " + res.lat + " " + res.lon + " " + res.alt);
-        if (config_s.callSign === "XX0XXX-00" || config_s.callSign === "" || (config_s.lat === 0 && config_s.lon === 0)) {
-          console.log("Connect - Unconfigured Node or no Location set!");
-          // give the node a default location from phone
-          console.log("Connect - Setting Initial Position from Phone");
-          setCurrPosGPS(true);
-          // delay to give the node time to save the position
-          setTimeout(() => { }, 2000);
-        }
-
-      }).catch((error) => {
-        console.log("Connect - GPS Error: " + error);
-      });
+      // set the current position from GPS and send the position to the node if unconfigured
+      if (config_s.callSign === "XX0XXX-00" || config_s.callSign === "" || (config_s.lat === 0 && config_s.lon === 0)) {
+        LogS.log(0, "Connect - Unconfigured Node or no Location set!");
+        // give the node a default location from phone
+        LogS.log(0, "Connect - Setting Initial Position from Phone");
+        setCurrPosGPS();
+        // delay to give the node time to save the position
+        setTimeout(() => { }, 2000);
+      }
 
       // start the TimeSync Manager
       LogS.log(0, "Connect - Starting TimeSyncManager with Timestamp: ");
@@ -974,14 +972,7 @@ const Tab1: React.FC = () => {
     }
   }, [nodeConfFin]);
 
-  const sendTimestamp = async (view1:DataView, devID:string) => {
-    // send a timestamp to phone via dataview. 4byte unix timestamp in seconds
-    try {
-      await sendDV(view1, devID);
-    } catch (error) {
-      LogS.log(1, "Error on sending Timestamp: " + error);
-    }
-  }
+
 
 
 

@@ -253,17 +253,12 @@ export interface SensorSettingsS1 {
 // wifi settings interface
 /**
  * swdoc["TYP"] = "SW";
- * swdoc["SSID"] = meshcom_settings.node_ssid;
- * swdoc["IP"] = meshcom_settings.node_ip;
-        swdoc["GW"] = meshcom_settings.node_gw;     // IP GW Address
-        swdoc["AP"] = bWIFIAP;
-        swdoc["DNS"] = meshcom_settings.node_dns;
-        swdoc["SUB"] = meshcom_settings.node_subnet;
-        swdoc["OWNIP"] = meshcom_settings.node_ownip;
-        swdoc["OWNGW"] = meshcom_settings.node_owngw;
-        swdoc["OWNMS"] = meshcom_settings.node_ownms;
-        swdoc["EUDP"] = bEXTUDP;
-        swdoc["EUDPIP"] = meshcom_settings.node_extern;
+ * swdoc["SSID"] = cBLEName;
+    swdoc["IP"] = meshcom_settings.node_ip;
+    swdoc["GW"] = meshcom_settings.node_gw;     // IP GW Address
+    swdoc["AP"] = bWIFIAP;
+    swdoc["DNS"] = meshcom_settings.node_dns;
+    swdoc["SUB"] = meshcom_settings.node_subnet;
 
  */
 export interface WifiSettings {
@@ -273,12 +268,29 @@ export interface WifiSettings {
     GW: string,
     AP: boolean,
     DNS: string,
-    SUB: string,
+    SUB: string
+}
+
+// wifi settings 2nd interface
+/**
+ * swdoc2["TYP"] = "S2";
+        swdoc2["OWNIP"] = meshcom_settings.node_ownip;
+        swdoc2["OWNGW"] = meshcom_settings.node_owngw;
+        swdoc2["OWNMS"] = meshcom_settings.node_ownms;
+        swdoc2["OWNDNS"] = meshcom_settings.node_owndns;
+        swdoc2["EUDP"] = bEXTUDP;
+        swdoc2["EUDPIP"] = meshcom_settings.node_extern;
+        swdoc2["TXPOW"] = meshcom_settings.node_wifi_power;
+ */
+export interface WifiSettings2 {
+    TYP: string,
     OWNIP: string,
     OWNGW: string,
     OWNMS: string,
+    OWNDNS: string,
     EUDP: boolean,
-    EUDPIP: string
+    EUDPIP: string,
+    TXPOW: number
 }
 
 // Node Settings interface
@@ -300,6 +312,7 @@ export interface WifiSettings {
     nsetdoc["GWNPOS"] = bGATEWAY_NOPOS;
     nsetdoc["MHONLY"] = bMHONLY;
     nsetdoc["NOALL"] = bNoMSGtoALL;
+    nsetdoc["GWS"] = meshcom_settings.node_gwsrv;
  */
 export interface NodeSettings {
     TYP: string,
@@ -318,7 +331,8 @@ export interface NodeSettings {
     MBW: number,
     GWNPOS: boolean,
     MHONLY: boolean,
-    NOALL: boolean
+    NOALL: boolean,
+    GWS: string
 }
 
 // APRS Settings interface 

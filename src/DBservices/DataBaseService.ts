@@ -4,7 +4,7 @@ import {
     CapacitorSQLite,
   } from "@capacitor-community/sqlite";
 
-import { MsgType, PosType, ChatFilterSettingsType } from "../utils/AppInterfaces";
+import { MsgType, PosType } from "../utils/AppInterfaces";
 import PosiStore from "../store/PosiStore";
 import MsgStore from "../store/MsgStore";
 import { format, sub } from "date-fns";
@@ -19,17 +19,9 @@ class DatabaseService {
     static dbName = 'meshcom.db';
     static isInit = false;
     static MAX_AGE_TXT_MSG = 3; // 3 days
-    static MAX_AGE_POS = 5; // 5 days
+    static MAX_AGE_POS = 3; // 3 days
     static cached_positions: PosType[] = [];
-    private static chatFilters: ChatFilterSettingsType = {
-        chat_filter_dm_grp: 0,
-        chat_filter_dm: 0,
-        chat_filter_grp: 0,
-        chat_filter_grp_num1: 0,
-        chat_filter_grp_num2: 0,
-        chat_filter_grp_num3: 0,
-        chat_filter_call_sign: ""
-    };
+    private static chatFilterSetting: string = 'ALL';
     
 
     static async initializeDatabase() {
@@ -117,54 +109,15 @@ class DatabaseService {
                 });
             }
 
-            // app settings table
+            // delete the old ChatFilterTable
             if (DatabaseService.db) {
                 await DatabaseService.db.execute(`
-                    CREATE TABLE IF NOT EXISTS ChatFilterTable (
-                        id INTEGER PRIMARY KEY NOT NULL, 
-                        chat_filter_dm_grp INTEGER NOT NULL DEFAULT 0,
-                        chat_filter_dm INTEGER NOT NULL DEFAULT 0,
-                        chat_filter_grp INTEGER NOT NULL DEFAULT 0,
-                        chat_filter_grp_num1 INTEGER NOT NULL DEFAULT 0,
-                        chat_filter_grp_num2 INTEGER NOT NULL DEFAULT 0,
-                        chat_filter_grp_num3 INTEGER NOT NULL DEFAULT 0,
-                        chat_filter_call_sign TEXT NOT NULL DEFAULT ""
-                    )
-                `).catch((err) => {
-                    LogS.log(1, 'Error creating ChatFilterTable:' + err);
+                    DROP TABLE IF EXISTS ChatFilterTable;
+                `).then(() => {
+                    LogS.log(0, 'Old ChatFilterTable deleted');
+                }).catch((err) => {
+                    LogS.log(1, 'Error deleting ChatFilterTable:' + err);
                 });
-            }
-
-            // check if we have the ChatFilterTable table. Read the chat filter settings and update the store
-            if (DatabaseService.db) {
-                const res = await DatabaseService.db.query('SELECT * FROM ChatFilterTable WHERE id = 0;');
-                if (!res.values || res.values.length === 0) {
-                    LogS.log(0,'ChatFilterTable table is empty, adding default values');
-                    await DatabaseService.db.execute('INSERT INTO ChatFilterTable (id, chat_filter_dm_grp, chat_filter_dm, chat_filter_grp, chat_filter_grp_num1, chat_filter_grp_num2, chat_filter_grp_num3, chat_filter_call_sign) VALUES (0,0,0,0,0,0,0,"");');
-                    // update the chat filter settings
-                    this.chatFilters = {
-                        chat_filter_dm_grp: 0,
-                        chat_filter_dm: 0,
-                        chat_filter_grp: 0,
-                        chat_filter_grp_num1: 0,
-                        chat_filter_grp_num2: 0,
-                        chat_filter_grp_num3: 0,
-                        chat_filter_call_sign: ""
-                    };
-                } else {
-                    LogS.log(0,'ChatFilterTable table is available, reading values');
-                    this.chatFilters = {
-                        chat_filter_dm_grp: res.values[0].chat_filter_dm_grp,
-                        chat_filter_dm: res.values[0].chat_filter_dm,
-                        chat_filter_grp: res.values[0].chat_filter_grp,
-                        chat_filter_grp_num1: res.values[0].chat_filter_grp_num1,
-                        chat_filter_grp_num2: res.values[0].chat_filter_grp_num2,
-                        chat_filter_grp_num3: res.values[0].chat_filter_grp_num3,
-                        chat_filter_call_sign: res.values[0].chat_filter_call_sign
-                    };
-
-                    LogS.log(0, "DB Chat Filter Settings: " + JSON.stringify(this.chatFilters));
-                }
             }
 
             if (DatabaseService.db) {
@@ -244,7 +197,7 @@ class DatabaseService {
     }
 
     // writeTxtMsg to the TextMessages table
-    static async writeTxtMsg(msg: MsgType) {
+    static async writeTxtMsg(msg: MsgType, isInitMsg: boolean) {
         msg.msgTXT = DatabaseService.escapeQuotes(msg.msgTXT);
 
         if (DatabaseService.db) {
@@ -268,6 +221,16 @@ class DatabaseService {
                 const escTxtMsgs = DatabaseService.escapeQuotesInArr(txtMsgs);
                 //apply filters, updates the store then
                 DatabaseService.applyFilters(escTxtMsgs);
+                // if this is not during init load from node connection, we need to mark the segment buttons in chat page
+                if (isInitMsg) {
+                    if (msg.isDM === 0 && msg.isGrpMsg === 0) {
+                        ConfigObject.addInitChatSegmentMarker("ALL");
+                    } else if (msg.isDM === 1 && msg.isGrpMsg === 0) {
+                        ConfigObject.addInitChatSegmentMarker("DM");
+                    } else if (msg.isDM === 1 && msg.isGrpMsg === 1) {
+                        ConfigObject.addInitChatSegmentMarker(msg.grpNum.toString());
+                    }
+                }
             } catch (error) {
                 LogS.log(1, 'Error writing text message:' + error);
             }
@@ -614,43 +577,44 @@ class DatabaseService {
     }
 
     // FILTERING
-    // set the dm_grp filter
-    static async setChatFilters(filterSettings: ChatFilterSettingsType) {
-        this.chatFilters = filterSettings;
+    // set the filterstring based on the seqgment button selection in the Chat page
+    static async setChatFilters(filterStr: string) {
+
+        this.chatFilterSetting = filterStr;
+        console.log('DB Setting Chat Filters to:', filterStr);
         try {
             const msgs = await this.getTextMessages();
             this.applyFilters(msgs);
             // write the settings to the ChatFilterTable table
-            await this.writeChatFilterSettings();
+            //await this.writeChatFilterSettings();
         } catch (error) {
             LogS.log(1, 'DB Error setting DM/Grp filter:' + error);
         }
     }
 
-    // get the filtersettings
-    static getChatFilters() {
-        return this.chatFilters;
-    }
 
     // function to apply the filters and return the filtered messages. Also show always own send messages
     static applyFilters(msgs: MsgType[]) {
         let filtered_msgs:MsgType[] = [];
-        if (this.chatFilters.chat_filter_dm_grp === 1) {
+        const currentCallsign = ConfigObject.getConf().CALL;
+
+        // apply the chat filter string
+        if (this.chatFilterSetting === 'ALL') {
             filtered_msgs = msgs.filter((msg) => {
-                return msg.isDM === 1 || msg.isGrpMsg === 1 || (msg.fromCall === ConfigObject.getConf().CALL);
-            }
-        )} else if (this.chatFilters.chat_filter_dm === 1) {
+                return (msg.fromCall === currentCallsign && msg.isDM !== 1 && msg.isGrpMsg !== 1) || (msg.isDM !== 1 && msg.isGrpMsg !== 1);
+            });
+        } else if (this.chatFilterSetting === 'DM') {
             filtered_msgs = msgs.filter((msg) => {
-                return msg.isDM === 1 && !msg.isGrpMsg || (msg.fromCall === ConfigObject.getConf().CALL);
+                return (msg.isDM === 1 && msg.isGrpMsg !== 1) || (msg.fromCall === currentCallsign && msg.isDM === 1 && msg.isGrpMsg !== 1);
+            });
+        } else {
+            // check if it is a group number
+            const _grpNum = parseInt(this.chatFilterSetting);
+            if (!isNaN(_grpNum)) {
+                filtered_msgs = msgs.filter((msg) => {
+                    return msg.isGrpMsg === 1 && msg.grpNum === _grpNum || (msg.fromCall === currentCallsign && msg.isGrpMsg === 1 && msg.grpNum === _grpNum);
+                });
             }
-        )}
-        else if (this.chatFilters.chat_filter_grp === 1) {
-            filtered_msgs = msgs.filter((msg) => {
-                return msg.isGrpMsg === 1 || (msg.fromCall === ConfigObject.getConf().CALL);
-            }
-        )}
-        else {
-            filtered_msgs = msgs;
         }
         
         // update the store
@@ -659,17 +623,9 @@ class DatabaseService {
         });
     }
 
-    // set the Chat Filter Settings in the ChatFilterTable table
-    private static async writeChatFilterSettings() {
-        if (DatabaseService.db) {
-            try {
-                await DatabaseService.db.execute(`UPDATE ChatFilterTable SET chat_filter_dm_grp = ${this.chatFilters.chat_filter_dm_grp}, chat_filter_dm = ${this.chatFilters.chat_filter_dm}, chat_filter_grp = ${this.chatFilters.chat_filter_grp}, chat_filter_grp_num1 = ${this.chatFilters.chat_filter_grp_num1}, chat_filter_grp_num2 = ${this.chatFilters.chat_filter_grp_num2}, chat_filter_grp_num3 = ${this.chatFilters.chat_filter_grp_num3}, chat_filter_call_sign = "${this.chatFilters.chat_filter_call_sign}" WHERE id = 0;`);
-            } catch (error) {
-                LogS.log(1, 'Error setting Chat Filter Settings:' + error);
-            }
-        } else {
-            LogS.log(1, 'Error setting Chat Filter Settings. Database not open.');
-        }
+    // get the current chat filter setting string
+    static getChatFilterSetting() {
+        return this.chatFilterSetting;
     }
 
 }

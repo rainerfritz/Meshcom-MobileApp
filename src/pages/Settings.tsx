@@ -8,7 +8,7 @@ import { useStoreState } from 'pullstate';
 import { DevIDStore } from '../store';
 import { getDevID, getBLEconnStore, getConfigStore, getScanResult } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
-import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1 } from '../utils/AppInterfaces';
+import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1, WifiSettings2 } from '../utils/AppInterfaces';
 import { iosTransitionAnimation, RangeValue } from '@ionic/core';
 import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle, send } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
@@ -29,7 +29,9 @@ import AprsSettingsStore from '../store/AprSettingsStore';
 import { usePhoneGps } from '../utils/PhoneGps';
 import WxDataStore from '../store/WxData';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
+import WifiSettingsStore2 from '../store/WiFiSettings2';
 import { set } from 'date-fns';
+import GpsDataStore from '../store/GpsData';
 
 
 
@@ -58,6 +60,7 @@ const Tab2: React.FC = () => {
 
   // wifii settings from store
   const wifiSettings_s:WifiSettings = WifiSettingsStore.useState(s => s.wifiSettings);
+  const wifiSettings2_s:WifiSettings2 = WifiSettingsStore2.useState(s => s.wifiSettings2);
 
   // node settings
   const nodeSettings:NodeSettings = useStoreState(NodeSettingsStore, s => s.nodeSettings);
@@ -82,6 +85,10 @@ const Tab2: React.FC = () => {
   // weatherdata
   const wxData_s = WxDataStore.useState(s => s.wxData);
   
+  // Position Data from store
+  const ownPosData = GpsDataStore.useState(s => s.gpsData);
+
+
 
 
 
@@ -244,9 +251,11 @@ const Tab2: React.FC = () => {
   const ip_addr_ref = useRef<HTMLIonInputElement>(null);
   const ip_gw_ref = useRef<HTMLIonInputElement>(null);
   const ip_snm_ref = useRef<HTMLIonInputElement>(null);
+  const ip_dns_ref = useRef<HTMLIonInputElement>(null);
   const ip_addr_str =useRef<string>("");
   const ip_gw_str = useRef<string>("");
   const ip_snm_str = useRef<string>("");
+  const ip_dns_str = useRef<string>("");
   // make the regex simple with 4 octets and each octet is 0-255
   const ip_regex = /^(?!0\d)(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(?!0\d)(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
@@ -270,8 +279,29 @@ const Tab2: React.FC = () => {
   const ext_udp_IP_str = useRef<string>("");
   const ext_udp_enable_str = useRef<string>("");
 
+  // Manual Position Settings Input Refs
+  const [shManualPos, setShManualPos] = useState<boolean>(false);
+  const manual_lat_ref = useRef<HTMLIonInputElement>(null);
+  const manual_lon_ref = useRef<HTMLIonInputElement>(null);
+  const manual_alt_ref = useRef<HTMLIonInputElement>(null);
+  const manual_pos_cmd = useRef<string>("");
 
+  // Gateway Server Settings and Selection
+  const [shGwServerSet, setShGwServerSet] = useState<boolean>(false);
+  const gw_srv = NodeSettingsStore.useState(s => s.nodeSettings.GWS);
+  const gw_srv_str = useRef<string>("OE");
+  const gw_srv_table : {[key: string]: string} = {
+    "OE": "Austria-OE",
+    "DL": "Germany-DL"};
+  const gw_srv_list = Object.keys(gw_srv_table);
+  const setGwServerNode = (gw_ev:string) => {
+    console.log("Setting Gateway Server: " + gw_ev);
+    gw_srv_str.current = gw_ev;
+    NodeSettingsStore.update(s => {
+      s.nodeSettings.GWS = gw_ev;
+    });}
 
+  
 
 
 
@@ -323,7 +353,7 @@ const Tab2: React.FC = () => {
   useEffect(()=>{
     LogS.log(0,"Settings Page NodeSettings updated");
     // set min max power based on hw
-    if(nodeInfo_s.HWID === 5 || nodeInfo_s.HWID >= 7 && nodeInfo_s.HWID <= 9 || nodeInfo_s.HWID >= 39 && nodeInfo_s.HWID <= 49) {
+    if(nodeInfo_s.HWID === 5 || nodeInfo_s.HWID >= 7 && nodeInfo_s.HWID <= 9 || nodeInfo_s.HWID >= 39) {
       minTXpwr.current = 2;
       maxTXpwr.current = 22;
     }
@@ -514,7 +544,7 @@ const Tab2: React.FC = () => {
   const setCurrentPosGPS = async () => {
     console.log("Setting Current Position GPS");
 
-    await setCurrPosGPS(false);
+    await setCurrPosGPS();
   };
 
 
@@ -923,12 +953,16 @@ const Tab2: React.FC = () => {
           cmd_ = "--webserver off";
         } else {
           // check if wifi ssid is longer than 0 and not none
-          if (config_s.wifi_ssid.length > 0 && config_s.wifi_ssid !== "none") {
-            cmd_ = "--webserver on";
+          if(nodeInfo_s.HWID !== 9){ // ESP32 only check
+            if (config_s.wifi_ssid.length > 0 && config_s.wifi_ssid !== "none") {
+              cmd_ = "--webserver on";
+            } else {
+              setAlHeader("Wifi Settings not set!");
+              setAlMsg("Please set a valid Wifi SSID and PW!");
+              setShAlertCard(true);
+            }
           } else {
-            setAlHeader("Wifi Settings not set!");
-            setAlMsg("Please set a valid Wifi SSID and PW!");
-            setShAlertCard(true);
+            cmd_ = "--webserver on";
           }
         }
         break;
@@ -980,10 +1014,16 @@ const Tab2: React.FC = () => {
 
       // change into safeboot OTA mode
       case "otaupdate": {
-        cmd_ = "--ota-update";
-        setAlHeader("Booting into OTA Mode!");
-        setAlMsg("On active Wifi connection access it after reboot via Web-Browser with " + nodeInfo_s.CALL + ".local or "+ wifiSettings_s.IP +" if in AP Mode: IP:192.168.4.1 or Meshcom-OTA.local");
-        setShAlertCard(true);
+        if(nodeInfo_s.HWID !== 9){ // ESP32 only check
+          cmd_ = "--ota-update";
+          setAlHeader("Booting into OTA Mode!");
+          setAlMsg("On active Wifi connection access it after reboot via Web-Browser with " + nodeInfo_s.CALL + ".local or "+ wifiSettings_s.IP +" if in AP Mode: IP:192.168.4.1 or Meshcom-OTA.local");
+          setShAlertCard(true);
+        } else {
+          setAlHeader("OTA Update not supported!");
+          setAlMsg("Only on ESP32 based boards available!");
+          setShAlertCard(true);
+        }
         break;
       }
 
@@ -1009,7 +1049,7 @@ const Tab2: React.FC = () => {
 
       // rx boost is only available on boards with a SX126x chip
       case "rxboost": {
-        if (nodeInfo_s.HWID === 5 || nodeInfo_s.HWID >= 7 && nodeInfo_s.HWID <= 9 || nodeInfo_s.HWID >= 39 && nodeInfo_s.HWID <= 49) {
+        if (nodeInfo_s.HWID === 5 || nodeInfo_s.HWID >= 7 && nodeInfo_s.HWID <= 9 || nodeInfo_s.HWID >= 39) {
           if (nodeInfo_s.BOOST) {
             cmd_ = "--setboostedgain off";
           } else {
@@ -1046,7 +1086,7 @@ const Tab2: React.FC = () => {
 
       // set fixed IP setting all at once
       case "setFixedIP": {
-        cmd_ = "--setownip " + ip_addr_str.current + " --setownms " + ip_snm_str.current + " --setowngw " + ip_gw_str.current;
+        cmd_ = "--setownip " + ip_addr_str.current + " --setownms " + ip_snm_str.current + " --setowngw " + ip_gw_str.current + " --setowndns " + ip_dns_str.current;
         console.log("IP CMD to node: " + cmd_);
         break;
       }
@@ -1121,7 +1161,7 @@ const Tab2: React.FC = () => {
       // reset fixed ip settings
       case "RST_FIXED_IP": {
         console.log("Resetting Fixed IP Settings to none");
-        cmd_ = "--setownip none --setownms none --setowngw none";
+        cmd_ = "--setownip none --setownms none --setowngw none --setowndns none";
         setAlHeader("Fixed IP Settings reset!");
         setAlMsg("Fixed IP Settings reset to none! Will reboot in 15s.");
         setShAlertCard(true);
@@ -1135,6 +1175,20 @@ const Tab2: React.FC = () => {
         } else {
           cmd_ = "--sht21 on";
         }
+        break;
+      }
+
+      // manual position setting
+      case "setManualPos": {
+        console.log("Setting Manual Position to node: " + manual_pos_cmd.current);
+        cmd_ = manual_pos_cmd.current;
+        break;
+      }
+
+      // Gw Server setting
+      case "setGWsrv": {
+        cmd_ = "--gateway srv " + gw_srv_str.current;
+        console.log("Gateway Server CMD to node: " + cmd_);
         break;
       }
     }
@@ -1332,18 +1386,21 @@ const Tab2: React.FC = () => {
     // check if the IP adresses are valid
     if(ip_addr_ref.current !== null && ip_addr_ref.current !== undefined &&
        ip_snm_ref.current !== null && ip_snm_ref.current !== undefined &&
-       ip_gw_ref.current !== null && ip_gw_ref.current !== undefined) {
+       ip_gw_ref.current !== null && ip_gw_ref.current !== undefined &&
+       ip_dns_ref.current !== null && ip_dns_ref.current !== undefined) {
 
       ip_addr_str.current = ip_addr_ref.current!.value!.toString();
       ip_snm_str.current = ip_snm_ref.current!.value!.toString();
       ip_gw_str.current = ip_gw_ref.current!.value!.toString();
+      ip_dns_str.current = ip_dns_ref.current!.value!.toString();
       console.log("IP Address: " + ip_addr_str.current);
       console.log("IP Subnet Mask: " + ip_snm_str.current);
       console.log("IP Gateway: " + ip_gw_str.current);
+      console.log("IP DNS: " + ip_dns_str.current);
 
       // check if the IP adresses are valid
-      if(ip_addr_str && ip_snm_str && ip_gw_str) {
-        if(ip_regex.test(ip_addr_str.current) && ip_regex.test(ip_snm_str.current) && ip_regex.test(ip_gw_str.current)) {
+      if(ip_addr_str && ip_snm_str && ip_gw_str && ip_dns_str) {
+        if(ip_regex.test(ip_addr_str.current) && ip_regex.test(ip_snm_str.current) && ip_regex.test(ip_gw_str.current) && ip_regex.test(ip_dns_str.current)) {
           // all IP adresses are valid
           console.log("IP Adresses are valid");
           // send the IP adresses to the node
@@ -1351,7 +1408,7 @@ const Tab2: React.FC = () => {
         } else {
           console.log("IP Adresses not valid!");
           setAlHeader("IP Adresses not valid!");
-          setAlMsg("Please enter a valid IP Address, Subnet Mask and Gateway!");
+          setAlMsg("Please enter a valid IP Address, Subnet Mask Gateway and DNS!");
           setShAlertCard(true);
         }
       }
@@ -1461,8 +1518,8 @@ const Tab2: React.FC = () => {
           setAlMsg("Please enter a valid IP Address for the Ext UDP IF!");
           setShAlertCard(true);
           // set the toggle back to false
-          WifiSettingsStore.update(s => {
-            s.wifiSettings.EUDP = false;
+          WifiSettingsStore2.update(s => {
+            s.wifiSettings2.EUDP = false;
           });
           return;
         }
@@ -1476,6 +1533,64 @@ const Tab2: React.FC = () => {
       setAlMsg("Ext UDP Interface disabled!");
       setShAlertCard(true);
     }
+  }
+
+  // Manual Position Settings ///////
+  const setManualPos = () => {
+    console.log("Setting Manual Position");
+    if(manual_lat_ref.current !== null && manual_lat_ref.current !== undefined &&
+        manual_lon_ref.current !== null && manual_lon_ref.current !== undefined &&
+        manual_alt_ref.current !== null && manual_alt_ref.current !== undefined) {
+
+      const lat_str = manual_lat_ref.current!.value!.toString();
+      const lon_str = manual_lon_ref.current!.value!.toString();
+      const alt_str = manual_alt_ref.current!.value!.toString();
+      console.log("Manual Lat: " + lat_str);
+      console.log("Manual Lon: " + lon_str);
+      console.log("Manual Alt: " + alt_str);
+
+      // check if the lat and lon are valid numbers
+      const lat_nr = +lat_str;
+      const lon_nr = +lon_str;
+      const alt_nr = +alt_str;
+
+      if(!isNaN(lat_nr) && !isNaN(lon_nr) && !isNaN(alt_nr)){
+        // check if the lat and lon are in valid range
+        if(lat_nr >= -90 && lat_nr <= 90 && lon_nr >= -180 && lon_nr <= 180 && alt_nr >= 0){
+          // all values are valid
+          console.log("Manual Position is valid");
+          const cmd_str = "--setlat " + lat_str + " --setlon " + lon_str + " --setalt " + alt_str;
+          console.log("Manual Position CMD: " + cmd_str);
+          manual_pos_cmd.current = cmd_str;
+          sendTxtCmd("setManualPos");
+          setAlHeader("Manual Position set!");
+          setAlMsg("Manual Position saved to node!");
+          setShAlertCard(true);
+        } else {
+          console.log("Manual Position not valid!");
+          setAlHeader("Manual Position not valid!");
+          setAlMsg("Please enter a valid Latitude (-90 to 90), Longitude (-180 to 180) and Altitude (>=0)!");
+          setShAlertCard(true);
+        }
+      } else {
+        console.log("Manual Position not valid!");
+        setAlHeader("Manual Position not valid!");
+        setAlMsg("Please enter a valid Latitude, Longitude and Altitude!");
+        setShAlertCard(true);
+      }
+
+    }
+  }
+
+
+
+  // send the GW server command to the node
+  const setGWsrvToNode = () => {
+    console.log("Setting Gateway Server to node: " + gw_srv_str.current);
+    sendTxtCmd("setGWsrv");
+    setAlHeader("Gateway Server set!");
+    setAlMsg("Gateway Server saved to node!");
+    setShAlertCard(true);
   }
 
 
@@ -1839,10 +1954,12 @@ const Tab2: React.FC = () => {
               <div>Wifi IP: {wifiSettings_s.IP}</div>
               <div>Wifi GW: {wifiSettings_s.GW}</div>
               <div>Wifi SNM: {wifiSettings_s.SUB}</div>
+              <div>WiFi DNS: {wifiSettings_s.DNS}</div>
               </>:<> 
               <div>ETH IP: {wifiSettings_s.IP}</div>
               <div>ETH GW: {wifiSettings_s.GW}</div>
               <div>ETH SNM: {wifiSettings_s.SUB}</div>
+              <div>ETH DNS: {wifiSettings_s.DNS}</div>
               </>}
               
             </div>
@@ -2013,6 +2130,42 @@ const Tab2: React.FC = () => {
           <div id="spacer-buttons" />
           <div className='txt-center'>
             <IonButton id="settings_button" fill='outline' slot='start' onClick={() => setCurrentPosGPS()}>Set Location - Phone GPS</IonButton>
+          </div>
+
+          <div id="spacer-buttons" />
+            {/*Manual Position Settings*/}
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shManualPos ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShManualPos(!shManualPos)} />
+              </div>
+              <IonText >Manual Location</IonText>
+            </div>
+            {shManualPos &&
+              <div className='setting_wrapper'>
+                <div className="flex-row mb-3">
+                  <div>
+                    <IonText className='mt-3 mb-3'>Latitude</IonText>
+                  </div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setManualPos()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={ownPosData.LAT} ref={manual_lat_ref} label='Set Latitude' labelPlacement="floating" type='text' maxlength={10} inputmode="text"></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Longitude</div>
+                    <IonItem>
+                      <IonInput value={ownPosData.LON} ref={manual_lon_ref} label='Set Longitude' labelPlacement="floating" type='text' maxlength={11} inputmode="text"></IonInput>
+                    </IonItem>
+                <div className='mt-3 mb-3'>Altitude (m)</div>
+                    <IonItem>
+                      <IonInput value={ownPosData.ALT} ref={manual_alt_ref} label='Set Altitude' labelPlacement="floating" type='text' maxlength={6} inputmode="text"></IonInput>
+                    </IonItem>
+              </div>
+            }
           </div>
 
           <div id="spacer-buttons" />
@@ -2235,6 +2388,31 @@ const Tab2: React.FC = () => {
             </> : <></>}
           </div>
 
+          <div id="spacer-buttons" />
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shGwServerSet ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShGwServerSet(!shGwServerSet)} />
+              </div>
+              <IonText>Gateway Server</IonText>
+            </div>
+            {shGwServerSet && 
+              <IonItem>
+              <IonSelect value={gw_srv} interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="GWSrv" onIonChange={(ev) => setGwServerNode(ev.detail.value)}>
+                {gw_srv_list.map((srv) => (
+                  <IonSelectOption key={srv} value={srv}>
+                    {gw_srv_table[srv]}
+                  </IonSelectOption>
+                ))}
+                
+              </IonSelect>
+              <IonButton size="small" fill="solid" color='success' onClick={() => setGWsrvToNode()}>
+                  <IonIcon icon={checkmarkCircle} ></IonIcon>
+                </IonButton><br></br>
+            </IonItem>
+            }
+          </div>
+
 
           <div id="spacer-buttons" />
           <div className='dropdown_arrow'>
@@ -2305,6 +2483,7 @@ const Tab2: React.FC = () => {
                       <IonInput value={wxData_s.TOFFO} ref={temp_ow_offset_ref} label='Set Onewire Offset' labelPlacement="floating" type='text' maxlength={5} inputmode="text"></IonInput>
                     </IonItem>
               </div>
+              
             }
           </div>
 
@@ -2335,15 +2514,19 @@ const Tab2: React.FC = () => {
                   </div>
                 </div>
                 <IonItem>
-                  <IonInput value={wifiSettings_s.OWNIP} ref={ip_addr_ref} label='Set IP Adress' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                  <IonInput value={wifiSettings2_s.OWNIP} ref={ip_addr_ref} label='Set IP Adress' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Subnet Mask</div>
                 <IonItem>
-                  <IonInput value={wifiSettings_s.OWNMS} ref={ip_snm_ref} label='Set NMS' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                  <IonInput value={wifiSettings2_s.OWNMS} ref={ip_snm_ref} label='Set NMS' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
                 <div className='mt-3 mb-3'>Gateway</div>
                 <IonItem>
-                  <IonInput value={wifiSettings_s.OWNGW} ref={ip_gw_ref} label='Set Gateway' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                  <IonInput value={wifiSettings2_s.OWNGW} ref={ip_gw_ref} label='Set Gateway' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>Gateway</div>
+                <IonItem>
+                  <IonInput value={wifiSettings2_s.OWNDNS} ref={ip_dns_ref} label='Set DNS' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
               </div>
             }
@@ -2371,10 +2554,10 @@ const Tab2: React.FC = () => {
                   </div>
                 </div>
                 <IonItem>
-                  <IonInput value={wifiSettings_s.EUDPIP} ref={ext_udp_ip_ref} label='Set UDP IP' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                  <IonInput value={wifiSettings2_s.EUDPIP} ref={ext_udp_ip_ref} label='Set UDP IP' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
                 <IonItem>
-                  <IonToggle enableOnOffLabels={true} checked={wifiSettings_s.EUDP} onIonChange={(ev) => enableExtUDP(ev)}>Enable</IonToggle>
+                  <IonToggle enableOnOffLabels={true} checked={wifiSettings2_s.EUDP} onIonChange={(ev) => enableExtUDP(ev)}>Enable</IonToggle>
                 </IonItem>
               </div>
             </>}
