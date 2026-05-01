@@ -28,7 +28,10 @@
 #define TLORA_PAGER 49
 #define T_DECK_PRO 50
 #define T_BEAM_1W 51
-
+#define HELTEC_V4 52
+#define T_ETH_ELITE_1262 53
+#define HELTEC_T114 54
+#define T3_S3_V13 55
  */
 
 
@@ -58,5 +61,9 @@ export const hwtable: {[key: number]: string} = {
     48:"EBYTE E22 S3",
     49:"TLORA Pager",
     50:"T-DECK Pro",
-    51:"TBEAM 1W"
+    51:"TBEAM 1W",
+    52:"HELTEC V4",
+    53:"T-ETH Elite",
+    54:"HELTEC T114",
+    55:"T3 S3 V1.3"
 } 

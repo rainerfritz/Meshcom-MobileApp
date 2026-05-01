@@ -21,7 +21,8 @@ const defaultInfoData:InfoData = {
     GCB4: 0,
     GCB5: 0,
     CTRY: "none",
-    BOOST: false
+    BOOST: false,
+    BPIN: 0
 }
 
 const NodeInfoStore = new Store({

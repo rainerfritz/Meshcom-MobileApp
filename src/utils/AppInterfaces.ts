@@ -81,7 +81,8 @@ export interface MheardType {
     mh_snr:number,
     mh_distance:number,
     mh_pl: number,
-    mh_mesh: number
+    mh_mesh: number,
+    mh_ncnt:number
 }
 
 // Reconnect flag for Background
@@ -164,6 +165,7 @@ export interface WxData {
             idoc["GCB5"] = meshcom_settings.node_gcb[5];
             idoc["CTRY"] = ctrycode;
             idoc["BOOST"] = bBOOSTEDGAIN;
+            idoc["BPIN"] = meshcom_settings.bt_code;
 
  */
 export interface InfoData {
@@ -183,7 +185,8 @@ export interface InfoData {
     "GCB4": number,
     "GCB5": number,
     "CTRY": string,
-    BOOST: boolean
+    BOOST: boolean,
+    BPIN: number
 }
 
 
@@ -234,11 +237,15 @@ export interface SensorSettings {
 
 // sensor settings additional interface
 /**
- * sensdoc1["TYP"] = "S1";
+ *         sensdoc1["TYP"] = "S1";
         sensdoc1["INA226"] = ina226_found;
         sensdoc1["SHUNT"] = meshcom_settings.node_shunt;
         sensdoc1["IMAX"] = meshcom_settings.node_imax;
         sensdoc1["SAMP"] = meshcom_settings.node_isamp;
+        sensdoc1["SHT"] = bSHT21ON;
+        sensdoc1["SHTF"] = sht21_found;
+        sensdoc1["226"] = bINA226ON;
+        sensdoc1["226F"] = ina226_found;
  */
 export interface SensorSettingsS1 {
     TYP: string,
@@ -247,7 +254,9 @@ export interface SensorSettingsS1 {
     IMAX: number,
     SAMP: number,
     SHT: boolean,
-    SHTF: boolean
+    SHTF: boolean,
+    "226": boolean,
+    "226F": boolean
 }
 
 // wifi settings interface
@@ -278,6 +287,7 @@ export interface WifiSettings {
         swdoc2["OWNGW"] = meshcom_settings.node_owngw;
         swdoc2["OWNMS"] = meshcom_settings.node_ownms;
         swdoc2["OWNDNS"] = meshcom_settings.node_owndns;
+        swdoc2["OWNNTP"] = meshcom_settings.node_ownntp;
         swdoc2["EUDP"] = bEXTUDP;
         swdoc2["EUDPIP"] = meshcom_settings.node_extern;
         swdoc2["TXPOW"] = meshcom_settings.node_wifi_power;
@@ -288,6 +298,7 @@ export interface WifiSettings2 {
     OWNGW: string,
     OWNMS: string,
     OWNDNS: string,
+    OWNNTP: string,
     EUDP: boolean,
     EUDPIP: string,
     TXPOW: number
@@ -352,7 +363,7 @@ export interface AprsSettings {
 }
 
 // Mheard interface
-// {"TYP":"MH","CALL":"OE1KFR-2","DATE":"2023-01-01","TIME":"00:00:41","PLT":33,"HW":10,"MOD":3,"RSSI":-44,"SNR":6}
+// {"TYP":"MH","CALL":"OE1MOJ-1","DATE":"2026-04-28","TIME":"19:47:06","PLT":58,"HW":3,"MOD":136,"RSSI":-91,"SNR":-1,"DIST":1.8,"PL":3,"MESH":1,"NCNT":7}
 export interface Mheard {
     TYP: string,
     CALL: string,
@@ -365,7 +376,8 @@ export interface Mheard {
     SNR: number,
     DIST: number,
     PL: number,
-    MESH: number
+    MESH: number,
+    NCNT: number
 }
 
 // Config sent from Node Finish message

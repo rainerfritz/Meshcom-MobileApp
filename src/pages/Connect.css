@@ -62,3 +62,24 @@
     justify-content: center;
     align-items: center;
 }
+
+.ble-device-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ble-conn-btn {
+    flex: 1;
+}
+
+.ble-pin-btn {
+    flex-shrink: 0;
+}
+
+.pin-modal-btns {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}

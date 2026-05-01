@@ -141,27 +141,21 @@ const Appl: React.FC = () => {
         <IonTabBar slot="bottom">
           <IonTabButton tab="tab1" href="/connect">
             <IonIcon aria-hidden="true" icon={bluetooth} />
-            <IonLabel>connect</IonLabel>
           </IonTabButton>
           <IonTabButton tab="tab2" href="/settings">
             <IonIcon aria-hidden="true" icon={settings} />
-            <IonLabel>settings</IonLabel>
           </IonTabButton>
           <IonTabButton tab="info" href="/info">
             <IonIcon aria-hidden="true" icon={informationCircleOutline} />
-            <IonLabel>Info</IonLabel>
           </IonTabButton>
           <IonTabButton tab="tab3" href="/chat">
             <IonIcon aria-hidden="true" icon={chatboxEllipses} />
-            <IonLabel>chat</IonLabel>
           </IonTabButton>
           <IonTabButton tab="map" href="/map">
             <IonIcon aria-hidden="true" icon={globe} />
-            <IonLabel>Map</IonLabel>
           </IonTabButton>
           <IonTabButton tab="mheard" href="/mheard">
             <IonIcon aria-hidden="true" icon={move} />
-            <IonLabel>Mheard</IonLabel>
           </IonTabButton>
           
         </IonTabBar>

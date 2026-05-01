@@ -1,8 +1,9 @@
 import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, 
   IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, IonLoading, IonModal,
-IonButtons, IonList, IonItem, IonLabel,
+IonButtons, IonList, IonItem, IonLabel, IonInput, IonIcon, IonText,
 useIonViewWillLeave,
 IonToggle} from '@ionic/react';
+import { keyOutline, trashOutline, checkmarkCircle } from 'ionicons/icons';
 
 import './Connect.css';
 
@@ -142,6 +143,12 @@ const Tab1: React.FC = () => {
 
   // Toggle for MC only Devices to filter at BLE scan
   const [showMConly, setShowMConly] = useState<boolean>(true);
+
+  // PIN management modal
+  const [shPinModal, setShPinModal] = useState<boolean>(false);
+  const pinModalDevice = useRef<ScanRes | null>(null);
+  const [pinModalCurrentPin, setPinModalCurrentPin] = useState<string>("");
+  const [pinInputVal, setPinInputVal] = useState<string>("");
 
 
 
@@ -446,6 +453,60 @@ const Tab1: React.FC = () => {
   }
 
 
+  // open PIN modal for a device
+  const openPinModal = async (dev: ScanRes) => {
+    pinModalDevice.current = dev;
+    await DatabaseService.checkDbConn();
+    const existing = await DatabaseService.getBlePin(dev.dev_id_);
+    setPinModalCurrentPin(existing ?? "");
+    setPinInputVal("");
+    setShPinModal(true);
+  };
+
+  // save PIN from modal input
+  const savePinModal = async () => {
+    const dev = pinModalDevice.current;
+    if (!dev) return;
+    const pin = pinInputVal.trim();
+    if (!/^\d{6}$/.test(pin)) {
+      setAlHeader("Invalid PIN");
+      setAlMsg("PIN must be exactly 6 digits.");
+      setShAlertCard(true);
+      return;
+    }
+    if (parseInt(pin, 10) < 100000) {
+      setAlHeader("Invalid PIN");
+      setAlMsg("PIN must be between 100000 and 999999.");
+      setShAlertCard(true);
+      return;
+    }
+    await DatabaseService.checkDbConn();
+    await DatabaseService.setBlePin(dev.dev_id_, pin);
+    setPinModalCurrentPin(pin);
+    setPinInputVal("");
+    setShPinModal(false);
+    LogS.log(0, "PIN saved for " + dev.devName);
+    // if currently connected to this device, also send the command to the node
+    if (connFlag && devID_s === dev.dev_id_) {
+      sendTxtCmdNode("--btcode " + pin);
+      LogS.log(0, "Sent --btcode to connected node: " + dev.devName);
+    }
+  };
+
+  // clear PIN from modal
+  const clearPinModal = async () => {
+    const dev = pinModalDevice.current;
+    if (!dev) return;
+    await DatabaseService.checkDbConn();
+    await DatabaseService.clearBlePin(dev.dev_id_);
+    setPinModalCurrentPin("");
+    setPinInputVal("");
+    setShPinModal(false);
+    LogS.log(0, "PIN cleared for " + dev.devName);
+  };
+
+
+  
   // handle the filter toggle for MC only devices
   const handleMConly = (state: boolean) => {
     setShowMConly(state);
@@ -611,15 +672,38 @@ const Tab1: React.FC = () => {
         
         // finally we send a hello message to the client. It then starts sending data if any
         LogS.log(0, "Sending Hello Msg to Node!");
-        const len_hello = 4;
-        const call_buffer = new ArrayBuffer(len_hello);
-        const view1 = new DataView(call_buffer);
-        view1.setUint8(0, len_hello);
-        view1.setUint8(1, 0x10);
-        view1.setUint8(2, 0x20);
-        view1.setUint8(3, 0x30);
+
+        // Look up stored BLE PIN by device ID
+        const storedPin = await DatabaseService.getBlePin(devID);
+        const pinToUse = (storedPin && storedPin !== "000000") ? storedPin : null;
+
+        let hello_view: DataView;
+        if (pinToUse) {
+          // Build 36-byte hello: [35, 0x10, 0x20, 0x30, SHA-256(pin)[0..31]]
+          const pinStr = pinToUse.padStart(6, '0');
+          const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pinStr));
+          const hashBytes = new Uint8Array(hashBuf);
+          const buf = new ArrayBuffer(36);
+          const v = new DataView(buf);
+          v.setUint8(0, 35);   // length marker as firmware expects msg_len >= 35
+          v.setUint8(1, 0x10);
+          v.setUint8(2, 0x20);
+          v.setUint8(3, 0x30);
+          hashBytes.forEach((b, i) => v.setUint8(4 + i, b));
+          hello_view = v;
+          LogS.log(0, "Sending Hello Msg with PIN hash for device: " + devID);
+        } else {
+          // No PIN — original open hello
+          const buf = new ArrayBuffer(4);
+          const v = new DataView(buf);
+          v.setUint8(0, 4);
+          v.setUint8(1, 0x10);
+          v.setUint8(2, 0x20);
+          v.setUint8(3, 0x30);
+          hello_view = v;
+        }
         try{
-          await sendDV(view1, devID);
+          await sendDV(hello_view, devID);
         } catch (error) {
           // if the pairing / bonding process is running on android we get here an error if we try to send data
           // but the hello message is then received on the node
@@ -1137,18 +1221,65 @@ const Tab1: React.FC = () => {
 
             {scanDevices.map((dev, i) => (
               <>
-                <div className='buttons'>
+                <div className='buttons ble-device-row'>
                   {dev.dev_id_ === devID_s ? <>
-                    <IonButton key={i} expand='block' size="default" fill='solid' slot='start' color={connFlag ? 'success' : 'primary'} onClick={() => handleBtn(dev.dev_id_)}>{dev.devName} | RSSI:{dev.rssi_}</IonButton>
+                    <IonButton className='ble-conn-btn' expand='block' size="default" fill='solid' slot='start' color={connFlag ? 'success' : 'primary'} onClick={() => handleBtn(dev.dev_id_)}>{dev.devName} | RSSI:{dev.rssi_}</IonButton>
                   </> : <>
-                    <IonButton key={i} expand='block' size="default" fill='solid' slot='start' onClick={() => handleBtn(dev.dev_id_)}>{dev.devName} | RSSI:{dev.rssi_}</IonButton>
+                    <IonButton className='ble-conn-btn' expand='block' size="default" fill='solid' slot='start' onClick={() => handleBtn(dev.dev_id_)}>{dev.devName} | RSSI:{dev.rssi_}</IonButton>
                   </>}
+                  <IonButton size="small" fill="outline" color="medium" className='ble-pin-btn' onClick={() => openPinModal(dev)}>
+                    <IonIcon icon={keyOutline}></IonIcon>
+                  </IonButton>
                 </div>
               </>
             ))}
 
           </div>
         </IonContent>
+
+        {/* PIN Management Modal */}
+        <IonModal isOpen={shPinModal} onDidDismiss={() => setShPinModal(false)}>
+          <IonHeader>
+            <IonToolbar>
+              <IonTitle>{pinModalDevice.current?.devName}</IonTitle>
+              <IonButtons slot="end">
+                <IonButton onClick={() => setShPinModal(false)}>Close</IonButton>
+              </IonButtons>
+            </IonToolbar>
+          </IonHeader>
+          <IonContent className="ion-padding">
+            {pinModalCurrentPin ? (
+              <IonText color="medium"><p>Current PIN: <strong>{pinModalCurrentPin}</strong></p></IonText>
+            ) : (
+              <IonText color="medium"><p>No PIN set — open connection.</p></IonText>
+            )}
+            <IonItem>
+              <IonInput
+                label="New PIN (6 digits)"
+                labelPlacement="floating"
+                type="text"
+                inputmode="numeric"
+                maxlength={6}
+                value={pinInputVal}
+                onIonInput={(e) => setPinInputVal(e.detail.value ?? "")}
+              />
+            </IonItem>
+            <div className="pin-modal-btns">
+              <IonButton expand="block" color="primary" onClick={savePinModal}>
+                <IonIcon slot="start" icon={checkmarkCircle}></IonIcon>
+                Save PIN
+              </IonButton>
+              <IonButton expand="block" color="danger" fill="outline" onClick={clearPinModal} disabled={!pinModalCurrentPin}>
+                <IonIcon slot="start" icon={trashOutline}></IonIcon>
+                Clear PIN
+              </IonButton>
+              {(!connFlag || pinModalDevice.current?.dev_id_ !== devID_s) && (
+                <IonText color="warning"><p>Node not connected! Pin change only in Phone DB.</p></IonText>
+              )}
+            </div>
+          </IonContent>
+        </IonModal>
+
       </IonPage>
     </>
   );

@@ -144,6 +144,19 @@ class DatabaseService {
                 LogS.log(1, 'Error creating recon table. Database connection not open.');
             }
 
+            if (DatabaseService.db) {
+                console.log('Creating ble_pins table');
+                await DatabaseService.db.execute(`CREATE TABLE IF NOT EXISTS ble_pins (
+                    device_name TEXT PRIMARY KEY NOT NULL,
+                    pin TEXT NOT NULL
+                );`).catch((err) => {
+                    LogS.log(1, 'Error creating ble_pins table:' + err);
+                });
+            } else {
+                LogS.log(1, 'Error creating ble_pins table. Database connection not open.');
+            }
+
+
             // housekeeping
             if (DatabaseService.db) {
                 await DatabaseService.housekeeping();
@@ -493,6 +506,77 @@ class DatabaseService {
         }
         
     }
+
+    // get stored BLE PIN for a device (keyed by device name / callsign)
+    static async getBlePin(deviceName: string): Promise<string | null> {
+        console.log("Getting BLE PIN for device:", deviceName);
+        if (DatabaseService.db) {
+            try {
+                const res = await DatabaseService.db.query(
+                    `SELECT pin FROM ble_pins WHERE device_name = '${deviceName}';`
+                );
+                if (res.values && res.values.length > 0) {
+                    return res.values[0].pin as string;
+                }
+                return null;
+            } catch (error) {
+                console.error('Error getting BLE PIN:', error);
+                return null;
+            }
+        } else {
+            console.error('Error getting BLE PIN. Database not open.');
+            return null;
+        }
+    }
+
+    // store BLE PIN for a device (upsert)
+    static async setBlePin(deviceName: string, pin: string): Promise<void> {
+        console.log("Storing BLE PIN for device:", deviceName);
+        if (DatabaseService.db) {
+            try {
+                await DatabaseService.db.execute(
+                    `INSERT INTO ble_pins (device_name, pin) VALUES ('${deviceName}', '${pin}')
+                     ON CONFLICT(device_name) DO UPDATE SET pin = '${pin}';`
+                );
+                console.log('BLE PIN stored for:', deviceName);
+            } catch (error) {
+                console.error('Error storing BLE PIN:', error);
+            }
+        } else {
+            console.error('Error storing BLE PIN. Database not open.');
+        }
+    }
+
+    // clear stored BLE PIN for a device
+    static async clearBlePin(deviceName: string): Promise<void> {
+        console.log("Clearing BLE PIN for device:", deviceName);
+        if (DatabaseService.db) {
+            try {
+                await DatabaseService.db.execute(
+                    `DELETE FROM ble_pins WHERE device_name = '${deviceName}';`
+                );
+                console.log('BLE PIN cleared for:', deviceName);
+            } catch (error) {
+                console.error('Error clearing BLE PIN:', error);
+            }
+        } else {
+            console.error('Error clearing BLE PIN. Database not open.');
+        }
+    }
+
+    // clear all stored BLE PINs
+    static async clearAllBlePins(): Promise<void> {
+        if (DatabaseService.db) {
+            try {
+                await DatabaseService.db.execute(`DELETE FROM ble_pins;`);
+                console.log('All BLE PINs cleared');
+            } catch (error) {
+                console.error('Error clearing all BLE PINs:', error);
+            }
+        } else {
+            console.error('Error clearing all BLE PINs. Database not open.');
+        }
+    }   
 
     // set reconStateVal
     static async setReconState(val: number, devID_: string) {

@@ -51,6 +51,13 @@ class MheardStaticStore {
         if(mhfound){
             console.log("Mheard Static Store: updating mheard");
             const filtered_mh = this.mhArr_s.filter(mhs => mhs.mh_callSign !== mheard.mh_callSign);
+            // if the incoming mheard has ncnt 0 we want to keep the old ncnt value.
+            if(mheard.mh_ncnt === 0){
+                const old_mh = this.mhArr_s.find(mhs => mhs.mh_callSign === mheard.mh_callSign && mhs.mh_nodecall === mheard.mh_nodecall);
+                if(old_mh){
+                    mheard.mh_ncnt = old_mh.mh_ncnt;
+                }
+            }
             filtered_mh.push(mheard);
             this.mhArr_s = filtered_mh;
             this.mhArr_s.sort(function(y, x){

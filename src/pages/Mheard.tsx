@@ -58,6 +58,10 @@ const Mheard = () => {
                                                         <div>Hw:</div>
                                                         <div className='value'>{mhs.mh_hw}</div>
                                                     </div>
+                                                    <div className='rowcont'>
+                                                        <div>Neighbours:</div>
+                                                        <div className='value'>{mhs.mh_ncnt}</div>
+                                                    </div>
                                                 </div>
                                                 <div>
                                                     <div className='rowcont'>

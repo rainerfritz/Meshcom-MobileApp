@@ -566,6 +566,36 @@ const Tab3: React.FC = () => {
         writeToClipboard(copyTxt);
       }
 
+      if (asActionDetail === "resend") {
+        console.log("Resend pressed");
+        const resendTxt = selMsg[0].msgTXT;
+        // Fill message text into the textarea
+        if (textAreaInputRef.current) {
+          textAreaInputRef.current.value = resendTxt;
+        }
+        // If DM segment is active, fill toCall (the original recipient) into To Callsign input
+        if (segmentFilter === "DM") {
+          const toCallResend = selMsg[0].toCall;
+          toCallsign_.current = toCallResend;
+          lastDMcallsign.current = toCallResend;
+          setShCallsign(true);
+          if (callsignInputRef.current) {
+            callsignInputRef.current.value = toCallResend;
+          }
+        }
+      }
+
+      if (asActionDetail === "replyTo") {
+        console.log("Reply To pressed");
+        const replyToCall = selMsg[0].fromCall;
+        toCallsign_.current = replyToCall;
+        lastDMcallsign.current = replyToCall;
+        setShCallsign(true);
+        if (callsignInputRef.current) {
+          callsignInputRef.current.value = replyToCall;
+        }
+      }
+
       if (asActionDetail === "sendDM") {
         console.log("DM pressed");
         let selCall = "";
@@ -574,9 +604,6 @@ const Tab3: React.FC = () => {
           selCall = selMsg[0].toCall;
         } else {
           selCall = selMsg[0].fromCall;
-          console.log("To Call: " + selMsg[0].toCall);
-          // check for group message to set the group number
-          if(!isNaN(+selMsg[0].toCall) && selMsg[0].toCall !== "") selCall = selMsg[0].toCall;
         }
         
         console.log("DM to Callsign: " + selCall);
@@ -584,7 +611,7 @@ const Tab3: React.FC = () => {
         lastDMcallsign.current = selCall;
         setIsOpenAS(false);
 
-        if(segmentFilter === "ALL"){
+        if(segmentFilter !== "DM"){
           handleSegmentChange("DM", false);
         }
 
@@ -774,10 +801,22 @@ const Tab3: React.FC = () => {
                 action: 'copy',
               },
             },
-            ...((segmentFilter === "ALL" || segmentFilter === "DM") ? [{
+            ...(msgArr_s.some(m => m.msgNr === msgNrAS && m.fromCall === nodeInfo_s.CALL) ? [{
+              text: 'Resend Message',
+              data: {
+                action: 'resend',
+              },
+            }] : []),
+            ...(segmentFilter !== "DM" ? [{
               text: 'Direct Message',
               data: {
                 action: 'sendDM',
+              },
+            }] : []),
+            ...(segmentFilter === "DM" ? [{
+              text: 'Reply To',
+              data: {
+                action: 'replyTo',
               },
             }] : []),
             {

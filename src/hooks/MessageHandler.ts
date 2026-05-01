@@ -1402,6 +1402,11 @@ export function useMSG() {
                                     mheard.DIST = calced_dist;
                                 }*/
 
+                                // if NCNT is not provided, set it to 0
+                                if(mheard.NCNT === undefined || mheard.NCNT === null){
+                                    mheard.NCNT = 0;
+                                }
+
                                 const new_mheard:MheardType = {
                                     mh_timestamp:now_timestamp,
                                     mh_nodecall:node_call_ref.current,
@@ -1413,7 +1418,8 @@ export function useMSG() {
                                     mh_hw:hwtable[mheard.HW],
                                     mh_distance:+mheard.DIST.toFixed(2),
                                     mh_pl:mheard.PL,
-                                    mh_mesh:mheard.MESH
+                                    mh_mesh:mheard.MESH,
+                                    mh_ncnt:mheard.NCNT
                                 }
 
                                 return (new_mheard);

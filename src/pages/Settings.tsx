@@ -10,10 +10,9 @@ import { getDevID, getBLEconnStore, getConfigStore, getScanResult } from '../sto
 import ConfigStore from '../store/ConfStore';
 import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1, WifiSettings2 } from '../utils/AppInterfaces';
 import { iosTransitionAnimation, RangeValue } from '@ionic/core';
-import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle, send } from 'ionicons/icons';
+import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
 import AlertCard from '../components/AlertCard';
-//import AprsCmtStore from '../store/AprsCmtStore';
 import { useHistory } from "react-router";
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
@@ -30,7 +29,6 @@ import { usePhoneGps } from '../utils/PhoneGps';
 import WxDataStore from '../store/WxData';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
 import WifiSettingsStore2 from '../store/WiFiSettings2';
-import { set } from 'date-fns';
 import GpsDataStore from '../store/GpsData';
 
 
@@ -142,10 +140,12 @@ const Tab2: React.FC = () => {
   const maxTXpwr = useRef<number>(17);
   const tx_pwr = useRef<number>(17);
   const [tx_pwr_w, setTxPwrW] = useState<number>(17);
+  const [tx_pwr_pct, setTxPwrPct] = useState<number>(100);
   const [shTxPwrSlider, setShTxPwrSlider] = useState<boolean>(false);
 
   // reboot node 
   const [shRebootCard, setShRebootCard] = useState<boolean>(false);
+  const [shDeepSleepCard, setShDeepSleepCard] = useState<boolean>(false);
 
   // OTA Update Card Yes/No
   const [shOTAUpdateCard, setShOTAUpdateCard] = useState<boolean>(false);
@@ -166,8 +166,8 @@ const Tab2: React.FC = () => {
 
   // custom BLE Pairing Ping
   const ble_pairing_pin = useRef<string>("000000");
-  const ble_pairing_pin_changed = useRef<boolean>(false);
   const ble_pairing_pin_ref = useRef<HTMLIonInputElement>(null);
+  const [ble_pairing_pin_display, setBLEPairingPinDisplay] = useState<string>("000000");
 
   // show hide user buttons
   const [shUserBtns, setShUserBtns] = useState<boolean>(false);
@@ -373,6 +373,8 @@ const Tab2: React.FC = () => {
     const pwr_w = (Math.pow(10, pwr_exp_w) * 1000).toFixed(0); //mW
     console.log("TX Pwr (mW): " + pwr_w);
     setTxPwrW(+pwr_w);
+    const max_pwr_w = Math.pow(10, (maxTXpwr.current - 30) / 10) * 1000;
+    setTxPwrPct(Math.round((+pwr_w) / max_pwr_w * 100));
 
     // set UTC ref
     console.log("Node UTC Offset: " + nodeSettings.UTCOF);
@@ -380,6 +382,33 @@ const Tab2: React.FC = () => {
 
   },[nodeSettings]);
 
+
+
+
+  // adapt ble pin when nodesettings arrive
+  useEffect(()=>{
+    LogS.log(0,"BLE Pairing Pin updated from NodeSettings");
+    // set the ble pin from info data. Comes in as INT but we need it as string for the input and sending to node
+    // Use ?? 0 to handle old firmware that does not send BPIN in the info JSON
+    const bpin = nodeInfo_s.BPIN ?? 0;
+    let ble_pin_str = bpin.toString();
+    // if the ble pin is 0 or 000000 we set it to 000000
+    if(bpin === 0 || ble_pin_str === "000000"){
+      ble_pairing_pin.current = "000000";
+      setBLEPairingPinDisplay("000000");
+    } else {
+      // if the ble pin is less than 6 digits we add leading zeros
+      if(ble_pin_str.length < 6){
+        ble_pin_str = ble_pin_str.padStart(6, "0");
+      }
+
+      ble_pairing_pin.current = ble_pin_str;
+      setBLEPairingPinDisplay(ble_pin_str);
+    }
+  },[nodeInfo_s.BPIN]);
+
+
+  
 
   // set values of sensor settings when they arrive
   useEffect(()=>{
@@ -807,6 +836,12 @@ const Tab2: React.FC = () => {
         break;
       }
 
+      case "deepsleep": {
+
+        cmd_ = "--deepsleep";
+        break;
+      }
+
       case "atxt": {
         console.log("APRS Comment assembled");
         const cmt_txt = aprsCmtRef.current!.value;
@@ -1014,13 +1049,13 @@ const Tab2: React.FC = () => {
 
       // change into safeboot OTA mode
       case "otaupdate": {
-        if(nodeInfo_s.HWID !== 9){ // ESP32 only check
+        if(nodeInfo_s.HWID !== 9 && nodeInfo_s.HWID !== 7 && nodeInfo_s.HWID !== 54){ // ESP32 only check
           cmd_ = "--ota-update";
           setAlHeader("Booting into OTA Mode!");
           setAlMsg("On active Wifi connection access it after reboot via Web-Browser with " + nodeInfo_s.CALL + ".local or "+ wifiSettings_s.IP +" if in AP Mode: IP:192.168.4.1 or Meshcom-OTA.local");
           setShAlertCard(true);
         } else {
-          setAlHeader("OTA Update not supported!");
+          setAlHeader("Wifi OTA Update not supported!");
           setAlMsg("Only on ESP32 based boards available!");
           setShAlertCard(true);
         }
@@ -1044,6 +1079,14 @@ const Tab2: React.FC = () => {
       // custom ble paring pin
       case "btcode": {
         cmd_ = "--btcode " + ble_pairing_pin.current;
+        break;
+      }
+
+      // reset BLE PIN to 000000 (disables BLE security)
+      case "RST_BT_CODE": {
+        console.log("Resetting BLE PIN to 000000 (security disabled)");
+        ble_pairing_pin.current = "000000";
+        cmd_ = "--btcode 000000";
         break;
       }
 
@@ -1618,9 +1661,10 @@ const Tab2: React.FC = () => {
 
   const grp0Changed = (event: any) => {
     const grp0 = event.target.value;
-    if(grp0 !== null && grp0 !== undefined && grp0 !== "" && grp0 !== " "){
-      console.log("Group 0 changed: " + grp0);
-      gcb0Ref.current = checkGrpInput(grp0);
+    if(grp0 !== null && grp0 !== undefined){
+      const val0 = (grp0.trim() === "") ? "0" : grp0;
+      console.log("Group 0 changed: " + val0);
+      gcb0Ref.current = checkGrpInput(val0);
       console.log("Group 0 nr: " + gcb0Ref.current);
       groupSettingChanged.current = true;
     }
@@ -1628,9 +1672,10 @@ const Tab2: React.FC = () => {
 
   const grp1Changed = (event: any) => {
     const grp1 = event.target.value;
-    if(grp1 !== null && grp1 !== undefined && grp1 !== "" && grp1 !== " "){
-      console.log("Group 1 changed: " + grp1);
-      gcb1Ref.current = checkGrpInput(grp1);
+    if(grp1 !== null && grp1 !== undefined){
+      const val1 = (grp1.trim() === "") ? "0" : grp1;
+      console.log("Group 1 changed: " + val1);
+      gcb1Ref.current = checkGrpInput(val1);
       console.log("Group 1 nr: " + gcb1Ref.current);
       groupSettingChanged.current = true;
     }
@@ -1638,9 +1683,10 @@ const Tab2: React.FC = () => {
 
   const grp2Changed = (event: any) => {
     const grp2 = event.target.value;
-    if(grp2 !== null && grp2 !== undefined && grp2 !== "" && grp2 !== " "){
-      console.log("Group 2 changed: " + grp2);
-      gcb2Ref.current = checkGrpInput(grp2);
+    if(grp2 !== null && grp2 !== undefined){
+      const val2 = (grp2.trim() === "") ? "0" : grp2;
+      console.log("Group 2 changed: " + val2);
+      gcb2Ref.current = checkGrpInput(val2);
       console.log("Group 2 nr: " + gcb2Ref.current);
       groupSettingChanged.current = true;
     }
@@ -1648,9 +1694,10 @@ const Tab2: React.FC = () => {
 
   const grp3Changed = (event: any) => {
     const grp3 = event.target.value;
-    if(grp3 !== null && grp3 !== undefined && grp3 !== "" && grp3 !== " "){
-      console.log("Group 3 changed: " + grp3);
-      gcb3Ref.current = checkGrpInput(grp3);
+    if(grp3 !== null && grp3 !== undefined){
+      const val3 = (grp3.trim() === "") ? "0" : grp3;
+      console.log("Group 3 changed: " + val3);
+      gcb3Ref.current = checkGrpInput(val3);
       console.log("Group 3 nr: " + gcb3Ref.current);
       groupSettingChanged.current = true;
     }
@@ -1658,9 +1705,10 @@ const Tab2: React.FC = () => {
 
   const grp4Changed = (event: any) => {
     const grp4 = event.target.value;
-    if(grp4 !== null && grp4 !== undefined && grp4 !== "" && grp4 !== " "){
-      console.log("Group 4 changed: " + grp4);
-      gcb4Ref.current = checkGrpInput(grp4);
+    if(grp4 !== null && grp4 !== undefined){
+      const val4 = (grp4.trim() === "") ? "0" : grp4;
+      console.log("Group 4 changed: " + val4);
+      gcb4Ref.current = checkGrpInput(val4);
       console.log("Group 4 nr: " + gcb4Ref.current);
       groupSettingChanged.current = true;
     }
@@ -1668,9 +1716,10 @@ const Tab2: React.FC = () => {
 
   const grp5Changed = (event: any) => {
     const grp5 = event.target.value;
-    if(grp5 !== null && grp5 !== undefined && grp5 !== "" && grp5 !== " "){
-      console.log("Group 5 changed: " + grp5);
-      gcb5Ref.current = checkGrpInput(grp5);
+    if(grp5 !== null && grp5 !== undefined){
+      const val5 = (grp5.trim() === "") ? "0" : grp5;
+      console.log("Group 5 changed: " + val5);
+      gcb5Ref.current = checkGrpInput(val5);
       console.log("Group 5 nr: " + gcb5Ref.current);
       groupSettingChanged.current = true;
     }
@@ -1751,6 +1800,8 @@ const Tab2: React.FC = () => {
       const pwr_w = (Math.pow(10, pwr_exp_w) * 1000).toFixed(0); //mW
       console.log("TX Pwr (mW): " + pwr_w);
       setTxPwrW(+pwr_w);
+      const max_pwr_w = Math.pow(10, (maxTXpwr.current - 30) / 10) * 1000;
+      setTxPwrPct(Math.round((+pwr_w) / max_pwr_w * 100));
       sendTxtCmd("txpwr");
     }
   }, [txpower_slider]);
@@ -1760,15 +1811,66 @@ const Tab2: React.FC = () => {
 
 
 
-  // handle custom pairing pin setting
-  const setBLEParingPin = (event:string) => {
-
+  // handle custom pairing pin input
+  const handleBLEParingPinInput = (event: string) => {
     console.log("Custom BLE Pairing Pin changed!");
     console.log("Event Pin: " + event);
-    if(ble_pairing_pin_ref.current!.value !== undefined && ble_pairing_pin_ref.current!.value !== null){
-      ble_pairing_pin.current = ble_pairing_pin_ref.current!.value.toString();
+    ble_pairing_pin.current = event ?? "";
+    setBLEPairingPinDisplay(event ?? "");
+  }
+
+  // reset BLE PIN to 000000 — clears DB entry and sends command to node
+  const resetBLEPin = async () => {
+    if (devID_s) {
+      await DataBaseService.checkDbConn();
+      await DataBaseService.clearBlePin(devID_s);
+      setBLEPairingPinDisplay("000000");
+      console.log("BLE PIN cleared in DB for devID: " + devID_s);
     }
-    ble_pairing_pin_changed.current = true;
+    sendTxtCmd("RST_BT_CODE");
+  };
+
+  // validate and send custom pairing pin to node
+  const setBLEParingPin = async () => {
+    const pinRaw = ble_pairing_pin_ref.current?.value?.toString() ?? ble_pairing_pin.current ?? "";
+    const pin = pinRaw.trim();
+
+    if (!/^\d{6}$/.test(pin)) {
+      setAlHeader("Invalid BLE PIN!");
+      setAlMsg("BLE PIN must be exactly 6 digits (0-9).");
+      setShAlertCard(true);
+      return;
+    }
+
+    if (parseInt(pin, 10) < 100000) {
+      setAlHeader("Invalid BLE PIN!");
+      setAlMsg("BLE PIN must be between 100000 and 999999");
+      setShAlertCard(true);
+      return;
+    }
+
+    ble_pairing_pin.current = pin;
+    sendTxtCmd("btcode");
+
+    if (devID_s) {
+      await DataBaseService.checkDbConn();
+      await DataBaseService.setBlePin(devID_s, pin);
+      console.log("BLE PIN saved in DB for devID: " + devID_s);
+    }
+
+    setAlHeader("BLE PIN set!");
+    setAlMsg("Setting saved to node.");
+    setShAlertCard(true);
+  }
+
+  // handle clear all pairing pins in DB
+  const clearAllBLEPins_ = async () => {
+    await DataBaseService.checkDbConn();
+    await DataBaseService.clearAllBlePins();
+    console.log("All BLE PINs cleared in DB");
+    setAlHeader("All BLE PINs cleared!");
+    setAlMsg("All BLE PINs cleared from database.");
+    setShAlertCard(true);
   }
 
 
@@ -1891,6 +1993,29 @@ const Tab2: React.FC = () => {
                 console.log('Reboot Node confirmed');
                 setShRebootCard(false);
                 sendTxtCmd("reboot");
+              },
+            },
+          ]}
+        />
+
+        <IonAlert
+          isOpen={shDeepSleepCard}
+          header="Deep Sleep"
+          message="Send node into Deep Sleep now?"
+          buttons={[
+            {
+              text: 'Cancel',
+              handler: () => {
+                console.log('Deep Sleep canceled');
+                setShDeepSleepCard(false);
+              },
+            },
+            {
+              text: 'YES',
+              handler: () => {
+                console.log('Deep Sleep confirmed');
+                setShDeepSleepCard(false);
+                sendTxtCmd("deepsleep");
               },
             },
           ]}
@@ -2101,14 +2226,23 @@ const Tab2: React.FC = () => {
           </div>
 
 
-          {/*<div id="spacer-buttons" />
+          <div id="spacer-buttons" />
           <div className='setting_wrapper'>
-            <IonText id="wifi-text">Custom BLE PIN 6 Digits</IonText>
-            <div className='mb-3'></div>
+            <div className="flex-row mb-3">
+              <div>
+                <IonText id="wifi-text">Custom BLE PIN 6 Digits</IonText>
+              </div>
+              <div className='rst-set-btns'>
+                <IonButton size="small" fill="outline" color='success' onClick={() => resetBLEPin()}>RST</IonButton>
+                <IonButton size="small" fill="outline" color='success' onClick={() => setBLEParingPin()}>
+                  <IonIcon icon={checkmarkCircle} ></IonIcon>
+                </IonButton>
+              </div>
+            </div>
             <IonItem>
-              <IonInput value={ble_pairing_pin.current} ref={ble_pairing_pin_ref} label='Set BLE Pin' labelPlacement="floating" type='number' maxlength={6} inputmode="numeric" onIonInput={(ev) => setBLEParingPin(ev.detail.value!)}></IonInput>
+              <IonInput value={ble_pairing_pin_display} ref={ble_pairing_pin_ref} label='Set BLE Pin' labelPlacement="floating" type='text' maxlength={6} inputmode="numeric" onIonInput={(ev) => handleBLEParingPinInput(ev.detail.value!)}></IonInput>
             </IonItem>
-          </div>*/}
+          </div>
 
           <div id="spacer-buttons" />
           <div className='setting_wrapper'>
@@ -2301,9 +2435,6 @@ const Tab2: React.FC = () => {
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("posdebug")}>POS-Info</IonButton>
                   </div>
-                  {/* <div>
-                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("txtrack")}>Send TRACK</IonButton>
-                  </div> */}
                 </div>
               </div>
 
@@ -2363,7 +2494,11 @@ const Tab2: React.FC = () => {
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => setShRebootCard(true)}>REBOOT</IonButton>
                   </div>
+                  <div>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => setShDeepSleepCard(true)}>Deep Sleep</IonButton>
+                  </div>
                 </div>
+
               </div>
             </> : <></>}
           </div>
@@ -2383,7 +2518,7 @@ const Tab2: React.FC = () => {
               <div className='ionrange_box'>
                 <IonRange value={tx_pwr.current} min={minTXpwr.current} max={maxTXpwr.current} pin={true} debounce={350} pinFormatter={(value: number) => `${value} dBm`}
                   onIonChange={({ detail }) => setTxpower_slider(detail.value)}></IonRange>
-                <IonLabel>Tx-Pwr: {tx_pwr.current} dBm / {tx_pwr_w}mW</IonLabel>
+                <IonLabel>Tx-Pwr: {tx_pwr.current} dBm / {tx_pwr_w}mW ({tx_pwr_pct}%)</IonLabel>
               </div>
             </> : <></>}
           </div>
@@ -2579,8 +2714,8 @@ const Tab2: React.FC = () => {
               <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>DataBaseService.clearTextMessages()}>Clear Text Msgs</IonButton>
               <div id="spacer-advTop" />
               <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>MheardStaticStore.clearMheards()}>Clear Mheards</IonButton>
-              {/*<div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>DataBaseService.clearAppSettings()}>Clear App Settings</IonButton>*/}
+              <div id="spacer-advTop" />
+              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>clearAllBLEPins_()}>Clear All BLE PINs</IonButton>
 
             </> : <></>}
             
