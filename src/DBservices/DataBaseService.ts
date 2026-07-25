@@ -102,10 +102,22 @@ class DatabaseService {
                         temp_2 REAL,
                         co2 REAL,
                         alt_press REAL,
-                        gas_res REAL
+                        gas_res REAL,
+                        neighbour_count INTEGER,
+                        groups TEXT
                     )
                 `).catch((err) => {
                     LogS.log(1, 'Error creating Positions table:' + err);
+                });
+            }
+
+            // check if we have the neighbour_count and groups columns in the Positions table. If not add them
+            if (DatabaseService.db) {
+                await DatabaseService.db.query(`SELECT neighbour_count FROM Positions;`).catch(async (err) => {
+                    LogS.log(1, 'Checking/adding neighbour_count, groups in Positions table:' + err);
+                    // add neighbour_count and groups columns
+                    await DatabaseService.db?.execute(`ALTER TABLE Positions ADD COLUMN neighbour_count INTEGER DEFAULT 0;`);
+                    await DatabaseService.db?.execute(`ALTER TABLE Positions ADD COLUMN groups TEXT DEFAULT '';`);
                 });
             }
 
@@ -370,8 +382,8 @@ class DatabaseService {
             console.log('DB Writing position:', pos.callSign);
             try {
                 const id = Date.now();
-                const query_str = `INSERT INTO positions (id,timestamp, callSign, lat, lon, alt, bat, hw, pressure, temperature, humidity, qnh, comment, temp_2, co2, alt_press, gas_res) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
-                const values = [id, pos.timestamp, pos.callSign, pos.lat, pos.lon, pos.alt, pos.bat, pos.hw, pos.pressure, pos.temperature, pos.humidity, pos.qnh, pos.comment, pos.temp_2, pos.co2, pos.alt_press, pos.gas_res];
+                const query_str = `INSERT INTO positions (id,timestamp, callSign, lat, lon, alt, bat, hw, pressure, temperature, humidity, qnh, comment, temp_2, co2, alt_press, gas_res, neighbour_count, groups) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
+                const values = [id, pos.timestamp, pos.callSign, pos.lat, pos.lon, pos.alt, pos.bat, pos.hw, pos.pressure, pos.temperature, pos.humidity, pos.qnh, pos.comment, pos.temp_2, pos.co2, pos.alt_press, pos.gas_res, pos.neighbour_count, pos.groups];
                 const ret = await DatabaseService.db.run(query_str, values);
                 console.log('DB writePos ret:', ret.changes?.values);
                 // update the store
@@ -392,8 +404,8 @@ class DatabaseService {
         if (DatabaseService.db) {
             console.log('DB Updating position:', pos.callSign);
             try {
-                const query_str = `UPDATE positions SET timestamp = ?, lat = ?, lon = ?, alt = ?, bat = ?, hw = ?, pressure = ?, temperature = ?, humidity = ?, qnh = ?, comment = ?, temp_2 = ?, co2 = ?, alt_press = ?, gas_res = ? WHERE callSign = ?`;
-                const values = [pos.timestamp, pos.lat, pos.lon, pos.alt, pos.bat, pos.hw, pos.pressure, pos.temperature, pos.humidity, pos.qnh, pos.comment, pos.temp_2, pos.co2, pos.alt_press, pos.gas_res, pos.callSign];
+                const query_str = `UPDATE positions SET timestamp = ?, lat = ?, lon = ?, alt = ?, bat = ?, hw = ?, pressure = ?, temperature = ?, humidity = ?, qnh = ?, comment = ?, temp_2 = ?, co2 = ?, alt_press = ?, gas_res = ?, neighbour_count = ?, groups = ? WHERE callSign = ?`;
+                const values = [pos.timestamp, pos.lat, pos.lon, pos.alt, pos.bat, pos.hw, pos.pressure, pos.temperature, pos.humidity, pos.qnh, pos.comment, pos.temp_2, pos.co2, pos.alt_press, pos.gas_res, pos.neighbour_count, pos.groups, pos.callSign];
                 const ret = await DatabaseService.db.run(query_str, values);
                 console.log('DB updatePos ret:', ret.changes?.values);
                 // read back all positions

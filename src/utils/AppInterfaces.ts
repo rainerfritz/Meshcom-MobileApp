@@ -33,7 +33,9 @@ export interface PosType {
     temp_2:number,
     co2:number,
     alt_press:number,
-    gas_res:number
+    gas_res:number,
+    neighbour_count:number,
+    groups:string
 }
 
 // config interface

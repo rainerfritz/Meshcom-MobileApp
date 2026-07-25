@@ -220,49 +220,74 @@ export function useMSG() {
 
                     // get the destination callsign if we have a direct message. After destCallsign we have a : stop there
                     // check if it is broadcast or DM
+                    // ASCII Decimal 42 = *
+                    /**
+                     * Since 4.35p July 11 there is a new VIA function which routes messages over a specific node. 
+                     * A Group message is also a DM but to a number instead of a callsign. 
+                     * New format: OE1KFR-7>OE1KFR-1,9:test       (group via OE1KFR-1)
+                     *             OE1KFR-7>OE1KFR-1,OE1KFR-2:hello (DM via OE1KFR-1)
+                     *             OE1KFR-7>OE1KFR-1,*:hello       (broadcast via OE1KFR-1)
+                     * Old format: OE1KFR>*:Test                   (broadcast, no via)
+                     *             OE1KFR-4>OE1KFR-2:Test          (DM, no via)
+                     * The last routing element before ':' / '!' determines the message type.
+                     * Intermediate via nodes are ignored.
+                     */
 
-                    if(msg.getUint8(text_offset - 2) === 42){
+                    // Absolute byte position of '>' (right after from-callsign)
+                    const gt_abs_pos = call_offset + call_len + 1;
 
-                        isDM_ = 0;
-                        console.log("Broadcast Message received");
-                        
-                    } else {
-
-                        isDM_ = 1;
-                        dm_callsign_start = text_offset - 2;
-                        console.log("Direct Message received");
-
+                    // Search for the message separator after '>':
+                    // msg_type 58 (':') for text, 33 ('!') for pos
+                    let sep_pos = -1;
+                    for (let i = gt_abs_pos + 1; i < msg_len; i++) {
+                        if (msg.getUint8(i) === msg_type) {
+                            sep_pos = i;
+                            break;
+                        }
                     }
 
-                    if(isDM_ === 1){
+                    if (sep_pos !== -1) {
+                        // Text/pos data starts right after the separator
+                        text_offset = sep_pos + 1;
 
-                        let dm_arr_index = 0;
-                        for (let i = dm_callsign_start; i < msg_len; i++){
-
-                            if(msg.getUint8(i) === 0x3a){
-                                // set start of message text accordingly
-                                text_offset = i + 1;
-                                break;
+                        // Find the last ',' between '>' and the separator.
+                        // The element after it is the final routing target.
+                        let last_sep_pos = gt_abs_pos;
+                        for (let i = gt_abs_pos + 1; i < sep_pos; i++) {
+                            if (msg.getUint8(i) === 44) { // ','
+                                last_sep_pos = i;
                             }
-
-                            dm_call_arr[dm_arr_index] = msg.getUint8(i);
-                            dm_arr_index++;
                         }
 
-                        dm_callsign = convBARRtoStr(dm_call_arr);
-
-                        // save it as tocall in the message obj to show to call info in chat bubble
-                        to_callsign_ = dm_callsign;
-
-                        console.log("DM Dest. Callsign: " + dm_callsign);
-
-                        // check if the dm call is a group message aka a number
-                        if(!isNaN(+dm_callsign)){
-                            isGrpMsg_ = 1;
-                            grpNum_ = +dm_callsign;
-                            console.log("Group Message Nr: " + grpNum_);
+                        // Extract the final routing element
+                        let last_elem_arr: number[] = [];
+                        let elem_idx = 0;
+                        for (let i = last_sep_pos + 1; i < sep_pos; i++) {
+                            last_elem_arr[elem_idx++] = msg.getUint8(i);
                         }
+                        const last_elem_str = convBARRtoStr(last_elem_arr);
+                        console.log("Last routing element: " + last_elem_str);
 
+                        if (last_elem_str === "*") {
+                            isDM_ = 0;
+                            console.log("Broadcast Message received");
+                        } else {
+                            isDM_ = 1;
+                            dm_callsign = last_elem_str;
+                            to_callsign_ = dm_callsign;
+                            console.log("DM Dest. Callsign: " + dm_callsign);
+
+                            // A pure number means group message
+                            if (!isNaN(+dm_callsign) && dm_callsign.trim() !== "") {
+                                isGrpMsg_ = 1;
+                                grpNum_ = +dm_callsign;
+                                console.log("Group Message Nr: " + grpNum_);
+                            }
+                        }
+                    } else {
+                        // Separator not found – treat as broadcast (should not normally occur)
+                        isDM_ = 0;
+                        console.log("Broadcast Message received (separator not found, fallback)");
                     }
                 }
 
@@ -753,6 +778,8 @@ export function useMSG() {
                     let data_vers_ = 0;
                     let alt_press_ = 0;  // currently F indicator is altitude from pressure but should be QFE, which is not ready implemented!
                     //let qfe_ = 0;
+                    let neighbour_count = 0;
+                    let groups_str = "";
 
                     // NEW-POS: 099 ! xA4ED0019 05 0 1 OE1KFR-2>*!4814.35N/01619.05E#/A=000804/P=984.3/H=48.0/T=20.7/O=20.8/F=243/G=36.3/V=3 HW:10 MOD:03 FCS:146D FW:1D LH:0A
                     
@@ -767,6 +794,14 @@ export function useMSG() {
                             console.log("Field Info: " + fieldinfo);
                             const value_str = str_split[i].slice(2);
                             console.log("Value: " + value_str);
+
+                            // if the fieldinfo starts with a N followed by a number it is the neighbour count. The number could be 1 or higher.
+                            if(fieldinfo.startsWith("N") && fieldinfo.length >= 2){
+                                neighbour_count = +fieldinfo.slice(1);
+                                console.log("Neighbour Count: " + neighbour_count);
+                                continue;
+                            }
+
 
                             switch (fieldinfo){
 
@@ -841,6 +876,17 @@ export function useMSG() {
                                     console.log("Alt Press: " + alt_press_);
                                     break;
                                 }
+                                case "R=": {
+                                    // Those are the groups a node has booked separated by semicolons. Example 232;2321;2323;
+                                    // The last semicolon is not needed and will be removed. The groups are stored in the database as a string.
+                                    const groups = value_str.split(";");
+                                    if (groups[groups.length - 1] === "") {
+                                        groups.pop();
+                                    }
+                                    groups_str = groups.join(",");
+                                    console.log("Groups: " + groups_str);
+                                    break;
+                                }
                                 
                             }
                         }
@@ -871,7 +917,9 @@ export function useMSG() {
                             temp_2: temp_out_,
                             gas_res: gas_res_,
                             co2: co2_,
-                            alt_press: alt_press_
+                            alt_press: alt_press_,
+                            neighbour_count: neighbour_count,
+                            groups: groups_str,
                         }
 
                         LogS.log(0, `Pos Msg from ${from_callsign_} via ${via_str}: Lat ${lat_degree_final} Lon ${lon_degree_final} Alt ${alt_nr_meter}m`);
@@ -1046,7 +1094,9 @@ export function useMSG() {
                                             temp_2: 0,
                                             co2: 0,
                                             alt_press: 0,
-                                            gas_res: 0
+                                            gas_res: 0,
+                                            neighbour_count: 0,
+                                            groups: " "
                                         }
                                         return newOwnPos;
                                     }

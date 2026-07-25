@@ -55,7 +55,7 @@ const NodeMap = () => {
 
   const [ currentPoint, setCurrentPoint ] = useState({ latitude: 48.20579, longitude: 16.37160 });
 
-  const [ markerInfo, setMarkerInfo] = useState({ lat_: 48.20579, lon_: 16.37160, alt_:243, call_:"OE1KFR-4", bat_:"100", hw_:"RAK4631", press_:0, hum_:0, temp_:0, qnh_:0, timestamp_:0, comment_:"", temp_2_:0, co2_:0, gas_res_:0, alt_press_:0 });
+  const [ markerInfo, setMarkerInfo] = useState({ lat_: 48.20579, lon_: 16.37160, alt_:243, call_:"OE1KFR-4", bat_:"100", hw_:"RAK4631", press_:0, hum_:0, temp_:0, qnh_:0, timestamp_:0, comment_:"", temp_2_:0, co2_:0, gas_res_:0, alt_press_:0, neighbour_count_:0, groups_:"" });
 
   const viewEntered = useRef<boolean>(false);
 
@@ -325,10 +325,10 @@ const NodeMap = () => {
   // show overlay of marker
   const handleShowMarkerInfo = (e:any, i:any, call:string, lat:number, lon:number, alt:number, bat:string, hw:string, 
     pressure:number, humidity:number, temperature:number, qnh:number, timestamp:number, comment:string, temp_2:number, co2:number, 
-    gas_res:number, alt_press:number) => {
+    gas_res:number, alt_press:number, neighbour_count:number, groups:string) => {
 
     const info = {call_:call, lat_:lat, lon_:lon, alt_:alt, bat_:bat, hw_:hw, press_:pressure, hum_:humidity, temp_:temperature, qnh_:qnh, 
-      timestamp_:timestamp, comment_:comment, temp_2_:temp_2, co2_:co2, gas_res_:gas_res, alt_press_:alt_press};
+      timestamp_:timestamp, comment_:comment, temp_2_:temp_2, co2_:co2, gas_res_:gas_res, alt_press_:alt_press, neighbour_count_:neighbour_count, groups_:groups};
     // print the info
     console.log("Marker Info: Call: " + call + " Lat: " + lat + " Lon: " + lon + " Alt: " + alt + " Bat: " + bat + " HW: " + hw + " Press: " + pressure + " Hum: " + humidity + " Temp: " + temperature + " QNH: " + qnh + " Time: " + timestamp + " Comment: " + comment + " Temp_2: " + temp_2 + " CO2: " + co2 + " Gas Res: " + gas_res + " Alt Press: " + alt_press);
     
@@ -408,7 +408,7 @@ const NodeMap = () => {
     setCenter(goToPos);
     sh_point_search.current = true;
     handleShowMarkerInfo(1,2,sPos.callSign, sPos.lat,sPos.lon,sPos.alt,sPos.bat,sPos.hw,sPos.pressure,sPos.humidity,
-      sPos.temperature,sPos.qnh,sPos.timestamp, sPos.comment, sPos.temp_2, sPos.co2, sPos.gas_res, sPos.alt_press);
+      sPos.temperature,sPos.qnh,sPos.timestamp, sPos.comment, sPos.temp_2, sPos.co2, sPos.gas_res, sPos.alt_press, sPos.neighbour_count, sPos.groups);
     
   }
 
@@ -546,7 +546,7 @@ const NodeMap = () => {
               <Marker
                 key={i}
                 onClick={e => handleShowMarkerInfo(e, i, pos.callSign, pos.lat, pos.lon, pos.alt, pos.bat, pos.hw, pos.pressure, pos.humidity, 
-                  pos.temperature, pos.qnh, pos.timestamp, pos.comment, pos.temp_2, pos.co2, pos.gas_res, pos.alt_press )}
+                  pos.temperature, pos.qnh, pos.timestamp, pos.comment, pos.temp_2, pos.co2, pos.gas_res, pos.alt_press, pos.neighbour_count, pos.groups )}
                 width={50}
                 anchor={[pos.lat, pos.lon]}
                 color={setMarkerColor(pos.callSign)} />
@@ -557,6 +557,7 @@ const NodeMap = () => {
                 <MapOverlay callSign={markerInfo.call_} lat={markerInfo.lat_} lon={markerInfo.lon_} alt={markerInfo.alt_} bat={markerInfo.bat_}
                   hw={markerInfo.hw_} pressure={markerInfo.press_} humidity={markerInfo.hum_} temperature={markerInfo.temp_} qnh={markerInfo.qnh_} timestamp={markerInfo.timestamp_} 
                   comment={markerInfo.comment_} temp_2={markerInfo.temp_2_} co2={markerInfo.co2_} gas_res={markerInfo.gas_res_} alt_press={markerInfo.alt_press_}
+                  neighbour_count={markerInfo.neighbour_count_} groups={markerInfo.groups_}
                   onCloseOverlay={onCloseOverlay}/>
               </Overlay>
             }

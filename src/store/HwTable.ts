@@ -32,6 +32,11 @@
 #define T_ETH_ELITE_1262 53
 #define HELTEC_T114 54
 #define T3_S3_V13 55
+#define T_CONNECT_PRO 56
+#define HELTEC_WIRELESS_PAPER 57
+#define HELTEC_E213 58
+#define ESP32_LORAPRS_E22 59
+#define ESP32_LORAPRS_RA01 60
  */
 
 
@@ -65,5 +70,10 @@ export const hwtable: {[key: number]: string} = {
     52:"HELTEC V4",
     53:"T-ETH Elite",
     54:"HELTEC T114",
-    55:"T3 S3 V1.3"
+    55:"T3 S3 V1.3 1262",
+    56:"T-CONNECT-PRO",
+    57:"Heltec W-Paper",
+    58:"HELTEC E213",
+    59:"LORAPRS E22",
+    60:"LORAPRS RA01"
 } 

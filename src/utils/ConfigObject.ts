@@ -27,7 +27,8 @@ class ConfClass{
             "GCB4": 0,
             "GCB5": 0,
             "CTRY": "none",
-            BOOST: false
+            BOOST: false,
+            BPIN: 0
         }
         this.own_position = {
             TYP: "G",
