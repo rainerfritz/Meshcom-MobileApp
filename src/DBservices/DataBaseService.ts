@@ -121,17 +121,6 @@ class DatabaseService {
                 });
             }
 
-            // delete the old ChatFilterTable
-            if (DatabaseService.db) {
-                await DatabaseService.db.execute(`
-                    DROP TABLE IF EXISTS ChatFilterTable;
-                `).then(() => {
-                    LogS.log(0, 'Old ChatFilterTable deleted');
-                }).catch((err) => {
-                    LogS.log(1, 'Error deleting ChatFilterTable:' + err);
-                });
-            }
-
             if (DatabaseService.db) {
                 console.log('Creating reconState table');
                 await DatabaseService.db.execute(`CREATE TABLE IF NOT EXISTS reconState (
@@ -166,6 +155,17 @@ class DatabaseService {
                 });
             } else {
                 LogS.log(1, 'Error creating ble_pins table. Database connection not open.');
+            }
+
+            if (DatabaseService.db) {
+                await DatabaseService.db.execute(`
+                    CREATE TABLE IF NOT EXISTS ChatSettings (
+                        channel TEXT PRIMARY KEY NOT NULL,
+                        audioEnabled INTEGER NOT NULL DEFAULT 1
+                    )
+                `).catch((err) => {
+                    LogS.log(1, 'Error creating ChatSettings table:' + err);
+                });
             }
 
 
@@ -722,6 +722,38 @@ class DatabaseService {
     // get the current chat filter setting string
     static getChatFilterSetting() {
         return this.chatFilterSetting;
+    }
+
+    // load all ChatSettings rows as a channel→audioEnabled map
+    static async getChatSettings(): Promise<Record<string, boolean>> {
+        const result: Record<string, boolean> = {};
+        if (DatabaseService.db) {
+            try {
+                const res = await DatabaseService.db.query('SELECT * FROM ChatSettings;');
+                if (res.values) {
+                    res.values.forEach((row: any) => {
+                        result[row.channel] = row.audioEnabled === 1;
+                    });
+                }
+            } catch (error) {
+                LogS.log(1, 'Error getting chat settings:' + error);
+            }
+        }
+        return result;
+    }
+
+    // persist audio-alert on/off for a channel (upsert)
+    static async setChatAudio(channel: string, enabled: boolean): Promise<void> {
+        if (DatabaseService.db) {
+            try {
+                await DatabaseService.db.execute(
+                    `INSERT INTO ChatSettings (channel, audioEnabled) VALUES ('${channel}', ${enabled ? 1 : 0})
+                     ON CONFLICT(channel) DO UPDATE SET audioEnabled = ${enabled ? 1 : 0};`
+                );
+            } catch (error) {
+                LogS.log(1, 'Error setting chat audio:' + error);
+            }
+        }
     }
 
 }

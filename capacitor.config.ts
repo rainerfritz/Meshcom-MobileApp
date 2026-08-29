@@ -8,6 +8,12 @@ const config: CapacitorConfig = {
     androidScheme: 'https'
   },
   plugins: {
+      LocalNotifications: {
+        smallIcon: 'res://drawable/meshcom_logo_32x32_transp_gray',
+        iconColor: '#3578e5',
+        sound: 'default',
+        presentationOptions: ['badge', 'sound', 'banner', 'list'],
+      },
       Keyboard: {
         resize: 'ionic',
         resizeOnFullScreen: false,

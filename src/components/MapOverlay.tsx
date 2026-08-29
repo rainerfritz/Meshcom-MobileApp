@@ -62,13 +62,13 @@ export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign,
                             </div>
                             {shExtInfo && (
                                 <div className="info">
-                                    <IonText>Pressure: {pressure}hPa</IonText><br />
-                                    <IonText>Temp: {temperature == 999 ? "n.a." : temperature}°C</IonText><br/>
-                                    <IonText>Temp 2: {temp_2 == 999 ? "n.a." : temp_2}°C</IonText><br/>
-                                    <IonText>Humidity: {humidity}%</IonText><br/>
-                                    <IonText>QNH: {qnh}hPa</IonText><br />
-                                    <IonText>eCO2: {co2}ppm</IonText><br />
-                                    <IonText>Gas Res.: {gas_res}k&Omega;</IonText><br />
+                                    {pressure !== 0 && <><IonText>Pressure: {pressure}hPa</IonText><br /></>}
+                                    {temperature !== 999 && <><IonText>Temp: {temperature}°C</IonText><br /></>}
+                                    {temp_2 !== 999 && <><IonText>Temp 2: {temp_2}°C</IonText><br /></>}
+                                    {humidity !== 0 && <><IonText>Humidity: {humidity}%</IonText><br /></>}
+                                    {qnh !== 0 && <><IonText>QNH: {qnh}hPa</IonText><br /></>}
+                                    {co2 !== 0 && <><IonText>eCO2: {co2}ppm</IonText><br /></>}
+                                    {gas_res !== 0 && <><IonText>Gas Res.: {gas_res}k&Omega;</IonText><br /></>}
                                 </div>
                             )}
                         </div>
@@ -77,7 +77,7 @@ export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign,
                             <IonButton size="small" onClick={() => setShExtInfo(!shExtInfo)}>
                                 {shExtInfo ? "Less" : "More"}
                             </IonButton>
-                            {shExtInfo && (<IonButton size="small" onClick={onCloseOverlay}>Close</IonButton>)}
+                            <IonButton size="small" onClick={onCloseOverlay}>Close</IonButton>
                         </div>
                     </IonCardContent>
                 </IonCard>

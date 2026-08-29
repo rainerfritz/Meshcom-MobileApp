@@ -1,4 +1,4 @@
-import { IonButton, IonActionSheet, IonContent, IonFooter, IonGrid, IonHeader, IonIcon, IonInput, IonItem, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonModal, IonCheckbox, IonSegmentButton, IonLabel, IonSegment, IonTextarea } from '@ionic/react';
+import { IonButton, IonActionSheet, IonContent, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonList, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonLabel, IonTextarea } from '@ionic/react';
 import React,{ useEffect, useRef, useState, createRef } from 'react';
 import {ConfType, MsgType, InfoData} from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
@@ -8,7 +8,7 @@ import { DevIDStore } from '../store';
 import { getConfigStore, getDevID, getMsgStore, getPlatformStore } from '../store/Selectors';
 import MsgStore from '../store/MsgStore';
 import ConfigStore from '../store/ConfStore';
-import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle, settings} from 'ionicons/icons';
+import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle, settings, mail, arrowBack, volumeHigh, volumeMute } from 'ionicons/icons';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import PlatformStore from '../store/PlatformStore';
 import { Keyboard } from '@capacitor/keyboard';
@@ -24,9 +24,9 @@ import NotifyMsgState from '../store/NotifyMsg';
 import { useHistory } from "react-router";
 import LogS from '../utils/LogService';
 import DatabaseService from '../DBservices/DataBaseService';
-import { set } from 'date-fns';
 import AlertCard from '../components/AlertCard';
 import NodeInfoStore from '../store/NodeInfoStore';
+import ChatSettingsStore from '../store/ChatSettingsStore';
 
 
 const Tab3: React.FC = () => {
@@ -118,10 +118,14 @@ const Tab3: React.FC = () => {
   // Nodeinfostore to get the groups subscribed on the node
   const nodeInfo_s:InfoData = useStoreState(NodeInfoStore, s => s.infoData);
 
-  // Segment chat filter state
-  const [segmentFilter, setSegmentFilter] = useState<string>("ALL");
+  // null = main list; non-null = the active chat filter ("ALL", "DM", or group number)
+  const [activeChatFilter, setActiveChatFilter] = useState<string | null>(null);
+  // unseen message flags per filter key
+  const [unseenFlags, setUnseenFlags] = useState<Record<string, boolean>>({});
+  // audio alert flags per channel (true = enabled, default when missing)
+  const audioFlags = ChatSettingsStore.useState(s => s.audioFlags);
 
-  // Flag that we send an DM. This should be active when we are in DM segment and in a group segment
+  // Flag that we send a DM when in DM or group segment
   const [sendDMGrpFlag, setSendDMGrpFlag] = useState<boolean>(false);
 
 
@@ -134,19 +138,19 @@ const Tab3: React.FC = () => {
     // set the bottom reference
     if(bottomRef.current === null) bottomRef.current = document.getElementById('bottomRefID') as HTMLDivElement;
 
-    // check if we have segmentbuttons to set from initialChatSegmentMarkers
+    // apply any unseen markers set while this page was inactive
     const initSegs: string[] = ConfigObject.getInitChatSegmentMarkers();
     if(initSegs.length > 0){
-      initSegs.forEach(seg => {
-        if(seg !== segmentFilter){
-          const Seqgmentbutton = document.getElementById(seg) as HTMLIonSegmentButtonElement;
-          if(Seqgmentbutton){
-            Seqgmentbutton.classList.add('segmentbutton_green');
-          }
-        }
-      });
+      const flags: Record<string, boolean> = {};
+      initSegs.forEach(seg => { flags[seg] = true; });
+      setUnseenFlags(prev => ({ ...prev, ...flags }));
       ConfigObject.clearInitChatSegmentMarkers();
     }
+
+    // load persisted audio settings
+    DatabaseService.getChatSettings().then(flags => {
+      ChatSettingsStore.update(s => { s.audioFlags = flags; });
+    });
 
     //const devid = devID_s;
     //updateDevID(devid);
@@ -387,6 +391,15 @@ const Tab3: React.FC = () => {
           vibration: true,
           sound: 'morse_r.wav'
         });
+        // silent channel used when audio alerts are disabled for a chat
+        await LocalNotifications.createChannel({
+          id: 'silent',
+          name: 'channel_silent',
+          importance: 3,
+          visibility: 1,
+          vibration: false,
+          sound: ''
+        });
         // sound: "android.resource://io.ionic.meshcom/raw/morse_r.wav"
         const channels = await LocalNotifications.listChannels();
         console.log("Channels:");
@@ -421,10 +434,10 @@ const Tab3: React.FC = () => {
   useEffect(() => {
     console.log("CHAT - New Message to Notify: ");
     console.log(notifyMsg_s);
-    const notify_title = "New Message from " + notifyMsg_s.fromCall;
-    notifyMsgUser(notify_title, notifyMsg_s.msgTXT);
 
     // if a message arrives in another segment than the current one set the background color class to indicate new message
+    if (notifyMsg_s.msgNr === 0) return; // skip default/initial state
+
     if (notifyMsg_s.isDM !== undefined && notifyMsg_s.isGrpMsg !== undefined) {
 
       let msgType = "ALL";
@@ -441,19 +454,20 @@ const Tab3: React.FC = () => {
 
       console.log("Message Type: " + msgType);
 
-      if (msgType !== segmentFilter) {
-        const Seqgmentbutton = document.getElementById(msgType) as HTMLIonSegmentButtonElement;
-        if (Seqgmentbutton) {
-          Seqgmentbutton.classList.add('segmentbutton_green');
-        }
+      const audioOn = ChatSettingsStore.getRawState().audioFlags[msgType] !== false;
+      const notify_title = "New Message from " + notifyMsg_s.fromCall;
+      notifyMsgUser(notify_title, notifyMsg_s.msgTXT, audioOn);
+
+      if (msgType !== activeChatFilter) {
+        setUnseenFlags(prev => ({ ...prev, [msgType]: true }));
       }
     }
 
   }, [notifyMsg_s.msgNr]);
 
 
-  // local notification method
-  const notifyMsgUser = async (title_:string, body_:string) => {
+  // local notification method — playSound controls whether sound is included
+  const notifyMsgUser = async (title_:string, body_:string, playSound: boolean = true) => {
     if(canNotify.current === true){
       if(thisPlatform === "ios"){
         LocalNotifications.schedule({
@@ -466,7 +480,7 @@ const Tab3: React.FC = () => {
                 at: new Date(Date.now() + 1000 * 1), // in 1 secs
                 repeats: false
               },
-              sound:''
+              ...(playSound ? { sound: 'default' } : {}),
             }]
         });
       }
@@ -482,10 +496,10 @@ const Tab3: React.FC = () => {
                 at: new Date(Date.now() + 1000 * 1), // in 1 secs
                 repeats: false
               },
-              channelId: '1',
+              channelId: playSound ? '1' : 'silent',
               smallIcon: 'res://drawable/meshcom_logo_32x32_transp_gray',
               largeIcon: 'res://drawable/meshcom_logo_64x64',
-              sound: 'morse_r.wav'
+              sound: playSound ? 'morse_r.wav' : ''
             }]
         });
       }
@@ -574,7 +588,7 @@ const Tab3: React.FC = () => {
           textAreaInputRef.current.value = resendTxt;
         }
         // If DM segment is active, fill toCall (the original recipient) into To Callsign input
-        if (segmentFilter === "DM") {
+        if (activeChatFilter === "DM") {
           const toCallResend = selMsg[0].toCall;
           toCallsign_.current = toCallResend;
           lastDMcallsign.current = toCallResend;
@@ -611,7 +625,7 @@ const Tab3: React.FC = () => {
         lastDMcallsign.current = selCall;
         setIsOpenAS(false);
 
-        if(segmentFilter !== "DM"){
+        if(activeChatFilter !== "DM"){
           handleSegmentChange("DM", false);
         }
 
@@ -687,30 +701,24 @@ const Tab3: React.FC = () => {
     scrollToBottom();
   }
 
-  // CHAT FIlterING with Segment Buttons
-  // handle the Seqgmentbutton for chat filtering and set filtering in the database-service
   const handleSegmentChange = (val: string, isGrp: boolean) => {
     console.log("Chat Filter Change to: " + val);
-    setSegmentFilter(val);
+    setActiveChatFilter(val);
 
     DatabaseService.setChatFilters(val);
 
-    // if we are in ALL segment close the to callsign input field and reset DM flag
     if (val === "ALL") {
       setShCallsign(false);
       setSendDMGrpFlag(false);
     }
 
-    // show the to callsign input only if we are in DM segment
     if (val === "DM") {
-      // remember the last DM callsign
       toCallsign_.current = lastDMcallsign.current;
       setShCallsign(true);
     } else {
       setShCallsign(false);
     }
 
-    // if we are in a group segment set the DM flag and set the destination call to the group number
     if (isGrp) {
       setSendDMGrpFlag(true);
       toCallsign_.current = val;
@@ -718,11 +726,25 @@ const Tab3: React.FC = () => {
       setSendDMGrpFlag(false);
     }
 
-    // remove the green background class from the segment button as we are now in this segment
-    const Seqgmentbutton = document.getElementById(val) as HTMLIonSegmentButtonElement;
-    if(Seqgmentbutton){
-      Seqgmentbutton.classList.remove('segmentbutton_green');
-    }
+    // clear unseen flag for this filter now that we're viewing it
+    setUnseenFlags(prev => ({ ...prev, [val]: false }));
+
+    // delay until chat DOM is rendered
+    setTimeout(() => scrollToBottom(), 100);
+  }
+
+  const goBackToList = () => {
+    setActiveChatFilter(null);
+    setShCallsign(false);
+    setSendDMGrpFlag(false);
+  }
+
+  const toggleAudio = (channel: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const current = audioFlags[channel] !== false; // missing key = enabled by default
+    const next = !current;
+    ChatSettingsStore.update(s => { s.audioFlags = { ...s.audioFlags, [channel]: next }; });
+    DatabaseService.setChatAudio(channel, next);
   }
   
 
@@ -731,44 +753,19 @@ const Tab3: React.FC = () => {
     <IonPage>
       <IonHeader>
         <IonToolbar>
-            <IonSegment value={segmentFilter} scrollable={true}>
-              <IonSegmentButton value="ALL" onClick={() => handleSegmentChange("ALL", false)} id='ALL'>
-                <IonLabel>All</IonLabel>
-              </IonSegmentButton>
-              <IonSegmentButton value="DM" onClick={() => handleSegmentChange("DM", false)} id='DM'>
-                <IonLabel>DM</IonLabel>
-              </IonSegmentButton>
-              {nodeInfo_s.GCB0 !== 0 &&
-              <IonSegmentButton value={nodeInfo_s.GCB0.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB0.toString(), true)} id={nodeInfo_s.GCB0.toString()}>
-                <IonLabel>{nodeInfo_s.GCB0.toString()}</IonLabel>
-              </IonSegmentButton>
-              }
-              {nodeInfo_s.GCB1 !== 0 &&
-              <IonSegmentButton value={nodeInfo_s.GCB1.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB1.toString(), true)} id={nodeInfo_s.GCB1.toString()}>
-                <IonLabel>{nodeInfo_s.GCB1.toString()}</IonLabel>
-              </IonSegmentButton>
-              }
-              {nodeInfo_s.GCB2 !== 0 &&
-              <IonSegmentButton value={nodeInfo_s.GCB2.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB2.toString(), true)} id={nodeInfo_s.GCB2.toString()}>
-                <IonLabel>{nodeInfo_s.GCB2.toString()}</IonLabel>
-              </IonSegmentButton>
-              }
-              {nodeInfo_s.GCB3 !== 0 &&
-              <IonSegmentButton value={nodeInfo_s.GCB3.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB3.toString(), true)} id={nodeInfo_s.GCB3.toString()}>
-                <IonLabel>{nodeInfo_s.GCB3.toString()}</IonLabel>
-              </IonSegmentButton>
-              }
-              {nodeInfo_s.GCB4 !== 0 &&
-              <IonSegmentButton value={nodeInfo_s.GCB4.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB4.toString(), true)} id={nodeInfo_s.GCB4.toString()}>
-                <IonLabel>{nodeInfo_s.GCB4.toString()}</IonLabel>
-              </IonSegmentButton>
-              }
-              {nodeInfo_s.GCB5 !== 0 &&
-              <IonSegmentButton value={nodeInfo_s.GCB5.toString()} onClick={() => handleSegmentChange(nodeInfo_s.GCB5.toString(), true)} id={nodeInfo_s.GCB5.toString()}>
-                <IonLabel>{nodeInfo_s.GCB5.toString()}</IonLabel>
-              </IonSegmentButton>
-              }
-            </IonSegment>
+          {activeChatFilter !== null && (
+            <IonButtons slot="start">
+              <IonButton onClick={goBackToList}>
+                <IonIcon icon={arrowBack} slot="icon-only" />
+              </IonButton>
+            </IonButtons>
+          )}
+          <IonTitle>
+            {activeChatFilter === null ? "Chat" :
+             activeChatFilter === "ALL" ? "All Messages" :
+             activeChatFilter === "DM" ? "Direct Messages" :
+             `Group ${activeChatFilter}`}
+          </IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
@@ -807,13 +804,13 @@ const Tab3: React.FC = () => {
                 action: 'resend',
               },
             }] : []),
-            ...(segmentFilter !== "DM" ? [{
+            ...(activeChatFilter !== "DM" ? [{
               text: 'Direct Message',
               data: {
                 action: 'sendDM',
               },
             }] : []),
-            ...(segmentFilter === "DM" ? [{
+            ...(activeChatFilter === "DM" ? [{
               text: 'Reply To',
               data: {
                 action: 'replyTo',
@@ -831,89 +828,155 @@ const Tab3: React.FC = () => {
         ></IonActionSheet>
 
 
-        <div id="spacer-top"></div>
-        <div id="msg-box" >
+        {activeChatFilter === null ? (
+          <IonList>
+            <IonItem className="chat-list-item" button onClick={() => handleSegmentChange("ALL", false)}>
+              {unseenFlags["ALL"] && <IonIcon icon={mail} color="success" slot="start" />}
+              <IonLabel>To All Channel</IonLabel>
+              <IonButton slot="end" fill="clear" onClick={e => toggleAudio("ALL", e)}>
+                <IonIcon icon={audioFlags["ALL"] !== false ? volumeHigh : volumeMute} color={audioFlags["ALL"] !== false ? "primary" : "medium"} />
+              </IonButton>
+            </IonItem>
+            <IonItem className="chat-list-item" button onClick={() => handleSegmentChange("DM", false)}>
+              {unseenFlags["DM"] && <IonIcon icon={mail} color="success" slot="start" />}
+              <IonLabel>Direct Messages</IonLabel>
+              <IonButton slot="end" fill="clear" onClick={e => toggleAudio("DM", e)}>
+                <IonIcon icon={audioFlags["DM"] !== false ? volumeHigh : volumeMute} color={audioFlags["DM"] !== false ? "primary" : "medium"} />
+              </IonButton>
+            </IonItem>
+            {nodeInfo_s.GCB0 !== 0 && (
+              <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB0.toString(), true)}>
+                {unseenFlags[nodeInfo_s.GCB0.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
+                <IonLabel>Group {nodeInfo_s.GCB0}</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB0.toString(), e)}>
+                  <IonIcon icon={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? "primary" : "medium"} />
+                </IonButton>
+              </IonItem>
+            )}
+            {nodeInfo_s.GCB1 !== 0 && (
+              <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB1.toString(), true)}>
+                {unseenFlags[nodeInfo_s.GCB1.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
+                <IonLabel>Group {nodeInfo_s.GCB1}</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB1.toString(), e)}>
+                  <IonIcon icon={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? "primary" : "medium"} />
+                </IonButton>
+              </IonItem>
+            )}
+            {nodeInfo_s.GCB2 !== 0 && (
+              <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB2.toString(), true)}>
+                {unseenFlags[nodeInfo_s.GCB2.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
+                <IonLabel>Group {nodeInfo_s.GCB2}</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB2.toString(), e)}>
+                  <IonIcon icon={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? "primary" : "medium"} />
+                </IonButton>
+              </IonItem>
+            )}
+            {nodeInfo_s.GCB3 !== 0 && (
+              <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB3.toString(), true)}>
+                {unseenFlags[nodeInfo_s.GCB3.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
+                <IonLabel>Group {nodeInfo_s.GCB3}</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB3.toString(), e)}>
+                  <IonIcon icon={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? "primary" : "medium"} />
+                </IonButton>
+              </IonItem>
+            )}
+            {nodeInfo_s.GCB4 !== 0 && (
+              <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB4.toString(), true)}>
+                {unseenFlags[nodeInfo_s.GCB4.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
+                <IonLabel>Group {nodeInfo_s.GCB4}</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB4.toString(), e)}>
+                  <IonIcon icon={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? "primary" : "medium"} />
+                </IonButton>
+              </IonItem>
+            )}
+            {nodeInfo_s.GCB5 !== 0 && (
+              <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB5.toString(), true)}>
+                {unseenFlags[nodeInfo_s.GCB5.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
+                <IonLabel>Group {nodeInfo_s.GCB5}</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB5.toString(), e)}>
+                  <IonIcon icon={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? "primary" : "medium"} />
+                </IonButton>
+              </IonItem>
+            )}
+          </IonList>
+        ) : (
+          <>
+            <div id="spacer-top"></div>
+            <div id="msg-box" >
 
-          {msgArr_s.map((msg, i) => (
-            <>
-              {checkMidnight(msg) &&
-                <div className="date-panel">
-                  <IonText id="msg-time">{getLocalDate(msg)}</IonText>
-                </div>}
+              {msgArr_s.map((msg, i) => (
+                <>
+                  {checkMidnight(msg) &&
+                    <div className="date-panel">
+                      <IonText id="msg-time">{getLocalDate(msg)}</IonText>
+                    </div>}
 
-              {msg.msgNr !== 0 ? <>
+                  {msg.msgNr !== 0 ? <>
 
-                <div key={i} onTouchStart={handleButtonPress} onTouchEnd={() => handleButtonRelease(msg.msgNr)} className={msgType(msg)}>
+                    <div key={i} onTouchStart={handleButtonPress} onTouchEnd={() => handleButtonRelease(msg.msgNr)} className={msgType(msg)}>
 
-                  {msg.isDM ? <>
-                    {(!isNaN(+msg.toCall) || msg.isGrpMsg) ? <>
                       <div className="ion-text-start">
-                      <IonText id="msg-dm">GROUP-MESSAGE {msg.toCall}</IonText>
-                    </div>
-                    </>:<>
-                    <div className="ion-text-start">
-                      <IonText id="msg-dm">DIRECT-MESSAGE</IonText>
-                    </div>
-                    </>}
-                  </> : <></>}
-
-                  <div className="ion-text-start">
-                    <IonText id="msg-time">{msg.msgTime}</IonText>
-                  </div>
-                  {msg.via.length > 1 ? <>
-                    <div className="ion-text-start">
-                      <IonText id="msg-via">via:{msg.via}</IonText>
-                    </div>
-                  </> : <></>}
-
-                  <div className="ion-text-start">
-                    {msg.isDM ? <>
-                      {msg.fromCall === config_s.callSign ? <>
+                        <IonText id="msg-time">{msg.msgTime}</IonText>
+                      </div>
+                      {msg.via.length > 1 ? <>
                         <div className="ion-text-start">
-                        <IonText id="from-call">To: {msg.toCall}</IonText>
+                          <IonText id="msg-via">via:{msg.via}</IonText>
                         </div>
-                      </>:<>
-                      <IonText id="from-call" >{msg.fromCall}: </IonText>
-                      </>}
-                    </> : <>
-                    <IonText id="from-call" >{msg.fromCall}: </IonText>
-                    </>}
-                    
-                  </div>
-
-                  <div id="spacer-txtbox"></div>
-
-                  <div className="msg_text">
-                    
-                    <MsgTxtLink msgTxt={msg.msgTXT} />
-                    
-                  </div>
-                  <div className='chkIcon'>
-
-                    {msg.fromCall === config_s.callSign ? <>
-                      {msg.ack === 0 ? <>
-                        <IonIcon icon={checkmark} id="chkIcon" size='small' slot='end' />
                       </> : <></>}
-                      {msg.ack === 1 ? <>
-                        <IonIcon icon={cloudOutline} id="chkIcon" size='small' slot='end' />
-                      </> : <></>}
-                      {msg.ack === 2 ? <>
-                        <IonIcon icon={cloudDoneOutline} id="chkIcon" size='small' slot='end' />
-                      </> : <></>}
-                    </> : <></>}
-                  </div>
-                </div>
 
-              </> : <></>}
+                      <div className="ion-text-start">
+                        {msg.isDM ? <>
+                          {msg.fromCall === config_s.callSign ? <>
+                            {(activeChatFilter === "ALL" || activeChatFilter === "DM") && (
+                              <div className="ion-text-start">
+                                <IonText id="from-call">To: {msg.toCall}</IonText>
+                              </div>
+                            )}
+                          </>:<>
+                          <IonText id="from-call" >{msg.fromCall}: </IonText>
+                          </>}
+                        </> : <>
+                        <IonText id="from-call" >{msg.fromCall}: </IonText>
+                        </>}
+                        
+                      </div>
 
-            </>
-          ))}
+                      <div id="spacer-txtbox"></div>
 
-        </div>
-        <div id="bottom" style={{ height: chatBoxPadding }}/>
-        <div ref={bottomRef} id="bottomRefID"/>
+                      <div className="msg_text">
+                        
+                        <MsgTxtLink msgTxt={msg.msgTXT} />
+                        
+                      </div>
+                      <div className='chkIcon'>
+
+                        {msg.fromCall === config_s.callSign ? <>
+                          {msg.ack === 0 ? <>
+                            <IonIcon icon={checkmark} id="chkIcon" size='small' slot='end' />
+                          </> : <></>}
+                          {msg.ack === 1 ? <>
+                            <IonIcon icon={cloudOutline} id="chkIcon" size='small' slot='end' />
+                          </> : <></>}
+                          {msg.ack === 2 ? <>
+                            <IonIcon icon={cloudDoneOutline} id="chkIcon" size='small' slot='end' />
+                          </> : <></>}
+                        </> : <></>}
+                      </div>
+                    </div>
+
+                  </> : <></>}
+
+                </>
+              ))}
+
+            </div>
+            <div id="bottom" style={{ height: chatBoxPadding }}/>
+            <div ref={bottomRef} id="bottomRefID"/>
+          </>
+        )}
       </IonContent>
 
+      {activeChatFilter !== null && (
       <IonFooter>
         <div className="send-text">
 
@@ -956,6 +1019,7 @@ const Tab3: React.FC = () => {
           </div>
         </div>
       </IonFooter>
+      )}
       
     </IonPage>
   );

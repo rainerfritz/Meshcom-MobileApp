@@ -175,3 +175,14 @@ ion-textarea.customTextAreaInput{
 .textarea_field{
     margin-top: 5px;
 }
+
+.chat-list-item {
+    --min-height: 65px;
+    --padding-top: 6px;
+    --padding-bottom: 6px;
+}
+
+.chat-list-item ion-label {
+    font-size: 1.3em !important;
+    font-weight: 600;
+}
