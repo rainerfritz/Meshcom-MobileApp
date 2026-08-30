@@ -160,6 +160,8 @@ const Tab3: React.FC = () => {
   const [showScrollDownBtn, setShowScrollDownBtn] = useState<boolean>(false);
   // remember scroll position per channel so it's restored when switching back
   const scrollPositions = useRef<Record<string, number>>({});
+  // remember whether each channel was scrolled to the bottom, so we re-scroll to the (possibly new) bottom instead of an outdated position
+  const atBottomPositions = useRef<Record<string, boolean>>({});
   // true while we're programmatically animating a scroll, to ignore the scroll events it fires
   const isProgrammaticScroll = useRef<boolean>(false);
 
@@ -266,6 +268,7 @@ const Tab3: React.FC = () => {
     isAtBottomRef.current = atBottom;
     setShowScrollDownBtn(!atBottom);
     scrollPositions.current[activeChatFilter] = el.scrollTop;
+    atBottomPositions.current[activeChatFilter] = atBottom;
     if (atBottom) {
       ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [activeChatFilter]: false }; });
     }
@@ -947,7 +950,9 @@ const Tab3: React.FC = () => {
   const restoreScrollPosition = async (channel: string) => {
     if (!contentRef.current) return;
     const saved = scrollPositions.current[channel];
-    if (saved !== undefined) {
+    // if the channel was previously at the bottom, always jump to the (possibly new) bottom
+    // instead of restoring the old scrollTop, since messages may have arrived while away
+    if (saved !== undefined && !atBottomPositions.current[channel]) {
       const el = await contentRef.current.getScrollElement();
       el.scrollTop = saved;
       const atBottom = el.scrollHeight - saved - el.clientHeight < 60;
