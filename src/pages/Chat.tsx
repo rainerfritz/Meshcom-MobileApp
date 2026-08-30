@@ -1,4 +1,4 @@
-import { IonButton, IonActionSheet, IonContent, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonList, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonLabel, IonTextarea } from '@ionic/react';
+import { IonButton, IonActionSheet, IonContent, IonFab, IonFabButton, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonList, IonModal, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonLabel, IonTextarea } from '@ionic/react';
 import React,{ useEffect, useRef, useState, createRef } from 'react';
 import {ConfType, MsgType, InfoData} from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
@@ -8,7 +8,7 @@ import { DevIDStore } from '../store';
 import { getConfigStore, getDevID, getMsgStore, getPlatformStore } from '../store/Selectors';
 import MsgStore from '../store/MsgStore';
 import ConfigStore from '../store/ConfStore';
-import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle, settings, mail, arrowBack, volumeHigh, volumeMute } from 'ionicons/icons';
+import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle, settings, mail, arrowBack, volumeHigh, volumeMute, chevronDownCircle, funnel, close as closeIcon } from 'ionicons/icons';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import PlatformStore from '../store/PlatformStore';
 import { Keyboard } from '@capacitor/keyboard';
@@ -27,6 +27,7 @@ import DatabaseService from '../DBservices/DataBaseService';
 import AlertCard from '../components/AlertCard';
 import NodeInfoStore from '../store/NodeInfoStore';
 import ChatSettingsStore from '../store/ChatSettingsStore';
+import ChatUnseenStore from '../store/ChatUnseenStore';
 
 
 const Tab3: React.FC = () => {
@@ -120,10 +121,33 @@ const Tab3: React.FC = () => {
 
   // null = main list; non-null = the active chat filter ("ALL", "DM", or group number)
   const [activeChatFilter, setActiveChatFilter] = useState<string | null>(null);
-  // unseen message flags per filter key
-  const [unseenFlags, setUnseenFlags] = useState<Record<string, boolean>>({});
+  // unseen message flags per filter key, shared with the tab bar badge
+  const unseenFlags = ChatUnseenStore.useState(s => s.unseenFlags);
   // audio alert flags per channel (true = enabled, default when missing)
   const audioFlags = ChatSettingsStore.useState(s => s.audioFlags);
+  // blocked callsigns per channel key ("GLOBAL" | "ALL" | "DM" | group number)
+  const blockedCallsigns = ChatSettingsStore.useState(s => s.blockedCallsigns);
+
+  // block-callsign flow: candidate callsign, scope-choice action sheet, confirmation alert
+  const [blockCandidateCall, setBlockCandidateCall] = useState<string>("");
+  const [isOpenBlockScopeAS, setIsOpenBlockScopeAS] = useState<boolean>(false);
+  const [shConfirmBlockAlert, setShConfirmBlockAlert] = useState<boolean>(false);
+  const [confirmBlockScope, setConfirmBlockScope] = useState<string>("");
+
+  // filter management modal (funnel icon on list items)
+  const [showFilterModal, setShowFilterModal] = useState<boolean>(false);
+  const [filterModalChannel, setFilterModalChannel] = useState<string>("");
+
+  // reference to the IonContent to control/observe scrolling
+  const contentRef = useRef<HTMLIonContentElement>(null);
+  // whether the user is currently scrolled to the bottom of the active chat
+  const isAtBottomRef = useRef<boolean>(true);
+  // show the "scroll to bottom" floating button when the user has scrolled up
+  const [showScrollDownBtn, setShowScrollDownBtn] = useState<boolean>(false);
+  // remember scroll position per channel so it's restored when switching back
+  const scrollPositions = useRef<Record<string, number>>({});
+  // true while we're programmatically animating a scroll, to ignore the scroll events it fires
+  const isProgrammaticScroll = useRef<boolean>(false);
 
   // Flag that we send a DM when in DM or group segment
   const [sendDMGrpFlag, setSendDMGrpFlag] = useState<boolean>(false);
@@ -143,19 +167,19 @@ const Tab3: React.FC = () => {
     if(initSegs.length > 0){
       const flags: Record<string, boolean> = {};
       initSegs.forEach(seg => { flags[seg] = true; });
-      setUnseenFlags(prev => ({ ...prev, ...flags }));
+      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, ...flags }; });
       ConfigObject.clearInitChatSegmentMarkers();
     }
 
-    // load persisted audio settings
-    DatabaseService.getChatSettings().then(flags => {
-      ChatSettingsStore.update(s => { s.audioFlags = flags; });
+    // load persisted audio + block-filter settings
+    DatabaseService.getChatSettings().then(({ audioFlags, blockedCallsigns }) => {
+      ChatSettingsStore.update(s => { s.audioFlags = audioFlags; s.blockedCallsigns = blockedCallsigns; });
     });
 
     //const devid = devID_s;
     //updateDevID(devid);
-    scrollToBottom();
-  });
+    if (activeChatFilter !== null) scrollToBottom();
+  }, [activeChatFilter]);
 
 
   // do everything we need to do before entering the screen
@@ -166,7 +190,7 @@ const Tab3: React.FC = () => {
       hasNotifyPermission();
     }
 
-  });
+  }, [thisPlatform]);
 
   // remember that we left the page
   useIonViewWillLeave(()=>{
@@ -183,7 +207,7 @@ const Tab3: React.FC = () => {
     // scroll down if Chat screen gets active again
     if (isAppActive) {
 
-      scrollToBottom();
+      if (activeChatFilter !== null) scrollToBottom();
     } 
   }, [isAppActive]);
 
@@ -198,16 +222,30 @@ const Tab3: React.FC = () => {
 
 
   // always show last message in chat
-  const scrollToBottom= async () => {
-    if(bottomRef.current === null)
-    bottomRef.current = document.getElementById('bottomRefID') as HTMLDivElement;
-    if (bottomRef.current) {
-      for (let i = 0; i < 3; i++) {
-        await new Promise(r => setTimeout(r, 200));
-        if (bottomRef.current) {
-          bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }
+  const scrollToBottom = async () => {
+    if (contentRef.current) {
+      isProgrammaticScroll.current = true;
+      await contentRef.current.scrollToBottom(300);
+      isProgrammaticScroll.current = false;
+    }
+    isAtBottomRef.current = true;
+    setShowScrollDownBtn(false);
+    if (activeChatFilter) {
+      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [activeChatFilter]: false }; });
+    }
+  }
+
+  // detect scroll position to know if the user is at the bottom, show/hide the scroll-down button and remember position per channel
+  const handleScroll = async () => {
+    if (!contentRef.current || activeChatFilter === null || isProgrammaticScroll.current) return;
+    const el = await contentRef.current.getScrollElement();
+    const threshold = 60;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    isAtBottomRef.current = atBottom;
+    setShowScrollDownBtn(!atBottom);
+    scrollPositions.current[activeChatFilter] = el.scrollTop;
+    if (atBottom) {
+      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [activeChatFilter]: false }; });
     }
   }
 
@@ -325,7 +363,8 @@ const Tab3: React.FC = () => {
             // close keyboard
             Keyboard.hide();
             
-            //scrollToBottom();
+            // always jump to the bottom to show the message just sent
+            scrollToBottom();
             
           }
         }
@@ -418,13 +457,15 @@ const Tab3: React.FC = () => {
   }
 
 
-  // scroll to bottom if new message arrives
+  // scroll to bottom if new message arrives, but only if the user hasn't scrolled up
   useEffect(() => {
 
     if (msgArr_s && msgArr_s.length > 0) {
       console.log("Chat - New Message Arrived");          
 
-      scrollToBottom();
+      if (isAtBottomRef.current) {
+        scrollToBottom();
+      }
     }
 
   }, [msgArr_s]);
@@ -458,9 +499,9 @@ const Tab3: React.FC = () => {
       const notify_title = "New Message from " + notifyMsg_s.fromCall;
       notifyMsgUser(notify_title, notifyMsg_s.msgTXT, audioOn);
 
-      if (msgType !== activeChatFilter) {
-        setUnseenFlags(prev => ({ ...prev, [msgType]: true }));
-      }
+      // only counts as "seen" if the chat tab is visible, showing this exact channel, scrolled to the bottom
+      const isSeen = thisPageActive.current && isAppActive && msgType === activeChatFilter && isAtBottomRef.current;
+      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [msgType]: !isSeen }; });
     }
 
   }, [notifyMsg_s.msgNr]);
@@ -537,18 +578,19 @@ const Tab3: React.FC = () => {
 
 
   // LongPress Handling on Messages to fire actionsheet
-  let btnpresstime = 0;
+  // must be a ref (not a plain variable) so it survives re-renders between touchstart and touchend
+  const btnpresstime = useRef<number>(0);
 
   const handleButtonPress = () => {
-    btnpresstime = Date.now();
-    console.log("Long Press time start: " + btnpresstime);
+    btnpresstime.current = Date.now();
+    console.log("Long Press time start: " + btnpresstime.current);
   }
 
   // check how long clicked on a message to show options
   const handleButtonRelease = (msgNr: number) => {
 
     const btnstop = Date.now();
-    const difftime = btnstop - btnpresstime;
+    const difftime = btnstop - btnpresstime.current;
     console.log("Long Press time stop: " + btnstop);
     console.log("Diff: " + difftime);
 
@@ -602,12 +644,25 @@ const Tab3: React.FC = () => {
       if (asActionDetail === "replyTo") {
         console.log("Reply To pressed");
         const replyToCall = selMsg[0].fromCall;
-        toCallsign_.current = replyToCall;
-        lastDMcallsign.current = replyToCall;
-        setShCallsign(true);
-        if (callsignInputRef.current) {
-          callsignInputRef.current.value = replyToCall;
+        if (activeChatFilter === "DM") {
+          toCallsign_.current = replyToCall;
+          lastDMcallsign.current = replyToCall;
+          setShCallsign(true);
+          if (callsignInputRef.current) {
+            callsignInputRef.current.value = replyToCall;
+          }
+        } else {
+          // in ALL/group channels prefill the message text with an @mention instead
+          if (textAreaInputRef.current) {
+            textAreaInputRef.current.value = "@" + replyToCall + " ";
+          }
         }
+      }
+
+      if (asActionDetail === "blockCallsign") {
+        console.log("Block Callsign pressed");
+        setBlockCandidateCall(selMsg[0].fromCall);
+        setIsOpenBlockScopeAS(true);
       }
 
       if (asActionDetail === "sendDM") {
@@ -644,6 +699,56 @@ const Tab3: React.FC = () => {
       string: copytext
     });
   };
+
+
+  // handle the Global / This Chat Only / Cancel choice after picking "Block Callsign"
+  const handleBlockScopeSheet = (detailAS: OverlayEventDetail) => {
+    setIsOpenBlockScopeAS(false);
+    if (detailAS.data && detailAS.data.scope && detailAS.data.scope !== "cancel") {
+      setConfirmBlockScope(detailAS.data.scope);
+      setShConfirmBlockAlert(true);
+    }
+  }
+
+  // apply the block after user confirms, persist it and refresh the shared store
+  const applyBlockCallsign = async () => {
+    setShConfirmBlockAlert(false);
+    await DatabaseService.blockCallsign(confirmBlockScope, blockCandidateCall);
+    ChatSettingsStore.update(s => { s.blockedCallsigns = DatabaseService.getBlockedCallsignsSnapshot(); });
+  }
+
+  // remove a single blocked callsign from a channel (or GLOBAL)
+  const handleUnblockCallsign = async (channel: string, callsign: string) => {
+    await DatabaseService.unblockCallsign(channel, callsign);
+    ChatSettingsStore.update(s => { s.blockedCallsigns = DatabaseService.getBlockedCallsignsSnapshot(); });
+  }
+
+  // remove all blocked callsigns for a channel (or GLOBAL)
+  const handleClearAllBlocks = async (channel: string) => {
+    await DatabaseService.clearBlockedCallsigns(channel);
+    ChatSettingsStore.update(s => { s.blockedCallsigns = DatabaseService.getBlockedCallsignsSnapshot(); });
+  }
+
+  // human-readable label for a channel key, used in titles and the filter modal
+  const getChannelLabel = (channel: string): string => {
+    if (channel === "ALL") return "To All Channel";
+    if (channel === "DM") return "Direct Messages";
+    return "Group " + channel;
+  }
+
+  // open the filter management modal for a given channel
+  const openFilterModal = (channel: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setFilterModalChannel(channel);
+    setShowFilterModal(true);
+  }
+
+  // whether a channel (or global) currently has any blocked callsigns, to show the funnel icon
+  const hasActiveFilter = (channel: string): boolean => {
+    const global = blockedCallsigns["GLOBAL"] || [];
+    const chArr = blockedCallsigns[channel] || [];
+    return global.length > 0 || chArr.length > 0;
+  }
 
 
 
@@ -703,6 +808,7 @@ const Tab3: React.FC = () => {
 
   const handleSegmentChange = (val: string, isGrp: boolean) => {
     console.log("Chat Filter Change to: " + val);
+
     setActiveChatFilter(val);
 
     DatabaseService.setChatFilters(val);
@@ -727,13 +833,32 @@ const Tab3: React.FC = () => {
     }
 
     // clear unseen flag for this filter now that we're viewing it
-    setUnseenFlags(prev => ({ ...prev, [val]: false }));
+    ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [val]: false }; });
 
-    // delay until chat DOM is rendered
-    setTimeout(() => scrollToBottom(), 100);
+    // delay until chat DOM is rendered, then restore the saved scroll position or jump to bottom
+    setTimeout(() => restoreScrollPosition(val), 100);
+  }
+
+  // restore a channel's saved scroll position, or scroll to bottom if it has none yet
+  const restoreScrollPosition = async (channel: string) => {
+    if (!contentRef.current) return;
+    const saved = scrollPositions.current[channel];
+    if (saved !== undefined) {
+      const el = await contentRef.current.getScrollElement();
+      el.scrollTop = saved;
+      const atBottom = el.scrollHeight - saved - el.clientHeight < 60;
+      isAtBottomRef.current = atBottom;
+      setShowScrollDownBtn(!atBottom);
+      if (atBottom) {
+        ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [channel]: false }; });
+      }
+    } else {
+      await scrollToBottom();
+    }
   }
 
   const goBackToList = () => {
+    // scroll position of the outgoing channel is already tracked continuously by handleScroll
     setActiveChatFilter(null);
     setShCallsign(false);
     setSendDMGrpFlag(false);
@@ -761,14 +886,11 @@ const Tab3: React.FC = () => {
             </IonButtons>
           )}
           <IonTitle>
-            {activeChatFilter === null ? "Chat" :
-             activeChatFilter === "ALL" ? "All Messages" :
-             activeChatFilter === "DM" ? "Direct Messages" :
-             `Group ${activeChatFilter}`}
+            {activeChatFilter === null ? "Chat" : getChannelLabel(activeChatFilter)}
           </IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="ion-padding">
+      <IonContent className="ion-padding" ref={contentRef} scrollEvents={true} onIonScroll={handleScroll}>
 
         <IonAlert
           isOpen={shDiscoCard}
@@ -788,6 +910,23 @@ const Tab3: React.FC = () => {
           message={alMsg}
           onDismiss={() => setShAlertCard(false)}
         />        
+
+        <IonAlert
+          isOpen={shConfirmBlockAlert}
+          header={`Block Callsign ${blockCandidateCall}`}
+          message={confirmBlockScope === "GLOBAL" ? "Block this callsign in all chats?" : `Block this callsign in ${getChannelLabel(confirmBlockScope)} only?`}
+          buttons={[
+            {
+              text: 'No',
+              role: 'cancel',
+              handler: () => setShConfirmBlockAlert(false),
+            },
+            {
+              text: 'Yes',
+              handler: () => applyBlockCallsign(),
+            },
+          ]}
+        />
 
         <IonActionSheet
           isOpen={isOpenAS}
@@ -810,10 +949,16 @@ const Tab3: React.FC = () => {
                 action: 'sendDM',
               },
             }] : []),
-            ...(activeChatFilter === "DM" ? [{
+            {
               text: 'Reply To',
               data: {
                 action: 'replyTo',
+              },
+            },
+            ...(msgArr_s.some(m => m.msgNr === msgNrAS && m.fromCall !== config_s.callSign) ? [{
+              text: 'Block Callsign',
+              data: {
+                action: 'blockCallsign',
               },
             }] : []),
             {
@@ -827,12 +972,38 @@ const Tab3: React.FC = () => {
           onDidDismiss={({ detail }) => handleActionSheet(detail)}
         ></IonActionSheet>
 
+        <IonActionSheet
+          isOpen={isOpenBlockScopeAS}
+          header={`Block ${blockCandidateCall}`}
+          buttons={[
+            {
+              text: 'Globally',
+              data: { scope: 'GLOBAL' },
+            },
+            {
+              text: 'This Chat Only',
+              data: { scope: activeChatFilter },
+            },
+            {
+              text: 'Cancel',
+              role: 'cancel',
+              data: { scope: 'cancel' },
+            },
+          ]}
+          onDidDismiss={({ detail }) => handleBlockScopeSheet(detail)}
+        ></IonActionSheet>
+
 
         {activeChatFilter === null ? (
           <IonList>
             <IonItem className="chat-list-item" button onClick={() => handleSegmentChange("ALL", false)}>
               {unseenFlags["ALL"] && <IonIcon icon={mail} color="success" slot="start" />}
               <IonLabel>To All Channel</IonLabel>
+              {hasActiveFilter("ALL") && (
+                <IonButton slot="end" fill="clear" onClick={e => openFilterModal("ALL", e)}>
+                  <IonIcon icon={funnel} color="warning" />
+                </IonButton>
+              )}
               <IonButton slot="end" fill="clear" onClick={e => toggleAudio("ALL", e)}>
                 <IonIcon icon={audioFlags["ALL"] !== false ? volumeHigh : volumeMute} color={audioFlags["ALL"] !== false ? "primary" : "medium"} />
               </IonButton>
@@ -840,6 +1011,11 @@ const Tab3: React.FC = () => {
             <IonItem className="chat-list-item" button onClick={() => handleSegmentChange("DM", false)}>
               {unseenFlags["DM"] && <IonIcon icon={mail} color="success" slot="start" />}
               <IonLabel>Direct Messages</IonLabel>
+              {hasActiveFilter("DM") && (
+                <IonButton slot="end" fill="clear" onClick={e => openFilterModal("DM", e)}>
+                  <IonIcon icon={funnel} color="warning" />
+                </IonButton>
+              )}
               <IonButton slot="end" fill="clear" onClick={e => toggleAudio("DM", e)}>
                 <IonIcon icon={audioFlags["DM"] !== false ? volumeHigh : volumeMute} color={audioFlags["DM"] !== false ? "primary" : "medium"} />
               </IonButton>
@@ -848,6 +1024,11 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB0.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB0.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB0}</IonLabel>
+                {hasActiveFilter(nodeInfo_s.GCB0.toString()) && (
+                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB0.toString(), e)}>
+                    <IonIcon icon={funnel} color="warning" />
+                  </IonButton>
+                )}
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB0.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -857,6 +1038,11 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB1.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB1.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB1}</IonLabel>
+                {hasActiveFilter(nodeInfo_s.GCB1.toString()) && (
+                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB1.toString(), e)}>
+                    <IonIcon icon={funnel} color="warning" />
+                  </IonButton>
+                )}
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB1.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -866,6 +1052,11 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB2.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB2.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB2}</IonLabel>
+                {hasActiveFilter(nodeInfo_s.GCB2.toString()) && (
+                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB2.toString(), e)}>
+                    <IonIcon icon={funnel} color="warning" />
+                  </IonButton>
+                )}
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB2.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -875,6 +1066,11 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB3.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB3.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB3}</IonLabel>
+                {hasActiveFilter(nodeInfo_s.GCB3.toString()) && (
+                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB3.toString(), e)}>
+                    <IonIcon icon={funnel} color="warning" />
+                  </IonButton>
+                )}
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB3.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -884,6 +1080,11 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB4.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB4.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB4}</IonLabel>
+                {hasActiveFilter(nodeInfo_s.GCB4.toString()) && (
+                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB4.toString(), e)}>
+                    <IonIcon icon={funnel} color="warning" />
+                  </IonButton>
+                )}
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB4.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -893,6 +1094,11 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB5.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB5.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB5}</IonLabel>
+                {hasActiveFilter(nodeInfo_s.GCB5.toString()) && (
+                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB5.toString(), e)}>
+                    <IonIcon icon={funnel} color="warning" />
+                  </IonButton>
+                )}
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB5.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -974,7 +1180,57 @@ const Tab3: React.FC = () => {
             <div ref={bottomRef} id="bottomRefID"/>
           </>
         )}
+
+        {activeChatFilter !== null && (
+          <IonFab vertical="bottom" horizontal="end" slot="fixed" className={showScrollDownBtn ? "scroll-down-fab visible" : "scroll-down-fab"}>
+            <IonFabButton size="small" onClick={() => scrollToBottom()}>
+              <IonIcon icon={chevronDownCircle} />
+            </IonFabButton>
+          </IonFab>
+        )}
       </IonContent>
+
+      <IonModal isOpen={showFilterModal} onDidDismiss={() => setShowFilterModal(false)}>
+        <IonHeader>
+          <IonToolbar>
+            <IonTitle>Filters</IonTitle>
+            <IonButtons slot="end">
+              <IonButton onClick={() => setShowFilterModal(false)}>Close</IonButton>
+            </IonButtons>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent className="ion-padding">
+          <IonText color="primary"><h2>Filter Global</h2></IonText>
+          <IonText><h3>Blocked Callsigns</h3></IonText>
+          <IonList>
+            {(blockedCallsigns["GLOBAL"] || []).map(call => (
+              <IonItem key={"global-" + call}>
+                <IonLabel>{call}</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={() => handleUnblockCallsign("GLOBAL", call)}>
+                  <IonIcon icon={closeIcon} color="danger" />
+                </IonButton>
+              </IonItem>
+            ))}
+          </IonList>
+          <IonButton expand="block" fill="outline" color="danger" onClick={() => handleClearAllBlocks("GLOBAL")}>Delete All Blocks</IonButton>
+
+          <div id="spacer_modal"></div>
+
+          <IonText color="primary"><h2>Filter {getChannelLabel(filterModalChannel)}</h2></IonText>
+          <IonText><h3>Blocked Callsigns</h3></IonText>
+          <IonList>
+            {(blockedCallsigns[filterModalChannel] || []).map(call => (
+              <IonItem key={"channel-" + call}>
+                <IonLabel>{call}</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={() => handleUnblockCallsign(filterModalChannel, call)}>
+                  <IonIcon icon={closeIcon} color="danger" />
+                </IonButton>
+              </IonItem>
+            ))}
+          </IonList>
+          <IonButton expand="block" fill="outline" color="danger" onClick={() => handleClearAllBlocks(filterModalChannel)}>Delete All Blocks</IonButton>
+        </IonContent>
+      </IonModal>
 
       {activeChatFilter !== null && (
       <IonFooter>

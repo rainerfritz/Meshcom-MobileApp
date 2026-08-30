@@ -56,13 +56,17 @@ import { App } from '@capacitor/app';
 
 import DataBaseService from './DBservices/DataBaseService';
 import { EdgeToEdge } from '@capawesome/capacitor-android-edge-to-edge-support';
+import ChatUnseenStore from './store/ChatUnseenStore';
 
 
 
 setupIonicReact();
 
 const Appl: React.FC = () => {
-  
+
+    // any channel with an unseen message shows a badge dot on the Chat tab icon
+    const unseenFlags = ChatUnseenStore.useState(s => s.unseenFlags);
+    const hasUnseenChat = Object.values(unseenFlags).some(v => v);
 
     // set background for the edge to edge support header
   const setBackgroundColor = async () => {
@@ -150,6 +154,19 @@ const Appl: React.FC = () => {
           </IonTabButton>
           <IonTabButton tab="tab3" href="/chat">
             <IonIcon aria-hidden="true" icon={chatboxEllipses} />
+            {hasUnseenChat && (
+              <span style={{
+                position: 'absolute',
+                top: '4px',
+                right: 'calc(50% - 22px)',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: '#2dd36f',
+                border: '2px solid var(--ion-tab-bar-background, #000)',
+                boxShadow: '0 0 2px rgba(0,0,0,0.6)'
+              }} />
+            )}
           </IonTabButton>
           <IonTabButton tab="map" href="/map">
             <IonIcon aria-hidden="true" icon={globe} />

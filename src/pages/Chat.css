@@ -186,3 +186,16 @@ ion-textarea.customTextAreaInput{
     font-size: 1.3em !important;
     font-weight: 600;
 }
+
+.scroll-down-fab {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 150ms ease;
+}
+
+.scroll-down-fab.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}

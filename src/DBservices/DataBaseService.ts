@@ -168,6 +168,16 @@ class DatabaseService {
                 });
             }
 
+            // check if we have the blockedCallsigns column in ChatSettings. If not add it (comma-separated callsigns; channel 'GLOBAL' is reserved for app-wide blocks)
+            if (DatabaseService.db) {
+                await DatabaseService.db.query(`SELECT blockedCallsigns FROM ChatSettings;`).catch(async (err) => {
+                    LogS.log(1, 'Checking/adding blockedCallsigns in ChatSettings table:' + err);
+                    await DatabaseService.db?.execute(`ALTER TABLE ChatSettings ADD COLUMN blockedCallsigns TEXT DEFAULT '';`);
+                });
+                // load the blocked-callsigns cache used for live message filtering
+                await DatabaseService.loadBlockedCallsignsCache();
+            }
+
 
             // housekeeping
             if (DatabaseService.db) {
@@ -713,6 +723,11 @@ class DatabaseService {
             }
         }
         
+        // exclude callsigns blocked globally or for this channel (never block our own messages)
+        filtered_msgs = filtered_msgs.filter((msg) => {
+            return msg.fromCall === currentCallsign || !DatabaseService.isBlocked(msg.fromCall, this.chatFilterSetting);
+        });
+
         // update the store
         MsgStore.update(s => {
             s.msgArr = filtered_msgs;
@@ -724,22 +739,24 @@ class DatabaseService {
         return this.chatFilterSetting;
     }
 
-    // load all ChatSettings rows as a channel→audioEnabled map
-    static async getChatSettings(): Promise<Record<string, boolean>> {
-        const result: Record<string, boolean> = {};
+    // load all ChatSettings rows as a channel→audioEnabled map, plus the blocked-callsigns lists per channel ('GLOBAL' = app-wide)
+    static async getChatSettings(): Promise<{ audioFlags: Record<string, boolean>; blockedCallsigns: Record<string, string[]> }> {
+        const audioFlags: Record<string, boolean> = {};
+        const blockedCallsigns: Record<string, string[]> = {};
         if (DatabaseService.db) {
             try {
                 const res = await DatabaseService.db.query('SELECT * FROM ChatSettings;');
                 if (res.values) {
                     res.values.forEach((row: any) => {
-                        result[row.channel] = row.audioEnabled === 1;
+                        audioFlags[row.channel] = row.audioEnabled === 1;
+                        blockedCallsigns[row.channel] = row.blockedCallsigns ? row.blockedCallsigns.split(',').filter((c: string) => c.length > 0) : [];
                     });
                 }
             } catch (error) {
                 LogS.log(1, 'Error getting chat settings:' + error);
             }
         }
-        return result;
+        return { audioFlags, blockedCallsigns };
     }
 
     // persist audio-alert on/off for a channel (upsert)
@@ -754,6 +771,86 @@ class DatabaseService {
                 LogS.log(1, 'Error setting chat audio:' + error);
             }
         }
+    }
+
+    // MESSAGE FILTERS - block callsigns either globally ('GLOBAL') or for one chat channel ('ALL'/'DM'/group number)
+    private static blockedCache: Record<string, string[]> = {};
+
+    // (re)load the blocked-callsigns cache from the ChatSettings table
+    static async loadBlockedCallsignsCache(): Promise<void> {
+        DatabaseService.blockedCache = {};
+        if (DatabaseService.db) {
+            try {
+                const res = await DatabaseService.db.query('SELECT channel, blockedCallsigns FROM ChatSettings;');
+                if (res.values) {
+                    res.values.forEach((row: any) => {
+                        DatabaseService.blockedCache[row.channel] = row.blockedCallsigns ? row.blockedCallsigns.split(',').filter((c: string) => c.length > 0) : [];
+                    });
+                }
+            } catch (error) {
+                LogS.log(1, 'Error loading blocked callsigns cache:' + error);
+            }
+        }
+    }
+
+    // check whether a callsign is blocked globally or for a specific channel
+    static isBlocked(fromCall: string, channelKey: string): boolean {
+        const global = DatabaseService.blockedCache['GLOBAL'] || [];
+        if (global.includes(fromCall)) return true;
+        const chArr = DatabaseService.blockedCache[channelKey] || [];
+        return chArr.includes(fromCall);
+    }
+
+    // add a callsign to the blocked list of a channel ('GLOBAL' for app-wide) and re-apply filters
+    static async blockCallsign(channelKey: string, callsign: string): Promise<void> {
+        const call = callsign.toUpperCase();
+        const current = [...(DatabaseService.blockedCache[channelKey] || [])];
+        if (!current.includes(call)) current.push(call);
+        DatabaseService.blockedCache[channelKey] = current;
+        await DatabaseService.persistBlockedCallsigns(channelKey, current);
+        await DatabaseService.reapplyFilters();
+    }
+
+    // remove a single callsign from a channel's blocked list and re-apply filters
+    static async unblockCallsign(channelKey: string, callsign: string): Promise<void> {
+        const call = callsign.toUpperCase();
+        const current = (DatabaseService.blockedCache[channelKey] || []).filter(c => c !== call);
+        DatabaseService.blockedCache[channelKey] = current;
+        await DatabaseService.persistBlockedCallsigns(channelKey, current);
+        await DatabaseService.reapplyFilters();
+    }
+
+    // remove all blocked callsigns for a channel and re-apply filters
+    static async clearBlockedCallsigns(channelKey: string): Promise<void> {
+        DatabaseService.blockedCache[channelKey] = [];
+        await DatabaseService.persistBlockedCallsigns(channelKey, []);
+        await DatabaseService.reapplyFilters();
+    }
+
+    // persist a channel's blocked-callsigns list (upsert)
+    private static async persistBlockedCallsigns(channelKey: string, list: string[]): Promise<void> {
+        if (!DatabaseService.db) return;
+        const joined = list.join(',');
+        try {
+            await DatabaseService.db.execute(
+                `INSERT INTO ChatSettings (channel, audioEnabled, blockedCallsigns) VALUES ('${channelKey}', 1, '${joined}')
+                 ON CONFLICT(channel) DO UPDATE SET blockedCallsigns = '${joined}';`
+            );
+        } catch (error) {
+            LogS.log(1, 'Error persisting blocked callsigns:' + error);
+        }
+    }
+
+    // re-read messages and re-apply channel + block filters, updating the store
+    private static async reapplyFilters(): Promise<void> {
+        const msgs = await DatabaseService.getTextMessages();
+        const escMsgs = DatabaseService.escapeQuotesInArr(msgs);
+        DatabaseService.applyFilters(escMsgs);
+    }
+
+    // sync snapshot of the blocked-callsigns cache, for populating the UI store
+    static getBlockedCallsignsSnapshot(): Record<string, string[]> {
+        return { ...DatabaseService.blockedCache };
     }
 
 }
