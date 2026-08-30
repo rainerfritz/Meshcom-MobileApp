@@ -1,4 +1,4 @@
-import { IonButton, IonActionSheet, IonContent, IonFab, IonFabButton, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonList, IonModal, IonPage, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonLabel, IonTextarea } from '@ionic/react';
+import { IonButton, IonActionSheet, IonContent, IonFab, IonFabButton, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonList, IonModal, IonPage, IonRadio, IonRadioGroup, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonLabel, IonTextarea } from '@ionic/react';
 import React,{ useEffect, useRef, useState, createRef } from 'react';
 import {ConfType, MsgType, InfoData} from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
@@ -8,7 +8,7 @@ import { DevIDStore } from '../store';
 import { getConfigStore, getDevID, getMsgStore, getPlatformStore } from '../store/Selectors';
 import MsgStore from '../store/MsgStore';
 import ConfigStore from '../store/ConfStore';
-import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle, settings, mail, arrowBack, volumeHigh, volumeMute, chevronDownCircle, funnel, close as closeIcon } from 'ionicons/icons';
+import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle, settings, mail, arrowBack, volumeHigh, volumeMute, chevronDownCircle, funnel, close as closeIcon, add as addIcon, createOutline } from 'ionicons/icons';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import PlatformStore from '../store/PlatformStore';
 import { Keyboard } from '@capacitor/keyboard';
@@ -23,7 +23,7 @@ import DMfrmMapStore from '../store/DMfrmMap';
 import NotifyMsgState from '../store/NotifyMsg';
 import { useHistory } from "react-router";
 import LogS from '../utils/LogService';
-import DatabaseService from '../DBservices/DataBaseService';
+import DatabaseService, { TextFilter } from '../DBservices/DataBaseService';
 import AlertCard from '../components/AlertCard';
 import NodeInfoStore from '../store/NodeInfoStore';
 import ChatSettingsStore from '../store/ChatSettingsStore';
@@ -127,6 +127,8 @@ const Tab3: React.FC = () => {
   const audioFlags = ChatSettingsStore.useState(s => s.audioFlags);
   // blocked callsigns per channel key ("GLOBAL" | "ALL" | "DM" | group number)
   const blockedCallsigns = ChatSettingsStore.useState(s => s.blockedCallsigns);
+  // text filters per channel key ("GLOBAL" | "ALL" | "DM" | group number)
+  const textFilters = ChatSettingsStore.useState(s => s.textFilters);
 
   // block-callsign flow: candidate callsign, scope-choice action sheet, confirmation alert
   const [blockCandidateCall, setBlockCandidateCall] = useState<string>("");
@@ -137,6 +139,18 @@ const Tab3: React.FC = () => {
   // filter management modal (funnel icon on list items)
   const [showFilterModal, setShowFilterModal] = useState<boolean>(false);
   const [filterModalChannel, setFilterModalChannel] = useState<string>("");
+  // inline "add blocked callsign" box: which section ("GLOBAL" or a channel key) is expanded, if any
+  const [addBlockOpenFor, setAddBlockOpenFor] = useState<string | null>(null);
+  const [addBlockText, setAddBlockText] = useState<string>("");
+
+  // text filter creation/edit modal
+  const [isOpenTextFilterModal, setIsOpenTextFilterModal] = useState<boolean>(false);
+  const [tfChannelContext, setTfChannelContext] = useState<string>("ALL");
+  const [tfScope, setTfScope] = useState<string>("GLOBAL");
+  const [tfMatchType, setTfMatchType] = useState<'exact' | 'contains'>('exact');
+  const [tfText, setTfText] = useState<string>("");
+  const [tfEditId, setTfEditId] = useState<string | null>(null);
+  const [tfEditPrevScope, setTfEditPrevScope] = useState<string | null>(null);
 
   // reference to the IonContent to control/observe scrolling
   const contentRef = useRef<HTMLIonContentElement>(null);
@@ -171,9 +185,9 @@ const Tab3: React.FC = () => {
       ConfigObject.clearInitChatSegmentMarkers();
     }
 
-    // load persisted audio + block-filter settings
-    DatabaseService.getChatSettings().then(({ audioFlags, blockedCallsigns }) => {
-      ChatSettingsStore.update(s => { s.audioFlags = audioFlags; s.blockedCallsigns = blockedCallsigns; });
+    // load persisted audio + block-filter + text-filter settings
+    DatabaseService.getChatSettings().then(({ audioFlags, blockedCallsigns, textFilters }) => {
+      ChatSettingsStore.update(s => { s.audioFlags = audioFlags; s.blockedCallsigns = blockedCallsigns; s.textFilters = textFilters; });
     });
 
     //const devid = devID_s;
@@ -665,6 +679,13 @@ const Tab3: React.FC = () => {
         setIsOpenBlockScopeAS(true);
       }
 
+      if (asActionDetail === "filterText") {
+        console.log("Filter Text pressed");
+        if (activeChatFilter) {
+          openTextFilterForMessage(activeChatFilter, selMsg[0].msgTXT);
+        }
+      }
+
       if (asActionDetail === "sendDM") {
         console.log("DM pressed");
         let selCall = "";
@@ -729,6 +750,79 @@ const Tab3: React.FC = () => {
     ChatSettingsStore.update(s => { s.blockedCallsigns = DatabaseService.getBlockedCallsignsSnapshot(); });
   }
 
+  // manually add a blocked callsign from the filter modal's inline input
+  const handleAddBlockedCallsign = async (channel: string) => {
+    if (!addBlockText.trim()) return;
+    await DatabaseService.blockCallsign(channel, addBlockText.trim());
+    ChatSettingsStore.update(s => { s.blockedCallsigns = DatabaseService.getBlockedCallsignsSnapshot(); });
+    setAddBlockOpenFor(null);
+    setAddBlockText("");
+  }
+
+  // open the create-text-filter modal, prefilled with a message's text (from the long-press menu)
+  const openTextFilterForMessage = (channel: string, msgTxt: string) => {
+    setTfChannelContext(channel);
+    setTfScope(channel);
+    setTfMatchType("exact");
+    setTfText(msgTxt);
+    setTfEditId(null);
+    setTfEditPrevScope(null);
+    setIsOpenTextFilterModal(true);
+  }
+
+  // open the edit-text-filter modal for an existing filter (from the filter management modal)
+  const openEditTextFilter = (channel: string, filter: TextFilter) => {
+    setTfChannelContext(channel);
+    setTfScope(channel);
+    setTfMatchType(filter.matchType);
+    setTfText(filter.text);
+    setTfEditId(filter.id);
+    setTfEditPrevScope(channel);
+    setIsOpenTextFilterModal(true);
+  }
+
+  // open the create-text-filter modal manually from the filter management modal (not tied to a message)
+  const openManualTextFilter = (scope: string) => {
+    setTfChannelContext(filterModalChannel);
+    setTfScope(scope);
+    setTfMatchType("contains");
+    setTfText("");
+    setTfEditId(null);
+    setTfEditPrevScope(null);
+    setIsOpenTextFilterModal(true);
+  }
+
+  // persist the create/edit text filter form, moving it between scopes if changed
+  const applyTextFilter = async () => {
+    if (!tfText.trim()) return;
+    const filter: TextFilter = {
+      id: tfEditId || (Date.now().toString(36) + Math.random().toString(36).slice(2)),
+      text: tfText,
+      matchType: tfMatchType,
+    };
+    if (tfEditId && tfEditPrevScope && tfEditPrevScope !== tfScope) {
+      await DatabaseService.removeTextFilter(tfEditPrevScope, tfEditId);
+    }
+    await DatabaseService.addOrUpdateTextFilter(tfScope, filter);
+    ChatSettingsStore.update(s => { s.textFilters = DatabaseService.getTextFiltersSnapshot(); });
+    setIsOpenTextFilterModal(false);
+    setTfEditId(null);
+    setTfEditPrevScope(null);
+    setTfText("");
+  }
+
+  // remove a single text filter from a channel (or GLOBAL)
+  const handleRemoveTextFilter = async (channel: string, filterId: string) => {
+    await DatabaseService.removeTextFilter(channel, filterId);
+    ChatSettingsStore.update(s => { s.textFilters = DatabaseService.getTextFiltersSnapshot(); });
+  }
+
+  // remove all text filters for a channel (or GLOBAL)
+  const handleClearAllTextFilters = async (channel: string) => {
+    await DatabaseService.clearTextFilters(channel);
+    ChatSettingsStore.update(s => { s.textFilters = DatabaseService.getTextFiltersSnapshot(); });
+  }
+
   // human-readable label for a channel key, used in titles and the filter modal
   const getChannelLabel = (channel: string): string => {
     if (channel === "ALL") return "To All Channel";
@@ -743,11 +837,13 @@ const Tab3: React.FC = () => {
     setShowFilterModal(true);
   }
 
-  // whether a channel (or global) currently has any blocked callsigns, to show the funnel icon
+  // whether a channel (or global) currently has any blocked callsigns or text filters, to color the funnel icon
   const hasActiveFilter = (channel: string): boolean => {
-    const global = blockedCallsigns["GLOBAL"] || [];
-    const chArr = blockedCallsigns[channel] || [];
-    return global.length > 0 || chArr.length > 0;
+    const globalBlocked = blockedCallsigns["GLOBAL"] || [];
+    const chBlocked = blockedCallsigns[channel] || [];
+    const globalText = textFilters["GLOBAL"] || [];
+    const chText = textFilters[channel] || [];
+    return globalBlocked.length > 0 || chBlocked.length > 0 || globalText.length > 0 || chText.length > 0;
   }
 
 
@@ -955,6 +1051,12 @@ const Tab3: React.FC = () => {
                 action: 'replyTo',
               },
             },
+            {
+              text: 'Filter Text',
+              data: {
+                action: 'filterText',
+              },
+            },
             ...(msgArr_s.some(m => m.msgNr === msgNrAS && m.fromCall !== config_s.callSign) ? [{
               text: 'Block Callsign',
               data: {
@@ -999,11 +1101,9 @@ const Tab3: React.FC = () => {
             <IonItem className="chat-list-item" button onClick={() => handleSegmentChange("ALL", false)}>
               {unseenFlags["ALL"] && <IonIcon icon={mail} color="success" slot="start" />}
               <IonLabel>To All Channel</IonLabel>
-              {hasActiveFilter("ALL") && (
-                <IonButton slot="end" fill="clear" onClick={e => openFilterModal("ALL", e)}>
-                  <IonIcon icon={funnel} color="warning" />
-                </IonButton>
-              )}
+              <IonButton slot="end" fill="clear" onClick={e => openFilterModal("ALL", e)}>
+                <IonIcon icon={funnel} color={hasActiveFilter("ALL") ? "warning" : "medium"} />
+              </IonButton>
               <IonButton slot="end" fill="clear" onClick={e => toggleAudio("ALL", e)}>
                 <IonIcon icon={audioFlags["ALL"] !== false ? volumeHigh : volumeMute} color={audioFlags["ALL"] !== false ? "primary" : "medium"} />
               </IonButton>
@@ -1011,11 +1111,9 @@ const Tab3: React.FC = () => {
             <IonItem className="chat-list-item" button onClick={() => handleSegmentChange("DM", false)}>
               {unseenFlags["DM"] && <IonIcon icon={mail} color="success" slot="start" />}
               <IonLabel>Direct Messages</IonLabel>
-              {hasActiveFilter("DM") && (
-                <IonButton slot="end" fill="clear" onClick={e => openFilterModal("DM", e)}>
-                  <IonIcon icon={funnel} color="warning" />
-                </IonButton>
-              )}
+              <IonButton slot="end" fill="clear" onClick={e => openFilterModal("DM", e)}>
+                <IonIcon icon={funnel} color={hasActiveFilter("DM") ? "warning" : "medium"} />
+              </IonButton>
               <IonButton slot="end" fill="clear" onClick={e => toggleAudio("DM", e)}>
                 <IonIcon icon={audioFlags["DM"] !== false ? volumeHigh : volumeMute} color={audioFlags["DM"] !== false ? "primary" : "medium"} />
               </IonButton>
@@ -1024,11 +1122,9 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB0.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB0.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB0}</IonLabel>
-                {hasActiveFilter(nodeInfo_s.GCB0.toString()) && (
-                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB0.toString(), e)}>
-                    <IonIcon icon={funnel} color="warning" />
-                  </IonButton>
-                )}
+                <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB0.toString(), e)}>
+                  <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB0.toString()) ? "warning" : "medium"} />
+                </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB0.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -1038,11 +1134,9 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB1.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB1.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB1}</IonLabel>
-                {hasActiveFilter(nodeInfo_s.GCB1.toString()) && (
-                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB1.toString(), e)}>
-                    <IonIcon icon={funnel} color="warning" />
-                  </IonButton>
-                )}
+                <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB1.toString(), e)}>
+                  <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB1.toString()) ? "warning" : "medium"} />
+                </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB1.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -1052,11 +1146,9 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB2.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB2.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB2}</IonLabel>
-                {hasActiveFilter(nodeInfo_s.GCB2.toString()) && (
-                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB2.toString(), e)}>
-                    <IonIcon icon={funnel} color="warning" />
-                  </IonButton>
-                )}
+                <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB2.toString(), e)}>
+                  <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB2.toString()) ? "warning" : "medium"} />
+                </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB2.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -1066,11 +1158,9 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB3.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB3.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB3}</IonLabel>
-                {hasActiveFilter(nodeInfo_s.GCB3.toString()) && (
-                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB3.toString(), e)}>
-                    <IonIcon icon={funnel} color="warning" />
-                  </IonButton>
-                )}
+                <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB3.toString(), e)}>
+                  <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB3.toString()) ? "warning" : "medium"} />
+                </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB3.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -1080,11 +1170,9 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB4.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB4.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB4}</IonLabel>
-                {hasActiveFilter(nodeInfo_s.GCB4.toString()) && (
-                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB4.toString(), e)}>
-                    <IonIcon icon={funnel} color="warning" />
-                  </IonButton>
-                )}
+                <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB4.toString(), e)}>
+                  <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB4.toString()) ? "warning" : "medium"} />
+                </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB4.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -1094,11 +1182,9 @@ const Tab3: React.FC = () => {
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB5.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB5.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
                 <IonLabel>Group {nodeInfo_s.GCB5}</IonLabel>
-                {hasActiveFilter(nodeInfo_s.GCB5.toString()) && (
-                  <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB5.toString(), e)}>
-                    <IonIcon icon={funnel} color="warning" />
-                  </IonButton>
-                )}
+                <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB5.toString(), e)}>
+                  <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB5.toString()) ? "warning" : "medium"} />
+                </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB5.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
@@ -1190,7 +1276,7 @@ const Tab3: React.FC = () => {
         )}
       </IonContent>
 
-      <IonModal isOpen={showFilterModal} onDidDismiss={() => setShowFilterModal(false)}>
+      <IonModal isOpen={showFilterModal} onDidDismiss={() => { setShowFilterModal(false); setAddBlockOpenFor(null); }}>
         <IonHeader>
           <IonToolbar>
             <IonTitle>Filters</IonTitle>
@@ -1201,10 +1287,25 @@ const Tab3: React.FC = () => {
         </IonHeader>
         <IonContent className="ion-padding">
           <IonText color="primary"><h2>Filter Global</h2></IonText>
-          <IonText><h3>Blocked Callsigns</h3></IonText>
+
+          <div className="filter-subgroup-header">
+            <IonText><h3>Blocked Callsigns</h3></IonText>
+            <IonButton size="small" fill="clear" onClick={() => { setAddBlockOpenFor(addBlockOpenFor === "GLOBAL" ? null : "GLOBAL"); setAddBlockText(""); }}>
+              <IonIcon icon={addIcon} />
+            </IonButton>
+          </div>
+          {addBlockOpenFor === "GLOBAL" && (
+            <IonItem>
+              <IonInput placeholder="Callsign" value={addBlockText} onIonInput={e => setAddBlockText((e.detail.value ?? "").toString())}></IonInput>
+              <IonButton slot="end" onClick={() => handleAddBlockedCallsign("GLOBAL")}>Apply</IonButton>
+              <IonButton slot="end" fill="clear" onClick={() => { setAddBlockOpenFor(null); setAddBlockText(""); }}>
+                <IonIcon icon={closeIcon} />
+              </IonButton>
+            </IonItem>
+          )}
           <IonList>
             {(blockedCallsigns["GLOBAL"] || []).map(call => (
-              <IonItem key={"global-" + call}>
+              <IonItem key={"global-block-" + call}>
                 <IonLabel>{call}</IonLabel>
                 <IonButton slot="end" fill="clear" onClick={() => handleUnblockCallsign("GLOBAL", call)}>
                   <IonIcon icon={closeIcon} color="danger" />
@@ -1212,15 +1313,53 @@ const Tab3: React.FC = () => {
               </IonItem>
             ))}
           </IonList>
-          <IonButton expand="block" fill="outline" color="danger" onClick={() => handleClearAllBlocks("GLOBAL")}>Delete All Blocks</IonButton>
+          <IonButton expand="block" fill="outline" color="danger" onClick={() => handleClearAllBlocks("GLOBAL")}>Delete All Callsign Blocks</IonButton>
+
+          <div id="spacer_modal"></div>
+
+          <div className="filter-subgroup-header">
+            <IonText><h3>Text Filters</h3></IonText>
+            <IonButton size="small" fill="clear" onClick={() => openManualTextFilter("GLOBAL")}>
+              <IonIcon icon={addIcon} />
+            </IonButton>
+          </div>
+          <IonList>
+            {(textFilters["GLOBAL"] || []).map(filter => (
+              <IonItem key={"global-text-" + filter.id}>
+                <IonLabel>{filter.text} ({filter.matchType === "exact" ? "Exact" : "Consists Of"})</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={() => openEditTextFilter("GLOBAL", filter)}>
+                  <IonIcon icon={createOutline} />
+                </IonButton>
+                <IonButton slot="end" fill="clear" onClick={() => handleRemoveTextFilter("GLOBAL", filter.id)}>
+                  <IonIcon icon={closeIcon} color="danger" />
+                </IonButton>
+              </IonItem>
+            ))}
+          </IonList>
+          <IonButton expand="block" fill="outline" color="danger" onClick={() => handleClearAllTextFilters("GLOBAL")}>Delete All Textfilters</IonButton>
 
           <div id="spacer_modal"></div>
 
           <IonText color="primary"><h2>Filter {getChannelLabel(filterModalChannel)}</h2></IonText>
-          <IonText><h3>Blocked Callsigns</h3></IonText>
+
+          <div className="filter-subgroup-header">
+            <IonText><h3>Blocked Callsigns</h3></IonText>
+            <IonButton size="small" fill="clear" onClick={() => { setAddBlockOpenFor(addBlockOpenFor === filterModalChannel ? null : filterModalChannel); setAddBlockText(""); }}>
+              <IonIcon icon={addIcon} />
+            </IonButton>
+          </div>
+          {addBlockOpenFor === filterModalChannel && (
+            <IonItem>
+              <IonInput placeholder="Callsign" value={addBlockText} onIonInput={e => setAddBlockText((e.detail.value ?? "").toString())}></IonInput>
+              <IonButton slot="end" onClick={() => handleAddBlockedCallsign(filterModalChannel)}>Apply</IonButton>
+              <IonButton slot="end" fill="clear" onClick={() => { setAddBlockOpenFor(null); setAddBlockText(""); }}>
+                <IonIcon icon={closeIcon} />
+              </IonButton>
+            </IonItem>
+          )}
           <IonList>
             {(blockedCallsigns[filterModalChannel] || []).map(call => (
-              <IonItem key={"channel-" + call}>
+              <IonItem key={"channel-block-" + call}>
                 <IonLabel>{call}</IonLabel>
                 <IonButton slot="end" fill="clear" onClick={() => handleUnblockCallsign(filterModalChannel, call)}>
                   <IonIcon icon={closeIcon} color="danger" />
@@ -1228,7 +1367,84 @@ const Tab3: React.FC = () => {
               </IonItem>
             ))}
           </IonList>
-          <IonButton expand="block" fill="outline" color="danger" onClick={() => handleClearAllBlocks(filterModalChannel)}>Delete All Blocks</IonButton>
+          <IonButton expand="block" fill="outline" color="danger" onClick={() => handleClearAllBlocks(filterModalChannel)}>Delete All Callsign Blocks</IonButton>
+
+          <div id="spacer_modal"></div>
+
+          <div className="filter-subgroup-header">
+            <IonText><h3>Text Filters</h3></IonText>
+            <IonButton size="small" fill="clear" onClick={() => openManualTextFilter(filterModalChannel)}>
+              <IonIcon icon={addIcon} />
+            </IonButton>
+          </div>
+          <IonList>
+            {(textFilters[filterModalChannel] || []).map(filter => (
+              <IonItem key={"channel-text-" + filter.id}>
+                <IonLabel>{filter.text} ({filter.matchType === "exact" ? "Exact" : "Consists Of"})</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={() => openEditTextFilter(filterModalChannel, filter)}>
+                  <IonIcon icon={createOutline} />
+                </IonButton>
+                <IonButton slot="end" fill="clear" onClick={() => handleRemoveTextFilter(filterModalChannel, filter.id)}>
+                  <IonIcon icon={closeIcon} color="danger" />
+                </IonButton>
+              </IonItem>
+            ))}
+          </IonList>
+          <IonButton expand="block" fill="outline" color="danger" onClick={() => handleClearAllTextFilters(filterModalChannel)}>Delete All Textfilters</IonButton>
+        </IonContent>
+      </IonModal>
+
+      <IonModal isOpen={isOpenTextFilterModal} onDidDismiss={() => setIsOpenTextFilterModal(false)}>
+        <IonHeader>
+          <IonToolbar>
+            <IonTitle>Filter Text</IonTitle>
+            <IonButtons slot="end">
+              <IonButton onClick={() => setIsOpenTextFilterModal(false)}>Close</IonButton>
+            </IonButtons>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent className="ion-padding">
+          <IonText><h3>Apply To</h3></IonText>
+          <IonRadioGroup value={tfScope} onIonChange={e => setTfScope(e.detail.value)}>
+            <IonItem>
+              <IonLabel>Globally</IonLabel>
+              <IonRadio slot="end" value="GLOBAL" />
+            </IonItem>
+            <IonItem>
+              <IonLabel>{getChannelLabel(tfChannelContext)}</IonLabel>
+              <IonRadio slot="end" value={tfChannelContext} />
+            </IonItem>
+          </IonRadioGroup>
+
+          <div id="spacer_modal"></div>
+
+          <IonText><h3>Match Type</h3></IonText>
+          <IonRadioGroup value={tfMatchType} onIonChange={e => setTfMatchType(e.detail.value)}>
+            <IonItem>
+              <IonLabel>Exact Match</IonLabel>
+              <IonRadio slot="end" value="exact" />
+            </IonItem>
+            <IonItem>
+              <IonLabel>Consists Of</IonLabel>
+              <IonRadio slot="end" value="contains" />
+            </IonItem>
+          </IonRadioGroup>
+
+          <div id="spacer_modal"></div>
+
+          <IonItem>
+            <IonTextarea
+              value={tfText}
+              onIonInput={e => setTfText(e.detail.value ?? "")}
+              autoGrow={true}
+              rows={3}
+              placeholder="Text to filter">
+            </IonTextarea>
+          </IonItem>
+
+          <div id="spacer_modal"></div>
+
+          <IonButton expand="block" onClick={() => applyTextFilter()}>Apply</IonButton>
         </IonContent>
       </IonModal>
 

@@ -11,6 +11,13 @@ import { format, sub } from "date-fns";
 import LogS from "../utils/LogService";
 import ConfigObject from "../utils/ConfigObject";
 
+// a single text filter entry: matches a message's text either exactly or as a substring
+export interface TextFilter {
+    id: string;
+    text: string;
+    matchType: 'exact' | 'contains';
+}
+
 
 class DatabaseService {
 
@@ -176,6 +183,16 @@ class DatabaseService {
                 });
                 // load the blocked-callsigns cache used for live message filtering
                 await DatabaseService.loadBlockedCallsignsCache();
+            }
+
+            // check if we have the textFilters column in ChatSettings. If not add it (JSON array of TextFilter, UTF-8 safe)
+            if (DatabaseService.db) {
+                await DatabaseService.db.query(`SELECT textFilters FROM ChatSettings;`).catch(async (err) => {
+                    LogS.log(1, 'Checking/adding textFilters in ChatSettings table:' + err);
+                    await DatabaseService.db?.execute(`ALTER TABLE ChatSettings ADD COLUMN textFilters TEXT DEFAULT '[]';`);
+                });
+                // load the text-filter cache used for live message filtering
+                await DatabaseService.loadTextFilterCache();
             }
 
 
@@ -725,7 +742,9 @@ class DatabaseService {
         
         // exclude callsigns blocked globally or for this channel (never block our own messages)
         filtered_msgs = filtered_msgs.filter((msg) => {
-            return msg.fromCall === currentCallsign || !DatabaseService.isBlocked(msg.fromCall, this.chatFilterSetting);
+            if (msg.fromCall === currentCallsign) return true;
+            if (DatabaseService.isBlocked(msg.fromCall, this.chatFilterSetting)) return false;
+            return !DatabaseService.isTextFiltered(msg.msgTXT, this.chatFilterSetting);
         });
 
         // update the store
@@ -739,10 +758,11 @@ class DatabaseService {
         return this.chatFilterSetting;
     }
 
-    // load all ChatSettings rows as a channel→audioEnabled map, plus the blocked-callsigns lists per channel ('GLOBAL' = app-wide)
-    static async getChatSettings(): Promise<{ audioFlags: Record<string, boolean>; blockedCallsigns: Record<string, string[]> }> {
+    // load all ChatSettings rows as a channel→audioEnabled map, plus the blocked-callsigns and text-filter lists per channel ('GLOBAL' = app-wide)
+    static async getChatSettings(): Promise<{ audioFlags: Record<string, boolean>; blockedCallsigns: Record<string, string[]>; textFilters: Record<string, TextFilter[]> }> {
         const audioFlags: Record<string, boolean> = {};
         const blockedCallsigns: Record<string, string[]> = {};
+        const textFilters: Record<string, TextFilter[]> = {};
         if (DatabaseService.db) {
             try {
                 const res = await DatabaseService.db.query('SELECT * FROM ChatSettings;');
@@ -750,13 +770,14 @@ class DatabaseService {
                     res.values.forEach((row: any) => {
                         audioFlags[row.channel] = row.audioEnabled === 1;
                         blockedCallsigns[row.channel] = row.blockedCallsigns ? row.blockedCallsigns.split(',').filter((c: string) => c.length > 0) : [];
+                        textFilters[row.channel] = DatabaseService.parseTextFilters(row.textFilters);
                     });
                 }
             } catch (error) {
                 LogS.log(1, 'Error getting chat settings:' + error);
             }
         }
-        return { audioFlags, blockedCallsigns };
+        return { audioFlags, blockedCallsigns, textFilters };
     }
 
     // persist audio-alert on/off for a channel (upsert)
@@ -851,6 +872,93 @@ class DatabaseService {
     // sync snapshot of the blocked-callsigns cache, for populating the UI store
     static getBlockedCallsignsSnapshot(): Record<string, string[]> {
         return { ...DatabaseService.blockedCache };
+    }
+
+    // TEXT FILTERS - filter messages by content, either globally ('GLOBAL') or for one chat channel
+    private static textFilterCache: Record<string, TextFilter[]> = {};
+
+    // parse a raw textFilters column value into an array, tolerating missing/malformed JSON
+    private static parseTextFilters(raw: string | null | undefined): TextFilter[] {
+        if (!raw) return [];
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            LogS.log(1, 'Error parsing text filters JSON:' + error);
+            return [];
+        }
+    }
+
+    // (re)load the text-filter cache from the ChatSettings table
+    static async loadTextFilterCache(): Promise<void> {
+        DatabaseService.textFilterCache = {};
+        if (DatabaseService.db) {
+            try {
+                const res = await DatabaseService.db.query('SELECT channel, textFilters FROM ChatSettings;');
+                if (res.values) {
+                    res.values.forEach((row: any) => {
+                        DatabaseService.textFilterCache[row.channel] = DatabaseService.parseTextFilters(row.textFilters);
+                    });
+                }
+            } catch (error) {
+                LogS.log(1, 'Error loading text filter cache:' + error);
+            }
+        }
+    }
+
+    // check whether a message's text matches a text filter, globally or for a specific channel
+    static isTextFiltered(msgTxt: string, channelKey: string): boolean {
+        const matches = (filters: TextFilter[]) => filters.some(f => f.matchType === 'exact' ? msgTxt === f.text : msgTxt.includes(f.text));
+        const global = DatabaseService.textFilterCache['GLOBAL'] || [];
+        if (matches(global)) return true;
+        const chArr = DatabaseService.textFilterCache[channelKey] || [];
+        return matches(chArr);
+    }
+
+    // add a new text filter or update an existing one (matched by id) for a channel ('GLOBAL' for app-wide), then re-apply filters
+    static async addOrUpdateTextFilter(channelKey: string, filter: TextFilter): Promise<void> {
+        const current = [...(DatabaseService.textFilterCache[channelKey] || [])];
+        const idx = current.findIndex(f => f.id === filter.id);
+        if (idx > -1) current[idx] = filter; else current.push(filter);
+        DatabaseService.textFilterCache[channelKey] = current;
+        await DatabaseService.persistTextFilters(channelKey, current);
+        await DatabaseService.reapplyFilters();
+    }
+
+    // remove a single text filter by id from a channel and re-apply filters
+    static async removeTextFilter(channelKey: string, filterId: string): Promise<void> {
+        const current = (DatabaseService.textFilterCache[channelKey] || []).filter(f => f.id !== filterId);
+        DatabaseService.textFilterCache[channelKey] = current;
+        await DatabaseService.persistTextFilters(channelKey, current);
+        await DatabaseService.reapplyFilters();
+    }
+
+    // remove all text filters for a channel and re-apply filters
+    static async clearTextFilters(channelKey: string): Promise<void> {
+        DatabaseService.textFilterCache[channelKey] = [];
+        await DatabaseService.persistTextFilters(channelKey, []);
+        await DatabaseService.reapplyFilters();
+    }
+
+    // persist a channel's text filters as JSON (upsert). Uses parameterized values so special
+    // characters, quotes and emojis (UTF-8) in the filter text can never break the SQL statement.
+    private static async persistTextFilters(channelKey: string, filters: TextFilter[]): Promise<void> {
+        if (!DatabaseService.db) return;
+        const json = JSON.stringify(filters);
+        try {
+            await DatabaseService.db.run(
+                `INSERT INTO ChatSettings (channel, audioEnabled, textFilters) VALUES (?, 1, ?)
+                 ON CONFLICT(channel) DO UPDATE SET textFilters = ?;`,
+                [channelKey, json, json]
+            );
+        } catch (error) {
+            LogS.log(1, 'Error persisting text filters:' + error);
+        }
+    }
+
+    // sync snapshot of the text-filter cache, for populating the UI store
+    static getTextFiltersSnapshot(): Record<string, TextFilter[]> {
+        return { ...DatabaseService.textFilterCache };
     }
 
 }

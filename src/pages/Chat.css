@@ -199,3 +199,9 @@ ion-textarea.customTextAreaInput{
     visibility: visible;
     pointer-events: auto;
 }
+
+.filter-subgroup-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
