@@ -239,7 +239,15 @@ const Tab3: React.FC = () => {
   const scrollToBottom = async () => {
     if (contentRef.current) {
       isProgrammaticScroll.current = true;
-      await contentRef.current.scrollToBottom(300);
+      // retry a few times: the list content can still grow (late layout, images,
+      // messages appended after coming back from background) right after the
+      // first jump, which otherwise leaves the view short of the real bottom
+      for (let attempt = 0; attempt < 6; attempt++) {
+        await contentRef.current.scrollToBottom(attempt === 0 ? 300 : 0);
+        const el = await contentRef.current.getScrollElement();
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < 2) break;
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
       isProgrammaticScroll.current = false;
     }
     isAtBottomRef.current = true;
