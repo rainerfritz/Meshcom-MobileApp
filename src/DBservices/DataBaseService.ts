@@ -274,7 +274,12 @@ class DatabaseService {
                 //apply filters, updates the store then
                 DatabaseService.applyFilters(escTxtMsgs);
                 // if this is not during init load from node connection, we need to mark the segment buttons in chat page
-                if (isInitMsg) {
+                // skip the marker if the message is blocked/text-filtered (global or channel-specific), since it won't show in chat either
+                const currentCallsign = ConfigObject.getConf().CALL;
+                const isFiltered = msg.fromCall !== currentCallsign &&
+                    (DatabaseService.isBlocked(msg.fromCall, msg.isDM === 1 && msg.isGrpMsg === 1 ? msg.grpNum.toString() : (msg.isDM === 1 ? "DM" : "ALL")) ||
+                     DatabaseService.isTextFiltered(msg.msgTXT, msg.isDM === 1 && msg.isGrpMsg === 1 ? msg.grpNum.toString() : (msg.isDM === 1 ? "DM" : "ALL")));
+                if (isInitMsg && !isFiltered) {
                     if (msg.isDM === 0 && msg.isGrpMsg === 0) {
                         ConfigObject.addInitChatSegmentMarker("ALL");
                     } else if (msg.isDM === 1 && msg.isGrpMsg === 0) {

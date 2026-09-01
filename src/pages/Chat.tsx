@@ -1,4 +1,4 @@
-import { IonButton, IonActionSheet, IonContent, IonFab, IonFabButton, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonList, IonModal, IonPage, IonRadio, IonRadioGroup, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonLabel, IonTextarea } from '@ionic/react';
+import { IonButton, IonActionSheet, IonContent, IonFab, IonFabButton, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonList, IonModal, IonNote, IonPage, IonRadio, IonRadioGroup, IonText, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, IonAlert, useIonViewWillLeave, IonButtons, IonLabel, IonTextarea } from '@ionic/react';
 import React,{ useEffect, useRef, useState, createRef } from 'react';
 import {ConfType, MsgType, InfoData} from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
@@ -123,6 +123,8 @@ const Tab3: React.FC = () => {
   const [activeChatFilter, setActiveChatFilter] = useState<string | null>(null);
   // unseen message flags per filter key, shared with the tab bar badge
   const unseenFlags = ChatUnseenStore.useState(s => s.unseenFlags);
+  // unseen message counts per filter key, shown as a badge on the chat list item
+  const unseenCounts = ChatUnseenStore.useState(s => s.unseenCounts);
   // audio alert flags per channel (true = enabled, default when missing)
   const audioFlags = ChatSettingsStore.useState(s => s.audioFlags);
   // blocked callsigns per channel key ("GLOBAL" | "ALL" | "DM" | group number)
@@ -179,11 +181,16 @@ const Tab3: React.FC = () => {
     if(bottomRef.current === null) bottomRef.current = document.getElementById('bottomRefID') as HTMLDivElement;
 
     // apply any unseen markers set while this page was inactive
-    const initSegs: string[] = ConfigObject.getInitChatSegmentMarkers();
-    if(initSegs.length > 0){
+    const initSegs: Record<string, number> = ConfigObject.getInitChatSegmentMarkers();
+    if(Object.keys(initSegs).length > 0){
       const flags: Record<string, boolean> = {};
-      initSegs.forEach(seg => { flags[seg] = true; });
-      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, ...flags }; });
+      Object.keys(initSegs).forEach(seg => { flags[seg] = true; });
+      ChatUnseenStore.update(s => {
+        s.unseenFlags = { ...s.unseenFlags, ...flags };
+        const counts = { ...s.unseenCounts };
+        Object.entries(initSegs).forEach(([seg, cnt]) => { counts[seg] = (counts[seg] ?? 0) + cnt; });
+        s.unseenCounts = counts;
+      });
       ConfigObject.clearInitChatSegmentMarkers();
     }
 
@@ -255,7 +262,7 @@ const Tab3: React.FC = () => {
     isAtBottomRef.current = true;
     setShowScrollDownBtn(false);
     if (activeChatFilter) {
-      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [activeChatFilter]: false }; });
+      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [activeChatFilter]: false }; s.unseenCounts = { ...s.unseenCounts, [activeChatFilter]: 0 }; });
     }
   }
 
@@ -270,7 +277,7 @@ const Tab3: React.FC = () => {
     scrollPositions.current[activeChatFilter] = el.scrollTop;
     atBottomPositions.current[activeChatFilter] = atBottom;
     if (atBottom) {
-      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [activeChatFilter]: false }; });
+      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [activeChatFilter]: false }; s.unseenCounts = { ...s.unseenCounts, [activeChatFilter]: 0 }; });
     }
   }
 
@@ -520,13 +527,21 @@ const Tab3: React.FC = () => {
 
       console.log("Message Type: " + msgType);
 
-      const audioOn = ChatSettingsStore.getRawState().audioFlags[msgType] !== false;
-      const notify_title = "New Message from " + notifyMsg_s.fromCall;
-      notifyMsgUser(notify_title, notifyMsg_s.msgTXT, audioOn);
+      // a blocked callsign or matching text filter (global or channel-specific) means this message is hidden from chat, so it must not alert or flag as unseen either
+      const isFiltered = DatabaseService.isBlocked(notifyMsg_s.fromCall, msgType) || DatabaseService.isTextFiltered(notifyMsg_s.msgTXT, msgType);
 
-      // only counts as "seen" if the chat tab is visible, showing this exact channel, scrolled to the bottom
-      const isSeen = thisPageActive.current && isAppActive && msgType === activeChatFilter && isAtBottomRef.current;
-      ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [msgType]: !isSeen }; });
+      if (!isFiltered) {
+        const audioOn = ChatSettingsStore.getRawState().audioFlags[msgType] !== false;
+        const notify_title = "New Message from " + notifyMsg_s.fromCall;
+        notifyMsgUser(notify_title, notifyMsg_s.msgTXT, audioOn);
+
+        // only counts as "seen" if the chat tab is visible, showing this exact channel, scrolled to the bottom
+        const isSeen = thisPageActive.current && isAppActive && msgType === activeChatFilter && isAtBottomRef.current;
+        ChatUnseenStore.update(s => {
+          s.unseenFlags = { ...s.unseenFlags, [msgType]: !isSeen };
+          s.unseenCounts = { ...s.unseenCounts, [msgType]: isSeen ? 0 : (s.unseenCounts[msgType] ?? 0) + 1 };
+        });
+      }
     }
 
   }, [notifyMsg_s.msgNr]);
@@ -939,8 +954,8 @@ const Tab3: React.FC = () => {
       setSendDMGrpFlag(false);
     }
 
-    // clear unseen flag for this filter now that we're viewing it
-    ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [val]: false }; });
+    // clear unseen flag + counter for this filter now that we're viewing it
+    ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [val]: false }; s.unseenCounts = { ...s.unseenCounts, [val]: 0 }; });
 
     // delay until chat DOM is rendered, then restore the saved scroll position or jump to bottom
     setTimeout(() => restoreScrollPosition(val), 100);
@@ -959,7 +974,7 @@ const Tab3: React.FC = () => {
       isAtBottomRef.current = atBottom;
       setShowScrollDownBtn(!atBottom);
       if (atBottom) {
-        ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [channel]: false }; });
+        ChatUnseenStore.update(s => { s.unseenFlags = { ...s.unseenFlags, [channel]: false }; s.unseenCounts = { ...s.unseenCounts, [channel]: 0 }; });
       }
     } else {
       await scrollToBottom();
@@ -1120,6 +1135,7 @@ const Tab3: React.FC = () => {
               <IonButton slot="end" fill="clear" onClick={e => toggleAudio("ALL", e)}>
                 <IonIcon icon={audioFlags["ALL"] !== false ? volumeHigh : volumeMute} color={audioFlags["ALL"] !== false ? "primary" : "medium"} />
               </IonButton>
+              {(unseenCounts["ALL"] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts["ALL"]}</IonNote>}
             </IonItem>
             <IonItem className="chat-list-item" button onClick={() => handleSegmentChange("DM", false)}>
               {unseenFlags["DM"] && <IonIcon icon={mail} color="success" slot="start" />}
@@ -1130,6 +1146,7 @@ const Tab3: React.FC = () => {
               <IonButton slot="end" fill="clear" onClick={e => toggleAudio("DM", e)}>
                 <IonIcon icon={audioFlags["DM"] !== false ? volumeHigh : volumeMute} color={audioFlags["DM"] !== false ? "primary" : "medium"} />
               </IonButton>
+              {(unseenCounts["DM"] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts["DM"]}</IonNote>}
             </IonItem>
             {nodeInfo_s.GCB0 !== 0 && (
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB0.toString(), true)}>
@@ -1141,6 +1158,7 @@ const Tab3: React.FC = () => {
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB0.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
+                {(unseenCounts[nodeInfo_s.GCB0.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB0.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB1 !== 0 && (
@@ -1153,6 +1171,7 @@ const Tab3: React.FC = () => {
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB1.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
+                {(unseenCounts[nodeInfo_s.GCB1.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB1.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB2 !== 0 && (
@@ -1165,6 +1184,7 @@ const Tab3: React.FC = () => {
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB2.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
+                {(unseenCounts[nodeInfo_s.GCB2.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB2.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB3 !== 0 && (
@@ -1177,6 +1197,7 @@ const Tab3: React.FC = () => {
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB3.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
+                {(unseenCounts[nodeInfo_s.GCB3.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB3.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB4 !== 0 && (
@@ -1189,6 +1210,7 @@ const Tab3: React.FC = () => {
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB4.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
+                {(unseenCounts[nodeInfo_s.GCB4.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB4.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB5 !== 0 && (
@@ -1201,6 +1223,7 @@ const Tab3: React.FC = () => {
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB5.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
+                {(unseenCounts[nodeInfo_s.GCB5.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB5.toString()]}</IonNote>}
               </IonItem>
             )}
           </IonList>

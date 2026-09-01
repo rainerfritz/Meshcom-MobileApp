@@ -7,7 +7,7 @@ class ConfClass{
     infodata_obj:InfoData;
     ble_dev_id:string = "00:00:00:00:00:00";
     own_position:GpsData;
-    initialChatSegmentMarkers: string[] = []; // stores the chat segments in chat page while connect when loading txt msgs from node
+    initialChatSegmentMarkers: Record<string, number> = {}; // counts unseen messages per chat segment while connect when loading txt msgs from node
 
     constructor() {
         this.infodata_obj = {
@@ -72,13 +72,11 @@ class ConfClass{
     }
 
     addInitChatSegmentMarker(seg:string){
-        if(!this.initialChatSegmentMarkers.includes(seg)){
-            this.initialChatSegmentMarkers.push(seg);
-        }
+        this.initialChatSegmentMarkers[seg] = (this.initialChatSegmentMarkers[seg] ?? 0) + 1;
     }
 
     clearInitChatSegmentMarkers(){
-        this.initialChatSegmentMarkers = [];
+        this.initialChatSegmentMarkers = {};
     }
 
     getInitChatSegmentMarkers(){
