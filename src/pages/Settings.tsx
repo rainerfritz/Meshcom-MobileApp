@@ -205,11 +205,12 @@ const Tab2: React.FC = () => {
       s.infoData.CTRY = ctry_ev;
     });
   }
-  const ctry_list = ["EU8", "UK", "LA", "UK8", "US", "VR2", "868", "906"];
+  const ctry_list = ["EU8", "UK", "LA", "UK8", "PL", "US", "VR2", "868", "906"];
   const ctry_list_translated: {[key: string]: string} = 
   {"EU8":"EU8 | 433.175MHz",
   "UK":"UK | 439.9125MHz",
   "UK8":"UK8 | 439.9125MHz",
+  "PL":"PL | 434.855MHz",
   "US":"US | 433.175MHz", 
   "VR2":"VR2 | 435.775MHz", 
   "868":"868 | 869.525MHz", 
@@ -292,7 +293,8 @@ const Tab2: React.FC = () => {
   const gw_srv_str = useRef<string>("OE");
   const gw_srv_table : {[key: string]: string} = {
     "OE": "Austria-OE",
-    "DL": "Germany-DL"};
+    "DL": "Germany-DL",
+    "IT": "Italy-IT"};
   const gw_srv_list = Object.keys(gw_srv_table);
   const setGwServerNode = (gw_ev:string) => {
     console.log("Setting Gateway Server: " + gw_ev);

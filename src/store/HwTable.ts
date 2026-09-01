@@ -37,6 +37,7 @@
 #define HELTEC_E213 58
 #define ESP32_LORAPRS_E22 59
 #define ESP32_LORAPRS_RA01 60
+#define T_WATCH_S3 61
  */
 
 
@@ -75,5 +76,6 @@ export const hwtable: {[key: number]: string} = {
     57:"Heltec W-Paper",
     58:"HELTEC E213",
     59:"LORAPRS E22",
-    60:"LORAPRS RA01"
+    60:"LORAPRS RA01",
+    61:"T-WATCH S3"
 } 
