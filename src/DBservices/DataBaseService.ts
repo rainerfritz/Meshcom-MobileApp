@@ -7,6 +7,7 @@ import {
 import { MsgType, PosType } from "../utils/AppInterfaces";
 import PosiStore from "../store/PosiStore";
 import MsgStore from "../store/MsgStore";
+import ChatPreviewStore from "../store/ChatPreviewStore";
 import { format, sub } from "date-fns";
 import LogS from "../utils/LogService";
 import ConfigObject from "../utils/ConfigObject";
@@ -755,6 +756,31 @@ class DatabaseService {
         // update the store
         MsgStore.update(s => {
             s.msgArr = filtered_msgs;
+        });
+
+        // refresh the "last message" previews shown on the main chat list, independent of the active filter
+        DatabaseService.updateChatPreviews(msgs, currentCallsign);
+    }
+
+    // recompute the latest message from someone else (not blocked/text-filtered) for every channel key
+    // ("ALL" | "DM" | group-number string), used as the preview line on the main chat list items
+    static updateChatPreviews(msgs: MsgType[], currentCallsign: string) {
+        const previews: Record<string, MsgType | null> = {};
+
+        for (const msg of msgs) {
+            if (msg.fromCall === currentCallsign) continue;
+
+            const channelKey = msg.isGrpMsg === 1 ? msg.grpNum.toString() : (msg.isDM === 1 ? 'DM' : 'ALL');
+
+            if (DatabaseService.isBlocked(msg.fromCall, channelKey)) continue;
+            if (DatabaseService.isTextFiltered(msg.msgTXT, channelKey)) continue;
+
+            // msgs is ordered by timestamp ASC, so a later match always overwrites the previous one
+            previews[channelKey] = msg;
+        }
+
+        ChatPreviewStore.update(s => {
+            s.previews = previews;
         });
     }
 

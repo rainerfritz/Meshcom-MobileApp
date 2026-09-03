@@ -28,6 +28,7 @@ import AlertCard from '../components/AlertCard';
 import NodeInfoStore from '../store/NodeInfoStore';
 import ChatSettingsStore from '../store/ChatSettingsStore';
 import ChatUnseenStore from '../store/ChatUnseenStore';
+import ChatPreviewStore from '../store/ChatPreviewStore';
 
 
 const Tab3: React.FC = () => {
@@ -121,6 +122,9 @@ const Tab3: React.FC = () => {
 
   // null = main list; non-null = the active chat filter ("ALL", "DM", or group number)
   const [activeChatFilter, setActiveChatFilter] = useState<string | null>(null);
+  // latest message from someone else per channel key, shown as a preview line on the main chat list items
+  const chatPreviews = ChatPreviewStore.useState(s => s.previews);
+
   // unseen message flags per filter key, shared with the tab bar badge
   const unseenFlags = ChatUnseenStore.useState(s => s.unseenFlags);
   // unseen message counts per filter key, shown as a badge on the chat list item
@@ -860,6 +864,13 @@ const Tab3: React.FC = () => {
     ChatSettingsStore.update(s => { s.textFilters = DatabaseService.getTextFiltersSnapshot(); });
   }
 
+  // renders the "callsign: message text" preview line under a chat list item's label, if a preview exists for that channel
+  const renderChatPreview = (channel: string) => {
+    const preview = chatPreviews[channel];
+    if (!preview) return null;
+    return <p className="chat-list-preview">{preview.fromCall}: {preview.msgTXT}</p>;
+  }
+
   // human-readable label for a channel key, used in titles and the filter modal
   const getChannelLabel = (channel: string): string => {
     if (channel === "ALL") return "To All Channel";
@@ -1149,102 +1160,102 @@ const Tab3: React.FC = () => {
           <IonList>
             <IonItem className="chat-list-item" button onClick={() => handleSegmentChange("ALL", false)}>
               {unseenFlags["ALL"] && <IonIcon icon={mail} color="success" slot="start" />}
-              <IonLabel>To All Channel</IonLabel>
+              <IonLabel><h3>To All Channel</h3>{renderChatPreview("ALL")}</IonLabel>
               <IonButton slot="end" fill="clear" onClick={e => openFilterModal("ALL", e)}>
                 <IonIcon icon={funnel} color={hasActiveFilter("ALL") ? "warning" : "medium"} />
               </IonButton>
               <IonButton slot="end" fill="clear" onClick={e => toggleAudio("ALL", e)}>
                 <IonIcon icon={audioFlags["ALL"] !== false ? volumeHigh : volumeMute} color={audioFlags["ALL"] !== false ? "primary" : "medium"} />
               </IonButton>
-              {(unseenCounts["ALL"] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts["ALL"]}</IonNote>}
+              {(unseenCounts["ALL"] ?? 0) > 0 && <IonNote slot="end" color="primary" className="unseen-count-badge">{unseenCounts["ALL"]}</IonNote>}
             </IonItem>
             <IonItem className="chat-list-item" button onClick={() => handleSegmentChange("DM", false)}>
               {unseenFlags["DM"] && <IonIcon icon={mail} color="success" slot="start" />}
-              <IonLabel>Direct Messages</IonLabel>
+              <IonLabel><h3>Direct Messages</h3>{renderChatPreview("DM")}</IonLabel>
               <IonButton slot="end" fill="clear" onClick={e => openFilterModal("DM", e)}>
                 <IonIcon icon={funnel} color={hasActiveFilter("DM") ? "warning" : "medium"} />
               </IonButton>
               <IonButton slot="end" fill="clear" onClick={e => toggleAudio("DM", e)}>
                 <IonIcon icon={audioFlags["DM"] !== false ? volumeHigh : volumeMute} color={audioFlags["DM"] !== false ? "primary" : "medium"} />
               </IonButton>
-              {(unseenCounts["DM"] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts["DM"]}</IonNote>}
+              {(unseenCounts["DM"] ?? 0) > 0 && <IonNote slot="end" color="primary" className="unseen-count-badge">{unseenCounts["DM"]}</IonNote>}
             </IonItem>
             {nodeInfo_s.GCB0 !== 0 && (
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB0.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB0.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
-                <IonLabel>Group {nodeInfo_s.GCB0}</IonLabel>
+                <IonLabel><h3>Group {nodeInfo_s.GCB0}</h3>{renderChatPreview(nodeInfo_s.GCB0.toString())}</IonLabel>
                 <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB0.toString(), e)}>
                   <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB0.toString()) ? "warning" : "medium"} />
                 </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB0.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB0.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
-                {(unseenCounts[nodeInfo_s.GCB0.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB0.toString()]}</IonNote>}
+                {(unseenCounts[nodeInfo_s.GCB0.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary" className="unseen-count-badge">{unseenCounts[nodeInfo_s.GCB0.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB1 !== 0 && (
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB1.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB1.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
-                <IonLabel>Group {nodeInfo_s.GCB1}</IonLabel>
+                <IonLabel><h3>Group {nodeInfo_s.GCB1}</h3>{renderChatPreview(nodeInfo_s.GCB1.toString())}</IonLabel>
                 <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB1.toString(), e)}>
                   <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB1.toString()) ? "warning" : "medium"} />
                 </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB1.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB1.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
-                {(unseenCounts[nodeInfo_s.GCB1.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB1.toString()]}</IonNote>}
+                {(unseenCounts[nodeInfo_s.GCB1.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary" className="unseen-count-badge">{unseenCounts[nodeInfo_s.GCB1.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB2 !== 0 && (
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB2.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB2.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
-                <IonLabel>Group {nodeInfo_s.GCB2}</IonLabel>
+                <IonLabel><h3>Group {nodeInfo_s.GCB2}</h3>{renderChatPreview(nodeInfo_s.GCB2.toString())}</IonLabel>
                 <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB2.toString(), e)}>
                   <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB2.toString()) ? "warning" : "medium"} />
                 </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB2.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB2.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
-                {(unseenCounts[nodeInfo_s.GCB2.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB2.toString()]}</IonNote>}
+                {(unseenCounts[nodeInfo_s.GCB2.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary" className="unseen-count-badge">{unseenCounts[nodeInfo_s.GCB2.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB3 !== 0 && (
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB3.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB3.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
-                <IonLabel>Group {nodeInfo_s.GCB3}</IonLabel>
+                <IonLabel><h3>Group {nodeInfo_s.GCB3}</h3>{renderChatPreview(nodeInfo_s.GCB3.toString())}</IonLabel>
                 <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB3.toString(), e)}>
                   <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB3.toString()) ? "warning" : "medium"} />
                 </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB3.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB3.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
-                {(unseenCounts[nodeInfo_s.GCB3.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB3.toString()]}</IonNote>}
+                {(unseenCounts[nodeInfo_s.GCB3.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary" className="unseen-count-badge">{unseenCounts[nodeInfo_s.GCB3.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB4 !== 0 && (
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB4.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB4.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
-                <IonLabel>Group {nodeInfo_s.GCB4}</IonLabel>
+                <IonLabel><h3>Group {nodeInfo_s.GCB4}</h3>{renderChatPreview(nodeInfo_s.GCB4.toString())}</IonLabel>
                 <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB4.toString(), e)}>
                   <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB4.toString()) ? "warning" : "medium"} />
                 </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB4.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB4.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
-                {(unseenCounts[nodeInfo_s.GCB4.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB4.toString()]}</IonNote>}
+                {(unseenCounts[nodeInfo_s.GCB4.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary" className="unseen-count-badge">{unseenCounts[nodeInfo_s.GCB4.toString()]}</IonNote>}
               </IonItem>
             )}
             {nodeInfo_s.GCB5 !== 0 && (
               <IonItem className="chat-list-item" button onClick={() => handleSegmentChange(nodeInfo_s.GCB5.toString(), true)}>
                 {unseenFlags[nodeInfo_s.GCB5.toString()] && <IonIcon icon={mail} color="success" slot="start" />}
-                <IonLabel>Group {nodeInfo_s.GCB5}</IonLabel>
+                <IonLabel><h3>Group {nodeInfo_s.GCB5}</h3>{renderChatPreview(nodeInfo_s.GCB5.toString())}</IonLabel>
                 <IonButton slot="end" fill="clear" onClick={e => openFilterModal(nodeInfo_s.GCB5.toString(), e)}>
                   <IonIcon icon={funnel} color={hasActiveFilter(nodeInfo_s.GCB5.toString()) ? "warning" : "medium"} />
                 </IonButton>
                 <IonButton slot="end" fill="clear" onClick={e => toggleAudio(nodeInfo_s.GCB5.toString(), e)}>
                   <IonIcon icon={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? volumeHigh : volumeMute} color={audioFlags[nodeInfo_s.GCB5.toString()] !== false ? "primary" : "medium"} />
                 </IonButton>
-                {(unseenCounts[nodeInfo_s.GCB5.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary">{unseenCounts[nodeInfo_s.GCB5.toString()]}</IonNote>}
+                {(unseenCounts[nodeInfo_s.GCB5.toString()] ?? 0) > 0 && <IonNote slot="end" color="primary" className="unseen-count-badge">{unseenCounts[nodeInfo_s.GCB5.toString()]}</IonNote>}
               </IonItem>
             )}
           </IonList>

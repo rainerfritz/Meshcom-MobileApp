@@ -198,9 +198,29 @@ ion-textarea.customTextAreaInput{
     --padding-bottom: 6px;
 }
 
-.chat-list-item ion-label {
+.chat-list-item ion-label h3 {
     font-size: 1.25em !important;
     font-weight: 600;
+    margin: 0;
+}
+
+/* Android (md mode) treats items with a second label line (our chat preview) as "multi-line" and
+   pushes the end-slot ion-note up with extra padding/margin and top alignment; force it back to a
+   centered, iOS-like badge without touching iOS, where this doesn't happen. */
+.md .chat-list-item ion-note.unseen-count-badge {
+    align-self: center;
+    margin: 0;
+    padding: 0;
+    font-size: 0.85rem;
+}
+
+.chat-list-preview {
+    margin: 2px 0 0 0;
+    font-size: 0.85em;
+    color: var(--ion-color-medium);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .scroll-down-fab {
