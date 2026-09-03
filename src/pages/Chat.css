@@ -161,6 +161,22 @@ ion-textarea.customTextAreaInput{
     margin-top: 3px;
     margin-bottom: 10px;
 }
+.new-msg-divider{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ion-color-primary);
+    font-size: 0.9em;
+    font-weight: 600;
+    margin: 10px 0;
+}
+.new-msg-divider::before,
+.new-msg-divider::after{
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid var(--ion-color-primary);
+    margin: 0 8px;
+}
 #spacer_settings_top{
     height: 45px;
     width: auto;

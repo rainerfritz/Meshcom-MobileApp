@@ -125,6 +125,12 @@ const Tab3: React.FC = () => {
   const unseenFlags = ChatUnseenStore.useState(s => s.unseenFlags);
   // unseen message counts per filter key, shown as a badge on the chat list item
   const unseenCounts = ChatUnseenStore.useState(s => s.unseenCounts);
+
+  // timestamp of the first "new" message in the active channel; a "New Messages" divider is rendered above it. Null = no divider.
+  const [dividerTimestamp, setDividerTimestampState] = useState<number | null>(null);
+  const dividerTimestampRef = useRef<number | null>(null);
+  const setDividerTimestamp = (ts: number | null) => { dividerTimestampRef.current = ts; setDividerTimestampState(ts); };
+
   // audio alert flags per channel (true = enabled, default when missing)
   const audioFlags = ChatSettingsStore.useState(s => s.audioFlags);
   // blocked callsigns per channel key ("GLOBAL" | "ALL" | "DM" | group number)
@@ -541,6 +547,11 @@ const Tab3: React.FC = () => {
           s.unseenFlags = { ...s.unseenFlags, [msgType]: !isSeen };
           s.unseenCounts = { ...s.unseenCounts, [msgType]: isSeen ? 0 : (s.unseenCounts[msgType] ?? 0) + 1 };
         });
+
+        // channel is open but message isn't instantly seen (scrolled up / app backgrounded) - mark where the new messages start
+        if (!isSeen && msgType === activeChatFilter && dividerTimestampRef.current === null) {
+          setDividerTimestamp(notifyMsg_s.timestamp);
+        }
       }
     }
 
@@ -928,12 +939,21 @@ const Tab3: React.FC = () => {
     scrollToBottom();
   }
 
-  const handleSegmentChange = (val: string, isGrp: boolean) => {
+  const handleSegmentChange = async (val: string, isGrp: boolean) => {
     console.log("Chat Filter Change to: " + val);
 
     setActiveChatFilter(val);
 
-    DatabaseService.setChatFilters(val);
+    // snapshot the pre-reset unseen count first so the "New Messages" divider can be positioned once this channel's messages are loaded
+    const unseenCountSnapshot = ChatUnseenStore.getRawState().unseenCounts[val] ?? 0;
+    setDividerTimestamp(null);
+
+    await DatabaseService.setChatFilters(val);
+
+    const freshMsgs = MsgStore.getRawState().msgArr;
+    if (unseenCountSnapshot > 0 && unseenCountSnapshot < freshMsgs.length) {
+      setDividerTimestamp(freshMsgs[freshMsgs.length - unseenCountSnapshot].timestamp);
+    }
 
     if (val === "ALL") {
       setShCallsign(false);
@@ -986,6 +1006,7 @@ const Tab3: React.FC = () => {
     setActiveChatFilter(null);
     setShCallsign(false);
     setSendDMGrpFlag(false);
+    setDividerTimestamp(null);
   }
 
   const toggleAudio = (channel: string, e: React.MouseEvent) => {
@@ -1237,6 +1258,11 @@ const Tab3: React.FC = () => {
                   {checkMidnight(msg) &&
                     <div className="date-panel">
                       <IonText id="msg-time">{getLocalDate(msg)}</IonText>
+                    </div>}
+
+                  {dividerTimestamp !== null && msg.timestamp === dividerTimestamp &&
+                    <div className="new-msg-divider">
+                      <span>New Messages</span>
                     </div>}
 
                   {msg.msgNr !== 0 ? <>
