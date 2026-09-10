@@ -1,5 +1,5 @@
 PODS:
-  - Capacitor (8.3.1):
+  - Capacitor (8.5.1):
     - CapacitorCordova
   - CapacitorApp (8.1.1):
     - Capacitor
@@ -11,10 +11,10 @@ PODS:
     - Capacitor
     - SQLCipher
     - ZIPFoundation
-  - CapacitorCordova (8.3.1)
-  - CapacitorGeolocation (7.1.4):
+  - CapacitorCordova (8.5.1)
+  - CapacitorGeolocation (8.2.2):
     - Capacitor
-    - IONGeolocationLib (~> 1.0)
+    - IONGeolocationLib (= 2.1.0)
   - CapacitorHaptics (8.0.2):
     - Capacitor
   - CapacitorKeyboard (8.0.5):
@@ -23,7 +23,7 @@ PODS:
     - Capacitor
   - CapacitorStatusBar (8.0.3):
     - Capacitor
-  - IONGeolocationLib (1.0.0)
+  - IONGeolocationLib (2.1.0)
   - SQLCipher (4.5.6):
     - SQLCipher/standard (= 4.5.6)
   - SQLCipher/common (4.5.6)
@@ -75,21 +75,21 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/status-bar"
 
 SPEC CHECKSUMS:
-  Capacitor: 46dbaa89c1d1cd121b9fc2dc839c1f39cc49e326
+  Capacitor: 8ca6676b3b1147b00f7f3a547ccf68defd658d55
   CapacitorApp: 305bd13c44f6f9d164e2ee66a4faa956ed8c0e06
   CapacitorClipboard: c75fdaa6e622111119f35e7914ecfc67b05efecb
   CapacitorCommunityBluetoothLe: f9c76baa5338d206b7418c48d945d93d47800af3
   CapacitorCommunitySqlite: 785553c54e52da62d058238d4571db5692c022c4
-  CapacitorCordova: 9010447fe25e869705fcf525e5f490facde87608
-  CapacitorGeolocation: 32a1f849c38c72b5071de36a28ebc548ef3bb611
+  CapacitorCordova: eb79411a3a0ed517eeb4c6dcf5933ce4bcbb5c9e
+  CapacitorGeolocation: 327f18983c8f8a55e191fcf7dee80b9294f1ab78
   CapacitorHaptics: 296f771ecd89c7a1bd92a7b6826a7d268e2e70f5
   CapacitorKeyboard: b6b0744890cdb1d9a96e2cafcc9253fdcc55de3b
   CapacitorLocalNotifications: e0747a329ddde3074d52dc74a003688af90e42be
   CapacitorStatusBar: eca7bc2b58d9f886f1ef9edb66e57a9b29c121af
-  IONGeolocationLib: 81f33f88d025846946de2cf63b0c7628e7c6bc9d
+  IONGeolocationLib: 6a7b6f76063fb1b01cfb14fae7d0f526e3c9b271
   SQLCipher: 838309284f29953a28ad2e81d87d55ea6b7c74fd
   ZIPFoundation: d170fa8e270b2a32bef9dcdcabff5b8f1a5deced
 
-PODFILE CHECKSUM: 550920a0185e6680f0f8753273c7dc2353252b48
+PODFILE CHECKSUM: 7f0ef1a72b8f8f445936de714e122b5b4a01ad33
 
 COCOAPODS: 1.16.2

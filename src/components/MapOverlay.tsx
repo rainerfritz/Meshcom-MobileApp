@@ -3,7 +3,7 @@ import { IonButton, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonCol
 import { PosType } from "../utils/AppInterfaces";
 import { useState } from "react";
 import DMfrmMapStore from "../store/DMfrmMap";
-import { useHistory } from "react-router";
+import { useNavigate } from "react-router-dom";
 import './MapOverlay.css';
 
 
@@ -20,7 +20,7 @@ interface MapOverlayProps extends PosType {
 
 export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign, lat, lon, alt, bat, hw, pressure, humidity, temperature, qnh, timestamp, comment, temp_2, co2, gas_res, neighbour_count, groups, onCloseOverlay }) => {
 
-    const history = useHistory();
+    const navigate = useNavigate();
 
     // state to show more info like pressure, etc
     const [shExtInfo, setShExtInfo] = useState(false);
@@ -35,7 +35,7 @@ export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign,
         // close the overlay
         onCloseOverlay();
         // forward to chat page
-        history.push("/chat");
+        navigate("/chat");
     }
 
 

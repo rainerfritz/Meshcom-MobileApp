@@ -21,7 +21,7 @@ import BLEconnStore from '../store/BLEconnected';
 import {getBLEconnStore} from '../store/Selectors';
 import DMfrmMapStore from '../store/DMfrmMap';
 import NotifyMsgState from '../store/NotifyMsg';
-import { useHistory } from "react-router";
+import { useNavigate } from "react-router-dom";
 import LogS from '../utils/LogService';
 import DatabaseService, { TextFilter } from '../DBservices/DataBaseService';
 import AlertCard from '../components/AlertCard';
@@ -106,8 +106,7 @@ const Tab3: React.FC = () => {
   // alert card params
   const [shDiscoCard, setShDiscoCard] = useState<boolean>(false);
 
-  //const navigation = useIonRouter();
-  const history = useHistory();
+  const navigate = useNavigate();
 
   // remember if this page is active
   const thisPageActive = useRef<boolean>(false);
@@ -934,7 +933,7 @@ const Tab3: React.FC = () => {
   const redirectConnect = () => {
     setShDiscoCard(false);
     if (isAppActive)
-      history.push("/connect");
+      navigate("/connect");
   }
 
 

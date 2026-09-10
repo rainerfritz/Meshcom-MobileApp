@@ -13,7 +13,7 @@ import { iosTransitionAnimation, RangeValue } from '@ionic/core';
 import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
 import AlertCard from '../components/AlertCard';
-import { useHistory } from "react-router";
+import { useNavigate } from "react-router-dom";
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
 import BLEconnStore from '../store/BLEconnected';
@@ -44,8 +44,8 @@ const Tab2: React.FC = () => {
   // get the gps functions to set current position
   const {setCurrPosGPS} = usePhoneGps();
 
-  // history forward to page
-  const history = useHistory();
+  // navigate forward to page
+  const navigate = useNavigate();
 
   // devid from store
   const devID_s = useStoreState(DevIDStore, getDevID);
@@ -1244,7 +1244,7 @@ const Tab2: React.FC = () => {
 
     // forward to info page when pos or wx info button pressed
     if (cmd === "posdebug" || cmd === "wx") {
-      history.push('/info');
+      navigate('/info');
     }
   }
 
@@ -1932,7 +1932,7 @@ const Tab2: React.FC = () => {
   const redirectConnect = () => {
     setShDiscoCard(false);
     if (isAppActive)
-      history.push("/connect");
+      navigate("/connect");
   }
 
 
@@ -2418,7 +2418,7 @@ const Tab2: React.FC = () => {
                 </div>
               </div>
 
-              <IonText color="primary" class='txt-center'>
+              <IonText color="primary" className='txt-center'>
                 <h3>GPS - Position</h3>
               </IonText>
               <div className='settings_btns'>
@@ -2440,7 +2440,7 @@ const Tab2: React.FC = () => {
                 </div>
               </div>
 
-              <IonText color="primary" class='txt-center'>
+              <IonText color="primary" className='txt-center'>
                 <h3>Sensors</h3>
               </IonText>
               <div className='settings_btns'>
@@ -2480,7 +2480,7 @@ const Tab2: React.FC = () => {
                 </div>
               </div>
 
-              <IonText color="primary" class='txt-center'>
+              <IonText color="primary" className='txt-center'>
                 <h3>Utilities</h3>
               </IonText>
               <div className='settings_btns'>

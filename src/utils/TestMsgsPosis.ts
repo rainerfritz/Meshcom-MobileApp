@@ -72,7 +72,9 @@ export const test_msgs : MsgType [] =
         temp_2:0,
         co2:0,
         alt_press:0,
-        gas_res:0
+        gas_res:0,
+        neighbour_count:0,
+        groups:""
     },
     {
         timestamp:0,
@@ -90,7 +92,9 @@ export const test_msgs : MsgType [] =
         temp_2:0,
         co2:0,
         alt_press:0,
-        gas_res:0
+        gas_res:0,
+        neighbour_count:0,
+        groups:""
     },
     {
         timestamp:0,
@@ -108,7 +112,9 @@ export const test_msgs : MsgType [] =
         temp_2:0,
         co2:0,
         alt_press:0,
-        gas_res:0
+        gas_res:0,
+        neighbour_count:0,
+        groups:""
     },
     {
         timestamp:0,
@@ -126,6 +132,8 @@ export const test_msgs : MsgType [] =
         temp_2:0,
         co2:0,
         alt_press:0,
-        gas_res:0
+        gas_res:0,
+        neighbour_count:0,
+        groups:""
     }
   ]

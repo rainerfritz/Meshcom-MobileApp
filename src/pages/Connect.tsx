@@ -15,7 +15,7 @@ import { useMSG } from '../hooks/MessageHandler';
 import { DevIDStore } from '../store';
 import { useStoreState } from 'pullstate';
 import { getDevID, getRedirChatStore, getShouldConfStore, getConfigStore } from '../store/Selectors';
-import { useHistory } from "react-router";
+import { useNavigate } from "react-router-dom";
 import ShouldConfStore from '../store/ShouldConfNode';
 import RedirectChatStore from '../store/RedirectChat';
 import PlatformStore from '../store/PlatformStore';
@@ -121,8 +121,7 @@ const Tab1: React.FC = () => {
   // phonegps hook
   const {getGpsLocation, setCurrPosGPS} = usePhoneGps();
 
-  //const navigation = useIonRouter();
-  const history = useHistory();
+  const navigate = useNavigate();
 
   // platform detection
   const pltfrm = useRef<string>("");
@@ -913,7 +912,7 @@ const Tab1: React.FC = () => {
     console.log("Reconnect Tries: " + recon_count.current);
 
     if (isAppActive_Ref.current)
-      history.push("/connect");
+      navigate("/connect");
 
     if (connFlag === false) {
       // show progress wheel
@@ -1051,7 +1050,7 @@ const Tab1: React.FC = () => {
 
       // redirect to chat
       if (isAppActive && !setConfAl) {
-        history.push("/chat");
+        navigate("/chat");
       }
     }
   }, [nodeConfFin]);
@@ -1089,7 +1088,7 @@ const Tab1: React.FC = () => {
     });
 
     if(isAppActive)
-      history.push("/settings");
+      navigate("/settings");
   }
 
 
@@ -1101,7 +1100,7 @@ const Tab1: React.FC = () => {
       console.log("Redirecting to Chat");
 
       if (isAppActive) {
-        history.push("/chat");
+        navigate("/chat");
         RedirectChatStore.update(s => {
           s.redirChat = false;
         });
