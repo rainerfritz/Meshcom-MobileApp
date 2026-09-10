@@ -90,6 +90,14 @@ class DatabaseService {
                 });
             }
 
+            // check if we have the ackCall column in the TextMessages table (callsign that sent the ack)
+            if (DatabaseService.db) {
+                await DatabaseService.db.query(`SELECT ackCall FROM TextMessages;`).catch(async (err) => {
+                    LogS.log(1, 'Checking/adding ackCall in TextMessages table:' + err);
+                    await DatabaseService.db?.execute(`ALTER TABLE TextMessages ADD COLUMN ackCall TEXT DEFAULT '';`);
+                });
+            }
+
             // Positions table
             if (DatabaseService.db) {
                 await DatabaseService.db.execute(`
@@ -311,7 +319,7 @@ class DatabaseService {
     }
 
     // Acknowledge Text Message
-    static async ackTxtMsg(msgNr: number, ack_type: number) {
+    static async ackTxtMsg(msgNr: number, ack_type: number, ack_call: string = '') {
         if (DatabaseService.db) {
             console.log('DB Acknowledging text message:' + msgNr);
             try {
@@ -333,16 +341,17 @@ class DatabaseService {
                                 msg.ack = 2;
                             }
                             if (ack_type === 0x00) {
-                                // msg came from another node 
+                                // msg came from another node
                                 msg.ack = 1;
                             }
                             if (ack_type === 0x02) {
                                 // msg came from DM Node. Should 0 and 1 instead of 0 and 2
                                 msg.ack = 2;
                             }
+                            msg.ackCall = ack_call;
 
                             // update in DB
-                            const query_str = `UPDATE TextMessages SET ack = ${msg.ack} WHERE msgNr = ${msgNr}`;
+                            const query_str = `UPDATE TextMessages SET ack = ${msg.ack}, ackCall = '${DatabaseService.escapeQuotes(ack_call)}' WHERE msgNr = ${msgNr}`;
                             const ret = await DatabaseService.db.execute(query_str);
                             console.log('DB ackTxtMsg ret:', ret.changes);
                             // read back all messages

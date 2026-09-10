@@ -135,6 +135,13 @@ ion-textarea.customTextAreaInput{
 
 }
 
+#msg-ack-call {
+    font-size: 0.7em;
+    color: rgb(230, 230, 230);
+    float: right;
+    margin-right: 4px;
+}
+
 .sendTextContent {
     height: 100%;
 }

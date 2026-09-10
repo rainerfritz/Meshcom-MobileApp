@@ -10,6 +10,7 @@ export interface MsgType {
     msgTXT:string,
     via:string,
     ack:number,
+    ackCall:string,
     isDM:number,
     isGrpMsg:number,
     grpNum:number,

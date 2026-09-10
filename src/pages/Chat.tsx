@@ -1316,13 +1316,16 @@ const Tab3: React.FC = () => {
 
                         {msg.fromCall === config_s.callSign ? <>
                           {msg.ack === 0 ? <>
-                            <IonIcon icon={checkmark} id="chkIcon" size='small' slot='end' />
+                            <IonIcon icon={checkmark} id="chkIcon" size='small' slot='end' title="sent" />
                           </> : <></>}
                           {msg.ack === 1 ? <>
-                            <IonIcon icon={cloudOutline} id="chkIcon" size='small' slot='end' />
+                            <IonIcon icon={cloudOutline} id="chkIcon" size='small' slot='end' title={msg.ackCall ? `heard by ${msg.ackCall}` : 'heard'} />
                           </> : <></>}
                           {msg.ack === 2 ? <>
-                            <IonIcon icon={cloudDoneOutline} id="chkIcon" size='small' slot='end' />
+                            <IonIcon icon={cloudDoneOutline} id="chkIcon" size='small' slot='end' title={msg.ackCall ? `acked by ${msg.ackCall}` : 'acked'} />
+                          </> : <></>}
+                          {msg.ackCall && (msg.ack === 1 || msg.ack === 2) ? <>
+                            <IonText id="msg-ack-call">{msg.ackCall}</IonText>
                           </> : <></>}
                         </> : <></>}
                       </div>

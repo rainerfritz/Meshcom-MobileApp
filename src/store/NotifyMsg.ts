@@ -10,6 +10,7 @@ const defaultMsg:MsgType = {
     msgTXT:"",
     via:"",
     ack:0,
+    ackCall:"",
     isDM:0,
     isGrpMsg:0,
     grpNum:0,

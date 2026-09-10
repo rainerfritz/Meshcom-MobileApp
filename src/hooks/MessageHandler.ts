@@ -582,6 +582,7 @@ export function useMSG() {
                             msgTXT: msg_text_,
                             via: via_str,
                             ack:0,
+                            ackCall:"",
                             isDM: isDM_,
                             isGrpMsg: isGrpMsg_,
                             grpNum: grpNum_,
@@ -933,13 +934,38 @@ export function useMSG() {
                 // acknowledge from node for txtmsg - sends back msgID
                 // we have two ack states. 1 -> ack from node | 2 -> ack from gateway
                 if (msg_type === 0x41){
-                    console.log("Txt Msg Acknowledge from node");
+                    console.log("Txt Msg Acknowledge from node, frame len: " + msg_len);
 
                     const ack_state = msg.getUint8(6);
                     console.log("Ack State: " + ack_state);
-                    
+
+                    // optional attribution: callsign of the station that acked, see ack_attribution.h
+                    // byte 7 (n) == 0 means old format (frame ends after byte 6), no attribution present
+                    let ack_call = "";
+                    if (msg_len > 7) {
+                        const ack_call_len = msg.getUint8(7);
+                        console.log("Ack Call Len (raw byte): " + ack_call_len);
+
+                        if (ack_call_len > 0 && msg_len >= 8 + ack_call_len) {
+                            const ack_call_arr: number[] = [];
+                            for (let i = 0; i < ack_call_len; i++) {
+                                ack_call_arr[i] = msg.getUint8(8 + i);
+                            }
+                            ack_call = convBARRtoStr(ack_call_arr);
+                            console.log("Ack Call decoded: " + ack_call);
+                        } else if (ack_call_len > 0) {
+                            LogS.log(1, `Ack frame too short for claimed call length: msg_len=${msg_len}, ack_call_len=${ack_call_len}`);
+                        } else {
+                            console.log("Ack Call: none (old format / unknown)");
+                        }
+                    } else {
+                        console.log("Ack Call: not present (frame has no attribution byte)");
+                    }
+
+                    console.log(`Ack Summary -> msgID: ${msgID}, state: ${ack_state}, call: '${ack_call}'`);
+
                     // Handle Acknowledge of Text Msg
-                    DatabaseService.ackTxtMsg(msgID, ack_state);
+                    DatabaseService.ackTxtMsg(msgID, ack_state, ack_call);
                 }
 
                 break;
