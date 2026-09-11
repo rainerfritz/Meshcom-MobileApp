@@ -55,19 +55,6 @@ ion-textarea.customTextAreaInput{
     font-size: 1.1em;
     --padding-end: 7px;
 }
-.other-message {
-    float: left;
-    padding: 5px;
-    margin-bottom: 8px;
-    width: fit-content;
-    max-width: 90%;
-    background-color: #404544;
-    border: solid 1px #393939;
-    border-radius: 6px;
-    color: #fff;
-    text-align: start;
-}
-
 .own-message {
     float: right;
     padding: 5px;
@@ -75,24 +62,39 @@ ion-textarea.customTextAreaInput{
     margin-bottom: 8px;
     max-width: 90%;
     width: fit-content;
-    background-color: #0b443e;
-    border: solid 1px #0d4f48;
+    background-color: var(--bubble-sent-bg);
+    border: solid 1px var(--bubble-sent-border);
     border-radius: 6px;
-    color: #fff;
+    color: var(--bubble-sent-text);
     text-align: start;
 }
 
-.dm-message {
+.received-message {
     float: left;
     padding: 5px;
     margin-bottom: 8px;
     max-width: 90%;
     width: fit-content;
-    background-color: #0b3944;
-    border: solid 1px #0d434f;
+    background-color: var(--bubble-received-bg);
+    border: solid 1px var(--bubble-received-border);
     border-radius: 6px;
-    color: #fff;
+    color: var(--bubble-received-text);
     text-align: start;
+}
+
+/* iOS: flat, high-radius "pill" bubbles per iOS Messages convention, no elevation.
+   Extra padding compensates for the larger radius so text doesn't crowd the rounded corners. */
+.ios .own-message,
+.ios .received-message {
+    padding: 7px 8px;
+    border-radius: 16px;
+}
+
+/* Android: Material-style bubbles - tighter radius, subtle elevation shadow */
+.md .own-message,
+.md .received-message {
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 #msg-spacer {
@@ -104,42 +106,57 @@ ion-textarea.customTextAreaInput{
     height: 5%;
 }
 
-#msg-time {
-    font-size: 0.7em;
-    color: rgb(230, 230, 230);
+.msg-meta-line {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px;
 }
 
-#msg-via {
-    font-size: 0.8em;
-    color: rgb(230, 230, 230);
-}
-#msg-dm {
-    font-size: 0.8em;
-    color: rgb(152, 228, 255);
+.msg-time {
+    font-size: 0.72em;
+    color: var(--bubble-meta-color);
 }
 
-#from-call {
-    font-size: 0.9em;
-    color: #9fd6fd;
+.msg-via {
+    font-size: 0.72em;
+    color: var(--bubble-meta-color);
+    opacity: 0.85;
 }
 
-#msg-text {
-    font-size: 1.1em;
+.msg-sender {
+    font-size: 0.95em;
+    font-weight: 700;
+    color: var(--bubble-sender-color);
+    letter-spacing: 0.01em;
+}
+
+.msg_text {
+    font-size: 1.05em;
+    line-height: 1.35;
+    color: inherit;
     padding-bottom: 3px;
+    word-break: break-word;
 }
 
-#chkIcon {
+.chkIcon {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.ack-icon {
     height: 1em;
-    float: right;
-    color: #1fe5d1;
-
+    color: var(--bubble-ack-color);
+    flex-shrink: 0;
 }
 
-#msg-ack-call {
-    font-size: 0.7em;
-    color: rgb(230, 230, 230);
-    float: right;
-    margin-right: 4px;
+.msg-ack-call {
+    font-size: 0.75em;
+    color: var(--bubble-meta-color);
+    line-height: 1;
 }
 
 .sendTextContent {
@@ -157,14 +174,14 @@ ion-textarea.customTextAreaInput{
 
 .date-panel{
     width: auto;
-    height: 5%;
     display: flex;
     justify-content: center;
     align-items: center;
-    background-color: #0b3944;
-    color: #fff;
+    background-color: var(--date-divider-bg);
+    color: var(--date-divider-text);
     font-size: 1.1em;
     border-radius: 6px;
+    padding: 4px 12px;
     margin-top: 3px;
     margin-bottom: 10px;
 }
@@ -172,7 +189,7 @@ ion-textarea.customTextAreaInput{
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--ion-color-primary);
+    color: var(--chat-divider-color);
     font-size: 0.9em;
     font-weight: 600;
     margin: 10px 0;
@@ -181,7 +198,7 @@ ion-textarea.customTextAreaInput{
 .new-msg-divider::after{
     content: "";
     flex: 1;
-    border-bottom: 1px solid var(--ion-color-primary);
+    border-bottom: 1px solid var(--chat-divider-color);
     margin: 0 8px;
 }
 #spacer_settings_top{

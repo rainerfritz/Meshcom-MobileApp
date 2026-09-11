@@ -74,6 +74,29 @@ http://ionicframework.com/docs/theming/ */
   --ion-color-light-contrast-rgb: 0, 0, 0;
   --ion-color-light-shade: #d7d8da;
   --ion-color-light-tint: #f5f6f9;
+
+  /** chat bubbles (light) **/
+  --bubble-sent-bg: #bfe8d8;
+  --bubble-sent-border: #8fd0b7;
+  --bubble-sent-text: #0b3d2e;
+
+  --bubble-received-bg: #c3e2f5;
+  --bubble-received-border: #96c8ea;
+  --bubble-received-text: #0b2e42;
+
+  --bubble-meta-color: #5b6b73;
+  --bubble-sender-color: #0d5f9e;
+  --bubble-ack-color: #147a6d;
+
+  --chat-divider-color: #b45309;
+  --date-divider-bg: #e4edf2;
+  --date-divider-text: #123244;
+}
+
+/* Android: received bubbles a touch darker and less saturated than the iOS blue */
+.md body {
+  --bubble-received-bg: #c9dce8;
+  --bubble-received-border: #a9c4d6;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -145,6 +168,29 @@ http://ionicframework.com/docs/theming/ */
     --ion-color-light-contrast-rgb: 255,255,255;
     --ion-color-light-shade: #1e2023;
     --ion-color-light-tint: #383a3e;
+
+    /** chat bubbles (dark) **/
+    --bubble-sent-bg: #124a3f;
+    --bubble-sent-border: #1a6656;
+    --bubble-sent-text: #eafff8;
+
+    --bubble-received-bg: #103a52;
+    --bubble-received-border: #1a5a7a;
+    --bubble-received-text: #eaf6ff;
+
+    --bubble-meta-color: #a9c2cc;
+    --bubble-sender-color: #6ec8ff;
+    --bubble-ack-color: #3fe5c8;
+
+    --chat-divider-color: #ffb454;
+    --date-divider-bg: #0b3944;
+    --date-divider-text: #ffffff;
+  }
+
+  /* Android: received bubbles a touch less saturated than the iOS blue */
+  .md body {
+    --bubble-received-bg: #16394a;
+    --bubble-received-border: #275166;
   }
 
   /*

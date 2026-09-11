@@ -8,6 +8,9 @@ const config: CapacitorConfig = {
     androidScheme: 'https'
   },
   plugins: {
+      SystemBars: {
+        insetsHandling: 'disable'
+      },
       LocalNotifications: {
         smallIcon: 'res://drawable/meshcom_logo_32x32_transp_gray',
         iconColor: '#3578e5',

@@ -451,9 +451,13 @@ const Tab3: React.FC = () => {
 
       //create a channel for notify on adroid
       if (thisPlatform === "android") {
+        // channel id bumped from '1' to '2': Android notification channels are immutable
+        // once created on a device, so a stale existing channel would keep ignoring the
+        // sound setting below — a new id forces a fresh channel with the correct sound.
+        await LocalNotifications.deleteChannel({ id: '1' });
         await LocalNotifications.createChannel({
-          id: '1',
-          name: 'channel1',
+          id: '2',
+          name: 'channel2',
           importance: 4,
           visibility: 1,
           vibration: true,
@@ -579,7 +583,7 @@ const Tab3: React.FC = () => {
                 at: new Date(Date.now() + 1000 * 1), // in 1 secs
                 repeats: false
               },
-              channelId: playSound ? '1' : 'silent',
+              channelId: playSound ? '2' : 'silent',
               smallIcon: 'res://drawable/meshcom_logo_32x32_transp_gray',
               largeIcon: 'res://drawable/meshcom_logo_64x64',
               sound: playSound ? 'morse_r.wav' : ''
@@ -590,18 +594,9 @@ const Tab3: React.FC = () => {
   }
 
 
-  // switch message type - own - own/dm - other
+  // switch message type - own vs. received (all channel types look the same when received)
   const msgType = (msg_:MsgType) =>{
-
-    if(msg_.fromCall === config_s.callSign) return "own-message";
-
-    if(msg_.fromCall !== config_s.callSign) {
-      if(msg_.isDM) {
-        return "dm-message"
-      } else {
-        return "other-message"
-      }
-    }
+    return msg_.fromCall === config_s.callSign ? "own-message" : "received-message";
   }
 
 
@@ -1236,7 +1231,7 @@ const Tab3: React.FC = () => {
                 <>
                   {checkMidnight(msg) &&
                     <div className="date-panel">
-                      <IonText id="msg-time">{getLocalDate(msg)}</IonText>
+                      <IonText className="msg-time">{getLocalDate(msg)}</IonText>
                     </div>}
 
                   {dividerTimestamp !== null && msg.timestamp === dividerTimestamp &&
@@ -1248,30 +1243,28 @@ const Tab3: React.FC = () => {
 
                     <div key={i} onTouchStart={handleButtonPress} onTouchEnd={() => handleButtonRelease(msg.msgNr)} className={msgType(msg)}>
 
-                      <div className="ion-text-start">
-                        <IonText id="msg-time">{msg.msgTime}</IonText>
+                      <div className="ion-text-start msg-meta-line">
+                        <IonText className="msg-time">{msg.msgTime}</IonText>
+                        {msg.via.length > 1 ? <>
+                          <IonText className="msg-via"> · via {msg.via}</IonText>
+                        </> : <></>}
                       </div>
-                      {msg.via.length > 1 ? <>
-                        <div className="ion-text-start">
-                          <IonText id="msg-via">via:{msg.via}</IonText>
-                        </div>
-                      </> : <></>}
 
                       <div className="ion-text-start">
                         {msg.isDM ? <>
                           {msg.fromCall === config_s.callSign ? <>
                             {(activeChatFilter === "ALL" || activeChatFilter === "DM") && (
                               <div className="ion-text-start">
-                                <IonText id="from-call">To: {msg.toCall}</IonText>
+                                <IonText className="msg-sender">To: {msg.toCall}</IonText>
                               </div>
                             )}
                           </>:<>
-                          <IonText id="from-call" >{msg.fromCall}: </IonText>
+                          <IonText className="msg-sender" >{msg.fromCall}: </IonText>
                           </>}
                         </> : <>
-                        <IonText id="from-call" >{msg.fromCall}: </IonText>
+                        <IonText className="msg-sender" >{msg.fromCall}: </IonText>
                         </>}
-                        
+
                       </div>
 
                       <div id="spacer-txtbox"></div>
@@ -1284,17 +1277,17 @@ const Tab3: React.FC = () => {
                       <div className='chkIcon'>
 
                         {msg.fromCall === config_s.callSign ? <>
+                          {msg.ackCall && (msg.ack === 1 || msg.ack === 2) ? <>
+                            <IonText className="msg-ack-call">{msg.ackCall}</IonText>
+                          </> : <></>}
                           {msg.ack === 0 ? <>
-                            <IonIcon icon={checkmark} id="chkIcon" size='small' slot='end' title="sent" />
+                            <IonIcon icon={checkmark} className="ack-icon" size='small' slot='end' title="sent" />
                           </> : <></>}
                           {msg.ack === 1 ? <>
-                            <IonIcon icon={cloudOutline} id="chkIcon" size='small' slot='end' title={msg.ackCall ? `heard by ${msg.ackCall}` : 'heard'} />
+                            <IonIcon icon={cloudOutline} className="ack-icon" size='small' slot='end' title={msg.ackCall ? `heard by ${msg.ackCall}` : 'heard'} />
                           </> : <></>}
                           {msg.ack === 2 ? <>
-                            <IonIcon icon={cloudDoneOutline} id="chkIcon" size='small' slot='end' title={msg.ackCall ? `acked by ${msg.ackCall}` : 'acked'} />
-                          </> : <></>}
-                          {msg.ackCall && (msg.ack === 1 || msg.ack === 2) ? <>
-                            <IonText id="msg-ack-call">{msg.ackCall}</IonText>
+                            <IonIcon icon={cloudDoneOutline} className="ack-icon" size='small' slot='end' title={msg.ackCall ? `acked by ${msg.ackCall}` : 'acked'} />
                           </> : <></>}
                         </> : <></>}
                       </div>
