@@ -454,24 +454,31 @@ const Tab3: React.FC = () => {
         // channel id bumped from '1' to '2': Android notification channels are immutable
         // once created on a device, so a stale existing channel would keep ignoring the
         // sound setting below — a new id forces a fresh channel with the correct sound.
-        await LocalNotifications.deleteChannel({ id: '1' });
-        await LocalNotifications.createChannel({
-          id: '2',
-          name: 'channel2',
-          importance: 4,
-          visibility: 1,
-          vibration: true,
-          sound: 'morse_r.wav'
-        });
-        // silent channel used when audio alerts are disabled for a chat
-        await LocalNotifications.createChannel({
-          id: 'silent',
-          name: 'channel_silent',
-          importance: 3,
-          visibility: 1,
-          vibration: false,
-          sound: ''
-        });
+        // (Also created in Connect.tsx right after permission grant, so channel '2' exists
+        // even if the Chat tab is never opened before the first notification fires; these
+        // calls are idempotent and just re-affirm the same channels.)
+        try {
+          await LocalNotifications.deleteChannel({ id: '1' });
+          await LocalNotifications.createChannel({
+            id: '2',
+            name: 'channel2',
+            importance: 4,
+            visibility: 1,
+            vibration: true,
+            sound: 'morse_r.wav'
+          });
+          // silent channel used when audio alerts are disabled for a chat
+          await LocalNotifications.createChannel({
+            id: 'silent',
+            name: 'channel_silent',
+            importance: 3,
+            visibility: 1,
+            vibration: false,
+            sound: ''
+          });
+        } catch (e) {
+          console.log("Failed to create Android notification channels: " + e);
+        }
         // sound: "android.resource://io.ionic.meshcom/raw/morse_r.wav"
         const channels = await LocalNotifications.listChannels();
         console.log("Channels:");

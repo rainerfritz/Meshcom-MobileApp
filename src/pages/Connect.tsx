@@ -150,6 +150,31 @@ const Tab1: React.FC = () => {
   const getNotifyPermission = async () => {
     if((await LocalNotifications.requestPermissions()).display === 'granted'){
       LogS.log(0, "Local Notification allowed");
+      // create the Android sound channels here too (not only on entering Chat) so they
+      // exist as soon as permission is granted, regardless of which tab is opened first
+      if (isPlatform('android')) {
+        try {
+          await LocalNotifications.deleteChannel({ id: '1' });
+          await LocalNotifications.createChannel({
+            id: '2',
+            name: 'channel2',
+            importance: 4,
+            visibility: 1,
+            vibration: true,
+            sound: 'morse_r.wav'
+          });
+          await LocalNotifications.createChannel({
+            id: 'silent',
+            name: 'channel_silent',
+            importance: 3,
+            visibility: 1,
+            vibration: false,
+            sound: ''
+          });
+        } catch (e) {
+          LogS.log(0, "Failed to create Android notification channels: " + e);
+        }
+      }
     }
   }
 
