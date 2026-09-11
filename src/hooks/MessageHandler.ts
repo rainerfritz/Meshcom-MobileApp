@@ -31,9 +31,9 @@
 import ConfigStore from '../store/ConfStore';
 import ShouldConfStore from '../store/ShouldConfNode';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
-import {hwtable} from '../store/HwTable';
-import {modtable} from '../store/ModTable';
-import { format, compareAsc, isAfter, fromUnixTime, isBefore } from "date-fns";
+import {hwName} from '../store/HwTable';
+import { format } from "date-fns";
+import { parsePositionPayload, readFrameTrailer, readMsgId, readNodeTimestampMs, decodeFlags } from "../utils/AprsParser";
 import GpsDataStore from '../store/GpsData';
 import WxDataStore from '../store/WxData';
 //import AprsCmtStore from '../store/AprsCmtStore';
@@ -106,7 +106,8 @@ export function useMSG() {
                 let text_offset = 0;
                 let from_callsign_ = "";
                 let to_callsign_ = "";
-                const msgID = msg.getUint32(2, false);
+                // msg_id is written little-endian on the wire (wire-format §1.1)
+                const msgID = readMsgId(msg, 2);
                 console.log("MSGID: " + msgID);
                 let route_calls = false;
                 let isDM_ = 0;    // flag broadcast or DM message
@@ -202,20 +203,6 @@ export function useMSG() {
                         }
 
                         console.log("Route Calls: " + via_str);
-
-                        // the last 4 bytes are the unix timestamp from node
-                        const unix_time = msg.getUint32(msg_len - 5, false) * 1000; // convert to ms
-                        console.log("Node Unix Time: " + unix_time);
-                        const node_time = format(unix_time, "HH:mm:ss");
-                        const node_date = format(unix_time, "yyyy-MM-dd");
-                        console.log("Node Date: " + node_date);
-                        console.log("Node Time: " + node_time);
-                        // we only take the time if it is after 2023-01-01 (node default time is 2023-01-01 00:00:00)
-                        if(isAfter(unix_time, new Date(2024,1,1)) && isBefore(unix_time, now_timestamp + /*24h */ 86400000)){
-                            timestamp_node = unix_time;
-                        } else {
-                            console.log("Node Time not valid! Using current time!");
-                        }
                     }
 
                     // get the destination callsign if we have a direct message. After destCallsign we have a : stop there
@@ -289,6 +276,16 @@ export function useMSG() {
                         isDM_ = 0;
                         console.log("Broadcast Message received (separator not found, fallback)");
                     }
+
+                    // node-supplied unix timestamp (BLE notification trailer, wire-format §4.3).
+                    // Read for every 0x40 text/pos frame, not only when a via path is present.
+                    const node_timestamp_ms = readNodeTimestampMs(msg);
+                    if (node_timestamp_ms !== null) {
+                        console.log("Node Unix Time: " + node_timestamp_ms);
+                        timestamp_node = node_timestamp_ms;
+                    } else {
+                        console.log("Node Time not valid! Using current time!");
+                    }
                 }
 
 
@@ -298,19 +295,19 @@ export function useMSG() {
                     console.log("Text Msg received");
 
                     // check if it needs to notify. new connect buffer gets sent from node and we dont't want to notify for them
-                    // byte index 5 indicates that
-                    // byte 5 mit 0x20 maskieren
-                    // wenn 1 kein notify
-                    // wenn 0 notify
+                    // byte index 6 is the flags byte (wire-format §1.2); app_offline (0x20) is set by
+                    // a gateway when re-emitting a server frame, which is when we suppress the notify
+                    const frame_flags = decodeFlags(msg.getUint8(6));
+                    LogS.log(0, `Frame Flags: maxHop=${frame_flags.maxHop} mesh=${frame_flags.mesh} appOffline=${frame_flags.appOffline} track=${frame_flags.track} server=${frame_flags.server}`);
 
                     let notify_ = 1;
 
-                    if((msg.getUint8(6) & 0x20) !== 0){
+                    if(frame_flags.appOffline){
 
                         notify_ = 0;
                         console.log("Message wants notify");
 
-                    } 
+                    }
 
                     //get text
                     let txt_arr: number[] = [];
@@ -600,329 +597,88 @@ export function useMSG() {
                     // ! xAE48D54D 05 1 0 9V1LH-1,OE1KBC-12>*!0122.64N/10356.52E#/B=005/A=000161/P=1004.9/H=40.2/T=28.9/Q=1005.4 HW:04 MOD:03 FCS:15D5 FW:17 LH:09
                     // Postext: 4711.55N/01444.60E_MeshCom Zeltweg /B=089/A=002451  -> Message with a comment
 
-                    
                     //get text
                     let pos_arr:number[] = [];
 
-                    //hardware string of node
-                    let hw_str:string = "";
+                    // HW id of the originating node, byte right after the 0x00 payload terminator (wire-format §1.1)
+                    let hw_id = 0;
+                    let zero_index = -1;
 
-                    // last 2x4 bytes are checksum
                     for(let i=0; i< (msg_len); i++){
 
                         if((msg.getUint8(i + text_offset)) === 0) {
-                            //get HW ID
-                            const hw_id =  msg.getUint8(i + text_offset + 1);
-                            //console.log("HW ID: " + hw_id);
-                            hw_str = hwtable[hw_id];
-                            console.log("HW String: " + hw_str);
-
+                            zero_index = i + text_offset;
+                            hw_id = msg.getUint8(zero_index + 1);
                             break;
                         }
 
                         pos_arr[i] = msg.getUint8(i + text_offset);
-                        
+
+                    }
+
+                    const hw_str = hwName(hw_id);
+                    console.log("HW String: " + hw_str);
+
+                    // MOD/FCS/FW/LASTHW/FW-sub trailer, parsed but not (yet) stored on PosType - see task 4
+                    if (zero_index !== -1) {
+                        const trailer = readFrameTrailer(msg, zero_index);
+                        if (trailer) {
+                            LogS.log(0, `Pos Msg Trailer: MOD ${trailer.mod} FCS 0x${trailer.fcs.toString(16)} FW ${trailer.fw ?? "n/a"} LastHW ${trailer.lastHw ?? "n/a"} FWSub ${trailer.fwSub ?? "n/a"}`);
+                        }
                     }
 
                     const pos_text_ = convBARRtoStr(pos_arr);
                     console.log("Postext: " + pos_text_);
 
+                    const parsed_pos = parsePositionPayload(pos_text_);
 
-
-                    // lat hat nur 4 stellen vor dem . bis 90 grad = ersten zwei Stellen deg
-                    // lon 5 stellen vor dem  . = ersten drei Stellen deg weil bis 180 grad beides mit leading zeros
-
-                    // APRS Format has a fixed length, get lat lon from MsgTxT Ex: 4814.23N/01618.97Eu
-
-                    const lat_lon_str = pos_text_.slice(0, 19);
-                    console.log("Lat/Lon String: " + lat_lon_str);
-
-                    // get W/E info and multiply longitude by -1 if W
-                    const long_dir = lat_lon_str.slice(17, 18);
-                    console.log("E/W Long Direction: " + long_dir);
-
-                    // get N/S info and multiply latitude by -1 if S
-                    const lat_dir = lat_lon_str.slice(7, 8);
-                    console.log("N/S Lat Direction: " + lat_dir);
-
-                    // get the rest of the string if there are telemetry data and comments
-                    // 4711.55N/01444.60E_MeshCom Zeltweg /B=089/A=002451 
-                    // 4814.23N/01618.97Eu/B=100/A=000787
-
-                    let telemetry_str = "";
-                    let str_split:string [] = [];
-                    let aprs_cmt = "";
-
-                    if (pos_text_.length > 19) {
-                        telemetry_str = pos_text_.slice(20, pos_text_.length);
-                        console.log("Telemetry String: " + telemetry_str);
-                        str_split = telemetry_str.split("/");
-
-                        // check if we have a comment and extract it
-                        if (pos_text_.charAt(19) !== '/' && pos_text_.charAt(19) !== ' ') {
-
-                            let char_index = 19
-
-                            for(let i=char_index; i<pos_text_.length; i++){
-                                if(pos_text_.charAt(i) === '/'){
-                                    char_index = i;
-                                    break;
-                                } else {
-                                    char_index = i;
-                                }
-                            }
-
-                            aprs_cmt = pos_text_.slice(19,char_index);
-                            console.log("APRS Comment: " + aprs_cmt);
-                        }
+                    if (parsed_pos === null) {
+                        LogS.log(1, "Discarding Pos Msg! Could not parse position payload: " + pos_text_);
+                        break;
                     }
-
-                    // Process LAT / LON and convert to Degree with Decimals
-
-                    const splitSign = lat_lon_str.charAt(8);
-                    //console.log("Splitsign: " + splitSign);
-                    const latlon_arr = lat_lon_str.split(splitSign);
-                    
-                    let latitude = latlon_arr[0];
-                    //console.log("Lat Str: " + latitude);
-                    
-                    // separate degree, minutes and decimals of minutes
-                    // remove N/S from Lat at the end of str
-                    latitude = latitude.slice(0, latitude.length - 1);
-
-                    const lat_substr = latitude.split(".");
-                    const lat_substr_deg_len = lat_substr[0].length;
-                    //console.log("Lat Substr Len: " + lat_substr_deg_len);
-
-                    const lat_deg = lat_substr[0].slice(0,lat_substr_deg_len -2);
-                    //console.log("Lat Deg: " + lat_deg);
-
-                    const lat_min = lat_substr[0].slice(lat_substr_deg_len - 2,lat_substr_deg_len);
-                    //console.log("Lat Min: " + lat_min);
-
-                    const lat_min_dec = lat_substr[1].slice(0,lat_substr[1].length);
-                    //console.log("Lat Min Dec: " + lat_min_dec);
-
-                    // rearrange to min with decimals
-                    const minute_str = lat_min + "." + lat_min_dec;
-                    
-                    let minute_nr = +minute_str;
-                    
-                    // calculate degree with decimals
-                    minute_nr = minute_nr / 60;
-                    //console.log("Lat Minute Nr: " + minute_nr);
-                    let lat_degree_final = +lat_deg + minute_nr;
-
-                    // assemble longitude and calculate. Longitude
-                    let longitude = latlon_arr[1];
-                    // has fixed length
-                    longitude = longitude.slice(0, 8);
-                    //console.log("Longitude String: " + longitude);
-
-
-                    // separate degree, minutes and decimals of minutes
-                    const lon_substr = longitude.split(".");
-                    const lon_substr_deg_len = lon_substr[0].length;
-
-                    const lon_deg = lon_substr[0].slice(0,lon_substr_deg_len -2);
-
-                    //console.log("Lon Deg: " + lon_deg);
-
-                    const lon_min = lon_substr[0].slice(lon_substr_deg_len - 2,lon_substr_deg_len);
-                    //console.log("Lon Min: " + lon_min);
-
-                    const lon_min_dec = lon_substr[1].slice(0,lon_substr[1].length);
-                    //console.log("Lon Min Dec: " + lon_min_dec);
-
-                    // rearrange to min with decimals
-                    const lon_minute_str = lon_min + "." + lon_min_dec;
-                    //console.log("Lon Minute Str: " + lon_minute_str);
-                    let lon_minute_nr = +lon_minute_str;
-                    // calculate degree with decimals
-                    lon_minute_nr = lon_minute_nr / 60;
-                    //console.log("Lon Minute Nr: " + lon_minute_nr);
-                    let lon_degree_final = +lon_deg + lon_minute_nr;
-
-                    // assign correct sign if W/E direction
-                    if(long_dir === "W"){
-                        lon_degree_final = lon_degree_final * -1.0;
-                    }
-                    // assign correct sign if S/N direction
-                    if(lat_dir === "S"){
-                        lat_degree_final = lat_degree_final * -1.0;
-                    }
-
-
-                    // round to 5 decimals
-                    lat_degree_final = Math.round(lat_degree_final * 10000) / 10000;
-                    lon_degree_final = Math.round(lon_degree_final * 10000) / 10000;
 
                     // avoid 0.0 / 0.0 POS
-                    if(lat_degree_final === 0.0 && lon_degree_final === 0.0) break;
-                    
+                    if (parsed_pos.lat === 0.0 && parsed_pos.lon === 0.0) break;
 
-                    console.log("Pos Msg Latitude: " + lat_degree_final);
-                    console.log("Pos Msg Longitude: " + lon_degree_final);
+                    console.log("Pos Msg Latitude: " + parsed_pos.lat);
+                    console.log("Pos Msg Longitude: " + parsed_pos.lon);
 
-                    //check which additional info we got. 
-                    let alt_string = "0";
-                    let bat_str = "0";
-                    let alt_nr_meter = 0;   // 0 is a valid value !! TODO change that!
-                    let pressure_ = 0;
-                    let humidity_ = 0;
-                    let temperature_ = 999; // 0 would be a valid value!
-                    let qnh_ = 0;
-                    let temp_out_ = 999;
-                    let gas_res_ = 0;
-                    let co2_ = 0;
-                    let data_vers_ = 0;
-                    let alt_press_ = 0;  // currently F indicator is altitude from pressure but should be QFE, which is not ready implemented!
-                    //let qfe_ = 0;
-                    let neighbour_count = 0;
-                    let groups_str = "";
+                    // map ParsedPosition onto PosType, preserving the app's existing UI conventions:
+                    // bat stays a string ("N.A." when absent/0), temps default to 999 when absent, groups joined with ",", alt in metres.
+                    const bat_str = (parsed_pos.bat === undefined || parsed_pos.bat === 0) ? "N.A." : String(parsed_pos.bat);
+                    const groups_str = parsed_pos.groups !== undefined ? parsed_pos.groups.join(",") : "";
 
-                    // NEW-POS: 099 ! xA4ED0019 05 0 1 OE1KFR-2>*!4814.35N/01619.05E#/A=000804/P=984.3/H=48.0/T=20.7/O=20.8/F=243/G=36.3/V=3 HW:10 MOD:03 FCS:146D FW:1D LH:0A
-                    
-                    if(str_split.length >= 1){
-
-                        console.log("Telemetry Data received!");
-
-                        //check what field has which info
-                        for(let i=0; i<str_split.length; i++){
-
-                            const fieldinfo = str_split[i].slice(0,2);
-                            console.log("Field Info: " + fieldinfo);
-                            const value_str = str_split[i].slice(2);
-                            console.log("Value: " + value_str);
-
-                            // if the fieldinfo starts with a N followed by a number it is the neighbour count. The number could be 1 or higher.
-                            if(fieldinfo.startsWith("N") && fieldinfo.length >= 2){
-                                neighbour_count = +fieldinfo.slice(1);
-                                console.log("Neighbour Count: " + neighbour_count);
-                                continue;
-                            }
-
-
-                            switch (fieldinfo){
-
-                                case "A=": {
-                                    alt_nr_meter = convertAlt(value_str);
-                                    console.log("Altitude: " + alt_nr_meter);
-                                    break;
-                                }
-                                case "B=": {
-                                    // remove leading zeros
-                                    bat_str = value_str;
-                                    if (bat_str.startsWith("0")) {
-                                        bat_str = bat_str.slice(1);
-                                    }
-                                    if (bat_str.startsWith("0")) {
-                                        bat_str = bat_str.slice(1);
-                                    }
-                                    console.log("Battery: " + bat_str);
-                                    break;
-                                }
-                                case "P=": {
-
-                                    pressure_ = +value_str;
-                                    console.log("Pressure: " + pressure_);
-                                    break;
-                                }
-                                case "H=": {
-
-                                    humidity_ = +value_str;
-                                    console.log("Humidity: " + humidity_);
-                                    break;
-                                }
-                                case "T=": {
-
-                                    temperature_ = +value_str;
-                                    console.log("Temperature: " + temperature_);
-                                    break;
-                                }
-                                case "Q=": {
-
-                                    qnh_ = +value_str;
-                                    console.log("QNH: " + qnh_);
-                                    break;
-                                }
-                                case "O=": {
-
-                                    temp_out_ = +value_str;
-                                    console.log("Temp Out: " + temp_out_);
-                                    break;
-                                }
-                                case "G=": {
-
-                                    gas_res_ = +value_str;
-                                    console.log("Gas Resistance: " + gas_res_);
-                                    break;
-                                }
-                                case "V=": {
-
-                                    data_vers_ = +value_str;
-                                    console.log("Data Version: " + data_vers_);
-                                    break;
-                                }
-                                case "C=": {
-
-                                    co2_ = +value_str;
-                                    console.log("CO2: " + co2_);
-                                    break;
-                                }
-                                case "F=": {
-
-                                    alt_press_ = +value_str;
-                                    console.log("Alt Press: " + alt_press_);
-                                    break;
-                                }
-                                case "R=": {
-                                    // Those are the groups a node has booked separated by semicolons. Example 232;2321;2323;
-                                    // The last semicolon is not needed and will be removed. The groups are stored in the database as a string.
-                                    const groups = value_str.split(";");
-                                    if (groups[groups.length - 1] === "") {
-                                        groups.pop();
-                                    }
-                                    groups_str = groups.join(",");
-                                    console.log("Groups: " + groups_str);
-                                    break;
-                                }
-                                
-                            }
-                        }
-
-                        if (bat_str === "0") bat_str = "N.A.";
-
-                        //console.log("Pos Msg Battery: " + bat_str);
-
-                    }
-                    
                     // check for valid lat lon value
-                    if (lat_degree_final !== 0.0 && lon_degree_final !== 0.0) {
+                    if (parsed_pos.lat !== 0.0 && parsed_pos.lon !== 0.0) {
 
                         //add update pos in DB
                         const newPosDB: PosType = {
                             timestamp:now_timestamp,
                             callSign: from_callsign_,
-                            lat: lat_degree_final,
-                            lon: lon_degree_final,
-                            alt: alt_nr_meter,
+                            lat: parsed_pos.lat,
+                            lon: parsed_pos.lon,
+                            alt: parsed_pos.alt ?? 0,
                             bat: bat_str,
                             hw: hw_str,
-                            pressure: pressure_,
-                            temperature: temperature_,
-                            humidity: humidity_,
-                            qnh: qnh_,
-                            comment: aprs_cmt,
-                            temp_2: temp_out_,
-                            gas_res: gas_res_,
-                            co2: co2_,
-                            alt_press: alt_press_,
-                            neighbour_count: neighbour_count,
+                            pressure: parsed_pos.pressure ?? 0,
+                            temperature: parsed_pos.temperature ?? 999,
+                            humidity: parsed_pos.humidity ?? 0,
+                            qnh: parsed_pos.qnh ?? 0,
+                            comment: parsed_pos.comment,
+                            temp_2: parsed_pos.temp2 ?? 999,
+                            gas_res: parsed_pos.gasRes ?? 0,
+                            co2: parsed_pos.co2 ?? 0,
+                            alt_press: parsed_pos.altPress ?? 0,
+                            neighbour_count: parsed_pos.neighbourCount ?? 0,
                             groups: groups_str,
+                            symbol_table: parsed_pos.symbolTable,
+                            symbol: parsed_pos.symbol,
+                            din: parsed_pos.din,
+                            vbus: parsed_pos.vbus,
+                            vcurrent: parsed_pos.vcurrent,
                         }
 
-                        LogS.log(0, `Pos Msg from ${from_callsign_} via ${via_str}: Lat ${lat_degree_final} Lon ${lon_degree_final} Alt ${alt_nr_meter}m`);
+                        LogS.log(0, `Pos Msg from ${from_callsign_} via ${via_str}: Lat ${parsed_pos.lat} Lon ${parsed_pos.lon} Alt ${newPosDB.alt}m`);
                         return (newPosDB);
 
                     } else {
@@ -1096,7 +852,9 @@ export function useMSG() {
                                             alt_press: 0,
                                             gas_res: 0,
                                             neighbour_count: 0,
-                                            groups: " "
+                                            groups: " ",
+                                            symbol_table: "",
+                                            symbol: ""
                                         }
                                         return newOwnPos;
                                     }
@@ -1214,7 +972,7 @@ export function useMSG() {
                                 ConfigStore.update(s => {
                                     s.config.callSign = callsign;
                                     s.config.fw_ver = fw_vers;
-                                    s.config.hw = hwtable[hw_id];
+                                    s.config.hw = hwName(hw_id);
                                     s.config.bat_perc = batt_perc;
                                     s.config.bat_volt = batt_volt;
                                 });
@@ -1465,7 +1223,7 @@ export function useMSG() {
                                     mh_time:mheard.TIME,
                                     mh_rssi:mheard.RSSI,
                                     mh_snr:mheard.SNR,
-                                    mh_hw:hwtable[mheard.HW],
+                                    mh_hw:hwName(mheard.HW),
                                     mh_distance:+mheard.DIST.toFixed(2),
                                     mh_pl:mheard.PL,
                                     mh_mesh:mheard.MESH,
@@ -1498,29 +1256,24 @@ export function useMSG() {
                                 BleConfigFinish.update(s => {
                                     s.BleConfFin = Date.now();
                                 });
-                                
+
                                 break;
                             }
+
+                            default:
+                                LogS.log(1, "Json Type did not match: " + json_type);
                         }
                         break;
                     }
+
+                    default:
+                        LogS.log(1, "Data Msg Type did not match: " + msg_type);
                 }
                 break;
             }
             default:
                 LogS.log(1, "Msg Flag did not match!");
         }
-    }
-
-    
-
-    //process altitude and bat strings 
-    const convertAlt = (alt_str: string):number => {
-        //console.log("Altitude String: " + alt_str);
-        let alt_nr_meter = +alt_str * 0.3048;
-        alt_nr_meter = Math.round(alt_nr_meter);
-        //console.log("Pos Msg Alt Meter: " + alt_nr_meter);
-        return alt_nr_meter;
     }
 
 

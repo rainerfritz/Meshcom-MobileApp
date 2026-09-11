@@ -78,4 +78,10 @@ export const hwtable: {[key: number]: string} = {
     59:"LORAPRS E22",
     60:"LORAPRS RA01",
     61:"T-WATCH S3"
-} 
+}
+
+// look up a hardware name by id, falling back to a labelled placeholder for
+// unknown/unmapped ids (e.g. the gaps between 13..38) instead of `undefined`
+export const hwName = (id: number): string => {
+    return hwtable[id] ?? `Unknown (${id})`;
+}

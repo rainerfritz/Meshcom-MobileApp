@@ -35,7 +35,12 @@ export interface PosType {
     alt_press:number,
     gas_res:number,
     neighbour_count:number,
-    groups:string
+    groups:string,
+    symbol_table: string,
+    symbol: string,
+    din?: string,
+    vbus?: number,
+    vcurrent?: number
 }
 
 // config interface
