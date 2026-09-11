@@ -451,14 +451,10 @@ const Tab3: React.FC = () => {
 
       //create a channel for notify on adroid
       if (thisPlatform === "android") {
-        // clean up the short-lived '2' channel from investigating a since-resolved sound
-        // issue (root cause was the device's notification volume, not the channel) — this
-        // reverts to the original '1' channel, which already has the correct settings on
-        // existing devices. (Also created in Connect.tsx right after permission grant, so
-        // channel '1' exists even if the Chat tab is never opened before the first
-        // notification fires; these calls are idempotent and just re-affirm the channels.)
+        // Also created in Connect.tsx right after permission grant, so channel '1' exists
+        // even if the Chat tab is never opened before the first notification fires; these
+        // calls are idempotent and just re-affirm the same channels.
         try {
-          await LocalNotifications.deleteChannel({ id: '2' });
           await LocalNotifications.createChannel({
             id: '1',
             name: 'channel1',
