@@ -881,6 +881,9 @@ const Tab1: React.FC = () => {
 
     // reset manual disco flag
     manual_ble_disco.current = false;
+    BLEconnStore.update(s => {
+      s.manual_disconnect = false;
+    });
   }
 
 
@@ -985,6 +988,10 @@ const Tab1: React.FC = () => {
   const doDisco = async (devID: string) => {
 
     manual_ble_disco.current = true;
+    // broadcast the manual-disconnect intent so other pages (Chat, Settings) can suppress their own disco alert
+    BLEconnStore.update(s => {
+      s.manual_disconnect = true;
+    });
     console.log("Connect Tab - Manual disco state: " + manual_ble_disco.current);
 
 
@@ -1003,6 +1010,14 @@ const Tab1: React.FC = () => {
       });
     } catch (error: any) {
       console.error("Error on Disconnect: " + error.message);
+
+      // disconnect attempt failed - onDisconnect() won't fire to reset these, so reset them here
+      // to avoid leaving a stuck manual-disconnect flag that would suppress a later real disconnect alert
+      manual_ble_disco.current = false;
+      BLEconnStore.update(s => {
+        s.manual_disconnect = false;
+      });
+
       // convert the error message to string
       const err_msg = error.message.toString();
       // reboot the node if the callsign is not set. BLE Authentication Error. 

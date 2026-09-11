@@ -326,8 +326,11 @@ const Tab2: React.FC = () => {
   });
 
   // trigger the BLE disco function when we disconnect and on page
+  // manual_disconnect is read from the raw store state (not subscribed via useStoreState) so that
+  // Connect.tsx resetting it back to false right after the disconnect doesn't re-run this effect
+  // and re-evaluate the condition once ble_connected is already false.
   useEffect(() => {
-    if (!ble_connected && thisPageActive.current) {
+    if (!ble_connected && thisPageActive.current && !BLEconnStore.getRawState().manual_disconnect) {
       console.log("Settings Page: BLE disconnected!");
       setShDiscoCard(true);
     }
@@ -1969,7 +1972,7 @@ const Tab2: React.FC = () => {
           isOpen={shDiscoCard}
           onDidDismiss={() => redirectConnect()}
           header="BLE Disconnect"
-          message="Node disconnected! Auto-Reconnect is disabled currently."
+          message="Node disconnected! Check the BLE Pin and reconnect to Node!"
           buttons={[
             {
               text: "OK"
