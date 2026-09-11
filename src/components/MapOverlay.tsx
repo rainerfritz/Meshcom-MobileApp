@@ -62,8 +62,8 @@ export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign,
                                 <IonText>HW: {hw}</IonText><br />
                                 {neighbour_count !== undefined && neighbour_count > 0 ? <><IonText>Neighbours: {neighbour_count}</IonText><br /></> : <></>}
                                 {groups && groups.trim() !== "" ? <><IonText>Grp: {groups}</IonText><br /></> : <></>}
-                                {comment && comment.trim() !== "" ? <><IonText>{comment}</IonText><br /></> : <></>}
-                                {name && name.trim() !== "" ? <><IonText>{name}</IonText><br /></> : <></>}
+                                {comment && comment.trim() !== "" ? <><IonText>Cmnt:{comment}</IonText><br /></> : <></>}
+                                {name && name.trim() !== "" ? <><IonText>Name:{name}</IonText><br /></> : <></>}
                             </div>
                             {shExtInfo && (
                                 <div className="info">
