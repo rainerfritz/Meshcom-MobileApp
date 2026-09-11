@@ -18,7 +18,7 @@ interface MapOverlayProps extends PosType {
                   onCloseOverlay={onCloseOverlay}
    */
 
-export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign, lat, lon, alt, bat, hw, pressure, humidity, temperature, qnh, timestamp, comment, temp_2, co2, gas_res, neighbour_count, groups, symbol_table, symbol, onCloseOverlay }) => {
+export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign, lat, lon, alt, bat, hw, pressure, humidity, temperature, qnh, timestamp, comment, name, temp_2, co2, gas_res, neighbour_count, groups, symbol_table, symbol, onCloseOverlay }) => {
 
     const navigate = useNavigate();
 
@@ -63,6 +63,7 @@ export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign,
                                 {neighbour_count !== undefined && neighbour_count > 0 ? <><IonText>Neighbours: {neighbour_count}</IonText><br /></> : <></>}
                                 {groups && groups.trim() !== "" ? <><IonText>Grp: {groups}</IonText><br /></> : <></>}
                                 {comment && comment.trim() !== "" ? <><IonText>{comment}</IonText><br /></> : <></>}
+                                {name && name.trim() !== "" ? <><IonText>{name}</IonText><br /></> : <></>}
                             </div>
                             {shExtInfo && (
                                 <div className="info">

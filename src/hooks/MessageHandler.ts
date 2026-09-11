@@ -666,6 +666,7 @@ export function useMSG() {
                             humidity: parsed_pos.humidity ?? 0,
                             qnh: parsed_pos.qnh ?? 0,
                             comment: parsed_pos.comment,
+                            name: parsed_pos.name,
                             temp_2: parsed_pos.temp2 ?? 999,
                             gas_res: parsed_pos.gasRes ?? 0,
                             co2: parsed_pos.co2 ?? 0,
