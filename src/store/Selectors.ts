@@ -33,6 +33,8 @@ export const getSensorSettings = createSelector(getState, state => state.sensorS
 
 export const getBLEconnStore = createSelector(getState, state => state.ble_connected);
 
+export const getDiscoAlertRequestCount = createSelector(getState, state => state.discoAlertRequestCount);
+
 export const getNodeInfoStore = createSelector(getState, state => state.infoData);
 
 export const getBleConfFinish = createSelector(getState, state => state.BleConfFin);

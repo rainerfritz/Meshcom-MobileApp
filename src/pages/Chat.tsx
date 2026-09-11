@@ -21,7 +21,6 @@ import BLEconnStore from '../store/BLEconnected';
 import {getBLEconnStore} from '../store/Selectors';
 import DMfrmMapStore from '../store/DMfrmMap';
 import NotifyMsgState from '../store/NotifyMsg';
-import { useNavigate } from "react-router-dom";
 import LogS from '../utils/LogService';
 import DatabaseService, { TextFilter } from '../DBservices/DataBaseService';
 import AlertCard from '../components/AlertCard';
@@ -102,11 +101,6 @@ const Tab3: React.FC = () => {
 
   // stores the last timestamp of a message in chat to insert date panel
   const lastMsgTime = useRef<number>(Date.now());
-
-  // alert card params
-  const [shDiscoCard, setShDiscoCard] = useState<boolean>(false);
-
-  const navigate = useNavigate();
 
   // remember if this page is active
   const thisPageActive = useRef<boolean>(false);
@@ -244,16 +238,6 @@ const Tab3: React.FC = () => {
   }, [isAppActive]);
 
 
-  // show discocard if BLE disconnects (but not for a manual disconnect from the Connect tab).
-  // manual_disconnect is read from the raw store state (not subscribed via useStoreState) so that
-  // Connect.tsx resetting it back to false right after the disconnect doesn't re-run this effect
-  // and re-evaluate the condition once ble_connected is already false.
-  useEffect(() => {
-    if(!ble_connected && thisPageActive.current && !BLEconnStore.getRawState().manual_disconnect){
-      setShDiscoCard(true);
-    }
-  }, [ble_connected]);
-
 
 
   // always show last message in chat
@@ -300,7 +284,8 @@ const Tab3: React.FC = () => {
 
     if(!ble_connected){
       console.log("BLE not connected");
-      setShDiscoCard(true);
+      // ask the app-wide BleDiscoAlert (App.tsx) to (re-)show itself
+      BLEconnStore.update(s => { s.discoAlertRequestCount++; });
       return;
     }
     console.log("Sending Message");
@@ -932,13 +917,6 @@ const Tab3: React.FC = () => {
   }
 
 
-  // redirect to connect page if unset node
-  const redirectConnect = () => {
-    setShDiscoCard(false);
-    if (isAppActive)
-      navigate("/connect");
-  }
-
 
   // handle no Db connection in offline mode - no node connected
   const handleNoDbConnFilter = () => {
@@ -1049,18 +1027,6 @@ const Tab3: React.FC = () => {
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding" ref={contentRef} scrollEvents={true} onIonScroll={handleScroll}>
-
-        <IonAlert
-          isOpen={shDiscoCard}
-          onDidDismiss={() => redirectConnect()}
-          header="BLE Disconnect"
-          message="Node disconnected! Check the BLE Pin and reconnect to Node!"
-          buttons={[
-            {
-              text: "OK"
-            },
-          ]}
-        />
 
         <AlertCard
           isOpen={shAlertCard}

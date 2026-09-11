@@ -1,5 +1,5 @@
 
-import { IonContent, IonHeader, IonPage, IonText, IonTitle, IonToolbar, IonLabel, IonInput, IonItem, IonButton, IonToggle, IonRange, IonIcon, IonRow, IonCol, IonGrid, IonSelect, IonSelectOption, useIonViewWillEnter, IonAlert, IonProgressBar, useIonViewDidEnter, useIonViewWillLeave } from '@ionic/react';
+import { IonContent, IonHeader, IonPage, IonText, IonTitle, IonToolbar, IonLabel, IonInput, IonItem, IonButton, IonToggle, IonRange, IonIcon, IonRow, IonCol, IonGrid, IonSelect, IonSelectOption, useIonViewWillEnter, IonAlert, IonProgressBar, useIonViewDidEnter } from '@ionic/react';
 import { useEffect, useRef, useState } from 'react';
 import {useBLE} from '../hooks/BleHandler';
 
@@ -19,7 +19,6 @@ import SensorSettingsStore from '../store/SensorSettings';
 import BLEconnStore from '../store/BLEconnected';
 import DataBaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
-import AppActiveState from '../store/AppActive';
 import WifiSettingsStore from '../store/WifiSettings';
 import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
@@ -71,8 +70,6 @@ const Tab2: React.FC = () => {
   // aprs settings from store
   const aprs_settings_s = AprsSettingsStore.useState(s => s.aprsSettings);
 
-  // get current AppState
-  const isAppActive = AppActiveState.useState(s => s.active);
 
   // trigger if we have an unconfiuired node
   //const shouldConf = useStoreState(ShouldConfStore, s => s.shouldConf);
@@ -127,12 +124,6 @@ const Tab2: React.FC = () => {
   const [alHeader, setAlHeader] = useState<string>("");
   const [alMsg, setAlMsg] = useState<string>("");
 
-  // disco card params
-  const [shDiscoCard, setShDiscoCard] = useState<boolean>(false);
-
-  // remember if this page is active
-  const thisPageActive = useRef<boolean>(false);
- 
   // tx power settings
   const [txpower_slider, setTxpower_slider] = useState<RangeValue>();
   // SX127x MinPwr: 5, MaxPwr: 17; SX126x MinPwr: -5, MaxPwr: 22; E22 +8db PA
@@ -310,7 +301,6 @@ const Tab2: React.FC = () => {
   // Tasks we need to do when we enter the page
   useIonViewDidEnter(() => {
     // update the ble devid from pullsate store
-    thisPageActive.current = true;
     const devid = devID_s;
     updateDevID(devid);
     console.log("Settings Page: Updating DevID " + devid);
@@ -319,22 +309,6 @@ const Tab2: React.FC = () => {
     updateBLEConnected(bleconn);
 
   });
-
-  // Tasks we need to do when we leave the page
-  useIonViewWillLeave(() => {
-    thisPageActive.current = false;
-  });
-
-  // trigger the BLE disco function when we disconnect and on page
-  // manual_disconnect is read from the raw store state (not subscribed via useStoreState) so that
-  // Connect.tsx resetting it back to false right after the disconnect doesn't re-run this effect
-  // and re-evaluate the condition once ble_connected is already false.
-  useEffect(() => {
-    if (!ble_connected && thisPageActive.current && !BLEconnStore.getRawState().manual_disconnect) {
-      console.log("Settings Page: BLE disconnected!");
-      setShDiscoCard(true);
-    }
-  }, [ble_connected]);
 
 
 
@@ -1931,14 +1905,6 @@ const Tab2: React.FC = () => {
   }
 
 
-  // redirect to connect page if unset node
-  const redirectConnect = () => {
-    setShDiscoCard(false);
-    if (isAppActive)
-      navigate("/connect");
-  }
-
-
   // handle OTA Update Button
   const handleOTAUpdate = () => {
     setShOTAUpdateCard(true);
@@ -1966,18 +1932,6 @@ const Tab2: React.FC = () => {
           header={alHeader}
           message={alMsg}
           onDismiss={() => setShAlertCard(false)}
-        />
-
-        <IonAlert
-          isOpen={shDiscoCard}
-          onDidDismiss={() => redirectConnect()}
-          header="BLE Disconnect"
-          message="Node disconnected! Check the BLE Pin and reconnect to Node!"
-          buttons={[
-            {
-              text: "OK"
-            },
-          ]}
         />
 
         <IonAlert

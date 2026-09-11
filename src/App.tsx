@@ -18,6 +18,7 @@ import Tab3 from './pages/Chat';
 import Mheard from './pages/Mheard';
 import Info from './pages/Info';
 import Map from './pages/Map';
+import BleDiscoAlert from './components/BleDiscoAlert';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -118,6 +119,7 @@ const Appl: React.FC = () => {
 
     <IonApp>
     <IonReactRouter>
+      <BleDiscoAlert />
       <IonTabs>
         <IonRouterOutlet>
           <Route path="/connect" element={<Tab1 />} />

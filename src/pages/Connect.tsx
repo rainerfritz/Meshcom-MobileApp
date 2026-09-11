@@ -1,7 +1,6 @@
-import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar, 
+import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar,
   IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, IonLoading, IonModal,
 IonButtons, IonList, IonItem, IonLabel, IonInput, IonIcon, IonText,
-useIonViewWillLeave,
 IonToggle} from '@ionic/react';
 import { keyOutline, trashOutline, checkmarkCircle } from 'ionicons/icons';
 
@@ -93,8 +92,6 @@ const Tab1: React.FC = () => {
 
   // manual disconnect ref to know if we disco ble manually
   const manual_ble_disco  = useRef<boolean>(false);
-  // alert card params
-  const [shDiscoCard, setShDiscoCard] = useState<boolean>(false);
 
   // trigger when node finished sending config (Jsons plus Textmessages)
   const nodeConfFin = BleConfigFinish.useState(s => s.BleConfFin);
@@ -137,8 +134,6 @@ const Tab1: React.FC = () => {
   // flag that we can notify on new messages. no notify when stored messages are read on ble connect 
   const canNotify = useRef<boolean>(false);
 
-  // remember if this page is active
-  const thisPageActive = useRef<boolean>(false);
 
   // Toggle for MC only Devices to filter at BLE scan
   const [showMConly, setShowMConly] = useState<boolean>(true);
@@ -234,13 +229,6 @@ const Tab1: React.FC = () => {
       getScan();
       didrun.current = true;
     }
-    // set the page active flag
-    thisPageActive.current = true;
-  });
-
-  // when we leave the page we clear the page active flag
-  useIonViewWillLeave(() => {
-    thisPageActive.current = false;
   });
 
 
@@ -823,9 +811,14 @@ const Tab1: React.FC = () => {
     // stop the load conf indicator (disco comes always at connect after fresh flash)
     setShLoadConf(false);
 
-    // update BLE connected state in store
+    // update BLE connected state in store. manual_disconnect is captured in the SAME update as
+    // ble_connected (both derived from manual_ble_disco.current here, not written separately
+    // later) so BleDiscoAlert's effect - which only re-runs when ble_connected actually changes -
+    // always sees a consistent snapshot, instead of racing against a later, independently-timed
+    // reset of manual_disconnect further down in this function.
     BLEconnStore.update(s => {
       s.ble_connected = false;
+      s.manual_disconnect = manual_ble_disco.current;
     });
 
     // reset notification flag
@@ -857,8 +850,8 @@ const Tab1: React.FC = () => {
       if (isAppActive_Ref.current) {
         reconnectBLE(deviceId);
       }*/
-      // alert the user that it disconnected if not manually
-      if(thisPageActive.current) setShDiscoCard(true);
+      // BleDiscoAlert (app root) shows the disconnect alert automatically once
+      // BLEconnStore.ble_connected flips false without manual_disconnect being set.
 
     } else {
       // Manual disconnect was triggered
@@ -879,11 +872,9 @@ const Tab1: React.FC = () => {
       s.BleConfFin = 0;
     });
 
-    // reset manual disco flag
+    // reset manual disco flag (BLEconnStore.manual_disconnect was already captured atomically
+    // with ble_connected above; the next onDisconnect() overwrites it fresh, so no reset needed here)
     manual_ble_disco.current = false;
-    BLEconnStore.update(s => {
-      s.manual_disconnect = false;
-    });
   }
 
 
@@ -973,13 +964,6 @@ const Tab1: React.FC = () => {
     setShStopReconBtn(false);
   }
 
-
-  // redirect to config page if unset node
-  const redirectConnect = () => {
-    setShDiscoCard(false);
-    /*if (isAppActive)
-      history.push("/connect");*/
-  }
 
 
 
@@ -1172,18 +1156,6 @@ const Tab1: React.FC = () => {
                 handler: (redirect) => {
                   redirectConfig();
                 },
-              },
-            ]}
-          />
-
-          <IonAlert
-            isOpen={shDiscoCard}
-            onDidDismiss={() => redirectConnect()}
-            header="BLE Disconnect"
-            message="Node disconnected! Check the BLE Pin and reconnect to Node!"
-            buttons={[
-              {
-                text: "OK"
               },
             ]}
           />
