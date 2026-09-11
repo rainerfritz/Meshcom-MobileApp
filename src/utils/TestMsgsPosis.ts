@@ -73,6 +73,8 @@ export const test_msgs : MsgType [] =
         co2:0,
         alt_press:0,
         gas_res:0,
+        symbol_table: "/",
+        symbol: "#",
         neighbour_count:0,
         groups:""
     },
@@ -93,6 +95,8 @@ export const test_msgs : MsgType [] =
         co2:0,
         alt_press:0,
         gas_res:0,
+        symbol_table: "/",
+        symbol: "#",
         neighbour_count:0,
         groups:""
     },
@@ -113,6 +117,8 @@ export const test_msgs : MsgType [] =
         co2:0,
         alt_press:0,
         gas_res:0,
+        symbol_table: "/",
+        symbol: "#",
         neighbour_count:0,
         groups:""
     },
@@ -133,6 +139,8 @@ export const test_msgs : MsgType [] =
         co2:0,
         alt_press:0,
         gas_res:0,
+        symbol_table: "/",
+        symbol: "#",
         neighbour_count:0,
         groups:""
     }

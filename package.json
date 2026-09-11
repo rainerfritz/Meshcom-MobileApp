@@ -28,6 +28,7 @@
     "@ionic/core": "^9.0.3",
     "@ionic/react": "^9.0.3",
     "@ionic/react-router": "^9.0.3",
+    "date-fns": "^4.4.0",
     "ionicons": "8.0.13",
     "linkify-react": "4.3.2",
     "linkifyjs": "4.3.2",
