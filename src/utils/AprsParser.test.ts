@@ -62,8 +62,41 @@ describe("parsePositionPayload", () => {
     // Deliberately not trimmed: the comment is exactly the slice up to the
     // first `/X=` token, matching what the firmware encoder concatenated.
     expect(p!.comment).toBe("MeshCom Zeltweg ");
+    expect(p!.name).toBe(""); // no `#` in the region -> no name, comment unaffected
     expect(p!.bat).toBe(89);
     expect(p!.alt).toBe(747); // 2451 ft -> 747.2 -> 747
+  });
+
+  it("splits a node name appended after the comment with '#'", () => {
+    const p = parsePositionPayload("4812.34N/01143.56E_Hello World#DK5EN-1/B=050");
+    expect(p).not.toBeNull();
+    expect(p!.comment).toBe("Hello World");
+    expect(p!.name).toBe("DK5EN-1");
+    expect(p!.bat).toBe(50);
+  });
+
+  it("splits on the LAST '#' when the free-text comment itself contains one", () => {
+    const p = parsePositionPayload("4812.34N/01143.56E_Channel #3#DK5EN-2/B=060");
+    expect(p).not.toBeNull();
+    expect(p!.comment).toBe("Channel #3");
+    expect(p!.name).toBe("DK5EN-2");
+    expect(p!.bat).toBe(60);
+  });
+
+  it("parses a name with no free-text comment before it", () => {
+    const p = parsePositionPayload("4812.34N/01143.56E_#DK5EN-3/B=070");
+    expect(p).not.toBeNull();
+    expect(p!.comment).toBe("");
+    expect(p!.name).toBe("DK5EN-3");
+    expect(p!.bat).toBe(70);
+  });
+
+  it("splits comment and name from a beacon with battery/altitude, per the agreed contract", () => {
+    const p = parsePositionPayload("4812.34N/01143.56E_Foo#Bar/B=085/A=001526");
+    expect(p).not.toBeNull();
+    expect(p!.comment).toBe("Foo");
+    expect(p!.name).toBe("Bar");
+    expect(p!.bat).toBe(85);
   });
 
   it("uses backslash table char, last-wins on a repeated key, comment stops at the first token", () => {

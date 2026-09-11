@@ -22,6 +22,7 @@ export interface ParsedPosition {
   symbolTable: string;
   symbol: string;
   comment: string;
+  name: string;
   alt?: number;
   bat?: number;
   pressure?: number;
@@ -148,7 +149,15 @@ export function parsePositionPayload(text: string): ParsedPosition | null {
       commentEnd = k.firstStart;
     }
   }
-  const comment = tail.slice(0, commentEnd);
+  const region = tail.slice(0, commentEnd);
+
+  // The node name, when present, is appended after the free-text comment as
+  // `#name` (the firmware forbids `#` in the name field, so splitting on the
+  // LAST `#` in the region is unambiguous even though a `#` inside the
+  // free-text comment itself stays legal). No `#` -> name "", comment as-is.
+  const nameSep = region.lastIndexOf("#");
+  const comment = nameSep === -1 ? region : region.slice(0, nameSep);
+  const name = nameSep === -1 ? "" : region.slice(nameSep + 1);
 
   const result: ParsedPosition = {
     lat,
@@ -156,6 +165,7 @@ export function parsePositionPayload(text: string): ParsedPosition | null {
     symbolTable,
     symbol: symbol ?? "",
     comment,
+    name,
   };
 
   if (keys.A.lastValid !== undefined) result.alt = convertAltFeetToMetres(keys.A.lastValid);
