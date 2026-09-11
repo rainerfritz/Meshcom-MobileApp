@@ -451,17 +451,17 @@ const Tab3: React.FC = () => {
 
       //create a channel for notify on adroid
       if (thisPlatform === "android") {
-        // channel id bumped from '1' to '2': Android notification channels are immutable
-        // once created on a device, so a stale existing channel would keep ignoring the
-        // sound setting below — a new id forces a fresh channel with the correct sound.
-        // (Also created in Connect.tsx right after permission grant, so channel '2' exists
-        // even if the Chat tab is never opened before the first notification fires; these
-        // calls are idempotent and just re-affirm the same channels.)
+        // clean up the short-lived '2' channel from investigating a since-resolved sound
+        // issue (root cause was the device's notification volume, not the channel) — this
+        // reverts to the original '1' channel, which already has the correct settings on
+        // existing devices. (Also created in Connect.tsx right after permission grant, so
+        // channel '1' exists even if the Chat tab is never opened before the first
+        // notification fires; these calls are idempotent and just re-affirm the channels.)
         try {
-          await LocalNotifications.deleteChannel({ id: '1' });
+          await LocalNotifications.deleteChannel({ id: '2' });
           await LocalNotifications.createChannel({
-            id: '2',
-            name: 'channel2',
+            id: '1',
+            name: 'channel1',
             importance: 4,
             visibility: 1,
             vibration: true,
@@ -590,7 +590,7 @@ const Tab3: React.FC = () => {
                 at: new Date(Date.now() + 1000 * 1), // in 1 secs
                 repeats: false
               },
-              channelId: playSound ? '2' : 'silent',
+              channelId: playSound ? '1' : 'silent',
               smallIcon: 'res://drawable/meshcom_logo_32x32_transp_gray',
               largeIcon: 'res://drawable/meshcom_logo_64x64',
               sound: playSound ? 'morse_r.wav' : ''

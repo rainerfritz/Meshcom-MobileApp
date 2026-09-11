@@ -154,10 +154,10 @@ const Tab1: React.FC = () => {
       // exist as soon as permission is granted, regardless of which tab is opened first
       if (isPlatform('android')) {
         try {
-          await LocalNotifications.deleteChannel({ id: '1' });
+          await LocalNotifications.deleteChannel({ id: '2' });
           await LocalNotifications.createChannel({
-            id: '2',
-            name: 'channel2',
+            id: '1',
+            name: 'channel1',
             importance: 4,
             visibility: 1,
             vibration: true,
