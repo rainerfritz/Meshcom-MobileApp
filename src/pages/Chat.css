@@ -139,12 +139,20 @@ ion-textarea.customTextAreaInput{
     word-break: break-word;
 }
 
+.ios .msg_text {
+    padding-bottom: 1.5px;
+}
+
 .chkIcon {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     gap: 4px;
     margin-top: 6px;
+}
+
+.ios .chkIcon {
+    margin-top: 3px;
 }
 
 .ack-icon {
