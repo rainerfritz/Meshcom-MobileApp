@@ -28,6 +28,13 @@ import NodeInfoStore from '../store/NodeInfoStore';
 import ChatSettingsStore from '../store/ChatSettingsStore';
 import ChatUnseenStore from '../store/ChatUnseenStore';
 import ChatPreviewStore from '../store/ChatPreviewStore';
+import { buildTestMsgs } from '../utils/TestMsgsPosis';
+
+
+// dev only: inject demo bubbles into the chat to check the bubble design without a connected
+// node. They live in the Pullstate store only, are never written to the database and vanish on
+// the next real store rebuild. Keep this false for normal operation and for commits.
+const INJECT_TEST_MSGS = false;
 
 
 const Tab3: React.FC = () => {
@@ -81,7 +88,7 @@ const Tab3: React.FC = () => {
   const lastDMcallsign = useRef<string>("");
 
   // longpress event
-  const MIN_PRESS_TIME = 800; //ms
+  const MIN_PRESS_TIME = 1000; //ms
   //actionsheet
   const [isOpenAS, setIsOpenAS] = useState(false);
   // message number from long press event
@@ -505,6 +512,21 @@ const Tab3: React.FC = () => {
     }
 
   }, [msgArr_s]);
+
+
+  // dev only (INJECT_TEST_MSGS): append demo bubbles to the store so the chat design can be
+  // checked without a node. Depends on msgArr_s because handleSegmentChange rebuilds the store
+  // asynchronously via setChatFilters() right after setting the filter - injecting on the filter
+  // alone would be overwritten again. The msgNr guard keeps that from looping.
+  useEffect(() => {
+    if (!INJECT_TEST_MSGS || activeChatFilter === null) return;
+
+    const testMsgs = buildTestMsgs(config_s.callSign, activeChatFilter);
+    const testIds = new Set(testMsgs.map(m => m.msgNr));
+    if (msgArr_s.some(m => testIds.has(m.msgNr))) return;
+
+    MsgStore.update(s => { s.msgArr = [...s.msgArr, ...testMsgs]; });
+  }, [activeChatFilter, msgArr_s, config_s.callSign]);
 
 
   // Trigger that we fire a notification on new message
