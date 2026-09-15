@@ -1,6 +1,7 @@
 
 // import components
-import { IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonItem, IonLabel, IonList, IonModal, IonPage, IonProgressBar, IonTitle, IonToolbar, useIonViewDidEnter, useIonViewWillEnter, useIonViewWillLeave } from '@ionic/react';
+import { IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonItem, IonLabel, IonList, IonModal, IonPage, IonProgressBar, IonTitle, IonToolbar } from '@ionic/react';
+import { useLocation } from 'react-router-dom';
 import { useStoreState } from 'pullstate';
 import { getConfigStore, getGpsData, getSensorSettings, getWxData, getDevID, getBLEconnStore, getAppActiveState } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
@@ -59,68 +60,43 @@ const Info: React.FC = () => {
   // update commands to the phone so we get the jsons etc
   const cmds = ["--info", "--pos", "--wx", "--seset"];
   const cmd_index = useRef<number>(0);
-  const window_active = useRef<boolean>(false);
+  // Whether this tab is the one currently shown. Derived from the router location instead of
+  // useIonViewDidEnter/useIonViewWillLeave: those Ionic view lifecycle events never fire in this
+  // IonTabs + react-router v6 setup, which is why the update timer used to stay off.
+  const location = useLocation();
+  const pageActive = location.pathname.replace(/\/+$/, "") === "/info";
+
+  // log window state - the update timer pauses while the log is open
+  const [shLog, setShLog] = useState<boolean>(false);
+  const [logMsgs, setLogMsgs] = useState<string []>([]);
 
 
-  // things we need to do when we enter the page
-  useIonViewDidEnter(() => {
-    console.log('Info Tab: View entered');
-    window_active.current = true;
-    // update the BLE hook
-    console.log("Info Tab: BLE Device ID: " + ConfigObject.ble_dev_id);
-    updateDevID(ConfigObject.ble_dev_id);
-    console.log("Info Tab: BLE Connected: " + ble_connected);
+  // owns the whole update timer lifecycle. Runs with a fresh closure on every relevant change,
+  // so it also starts by itself when the node connects while we are already sitting on the page.
+  useEffect(() => {
+    const callSignOk = config_s.callSign !== "" && config_s.callSign !== "XX0XXX-00";
+
+    if (!pageActive || !app_active_s || !ble_connected || !callSignOk || shLog) {
+      console.log('Info Tab: Update Timer off - pageActive:' + pageActive + ' appActive:' + app_active_s
+                  + ' bleConnected:' + ble_connected + ' callSignOk:' + callSignOk + ' logOpen:' + shLog);
+      clearUpdtTimer();
+      return;
+    }
+
+    // prime the BLE hook of this component instance with the current values
+    console.log("Info Tab: BLE Device ID: " + ConfigObject.getBleDevId());
+    updateDevID(ConfigObject.getBleDevId());
     updateBLEConnected(ble_connected);
-    // start the update timer
-    console.log('Info Tab: Starting Update Timer View entered');
-    // start the timer only if we have a configured node
-    if(config_s.callSign !== "" && config_s.callSign !== "XX0XXX-00")
-      startUpdtTimer();
-    
-  });
+
+    console.log('Info Tab: Starting Update Timer');
+    startUpdtTimer();
+
+    return () => clearUpdtTimer();
+  }, [pageActive, app_active_s, ble_connected, config_s.callSign, shLog]);
 
 
-  // things we need to do when we leave the page
-  useIonViewWillLeave(() => {
-    console.log('Info Tab: Leaving Info Tab, Clearing Update Timer');
-    window.clearInterval(updateTimerRef.current);
-    window_active.current = false;
-  });
-
-
-  // clear the timer when app goes to background
-  useEffect(() => {
-    console.log('Info Tab: App active State changed: ' + app_active_s);
-    if (!app_active_s) {
-      console.log('Info Tab: Clearing Update Timer App goes to background');
-      clearUpdtTimer();
-    }
-    if (app_active_s) {
-      if(window_active.current) {
-        console.log('Info Tab: Starting Update Timer App comes to foreground');
-        // start the timer only if we have a configured node
-        if(config_s.callSign !== "" && config_s.callSign !== "XX0XXX-00")
-          startUpdtTimer();
-      }
-    }
-  }, [app_active_s]);
-
-
-  // if we get disconnected from BLE, clear the update timer
-  useEffect(() => {
-    console.log('Info Tab: BLE Connected State changed: ' + ble_connected);
-    if (!ble_connected) {
-      console.log('Info Tab: Clearing Update Timer BLE disconnected');
-      clearUpdtTimer();
-    }
-  }, [ble_connected]);
-
-
-  // starts the update timer when BLE is connected
+  // starts the update timer. The conditions are owned by the effect above.
   const startUpdtTimer = () => {
-    // only start the timer if BLE is connected
-    if (!ble_connected) return;
-    //console.log('Info Tab: Starting Update Timer');
 
     // clear timer if it is running
     if (updateTimerRef.current) {
@@ -129,21 +105,12 @@ const Info: React.FC = () => {
 
     updateTimerRef.current = window.setInterval(() => {
       console.log('Info Tab: updateTimer ');
-      // only update if BLE is connected
-      if (ble_connected) {
-        if(cmd_index.current >= cmds.length) cmd_index.current = 0;
-        // send the command via BLE
-        sendTxtCmdNode(cmds[cmd_index.current]);
-        // update index
-        cmd_index.current = (cmd_index.current + 1) % cmds.length;
-      }
-      
+      if(cmd_index.current >= cmds.length) cmd_index.current = 0;
+      // send the command via BLE
+      sendTxtCmdNode(cmds[cmd_index.current]);
+      // update index
+      cmd_index.current = (cmd_index.current + 1) % cmds.length;
     }, updateInterval);
-    return () => {
-      console.log('Info Tab: Clearing Update Timer in cleanup');
-      clearUpdtTimer();
-      cmd_index.current = 0;
-    };
   }
 
 
@@ -154,11 +121,9 @@ const Info: React.FC = () => {
     cmd_index.current = 0;
   }
 
-  // handle log window and messages
-  const [shLog, setShLog] = useState<boolean>(false);
-  const [logMsgs, setLogMsgs] = useState<string []>([]);
+  // handle log window and messages. The update timer pauses/resumes via the shLog dependency
+  // of the timer effect above.
   const openLogWindow = () => {
-    clearUpdtTimer();
     setShLog(true);
     const newLogs = LogS.logs;
     setLogMsgs(newLogs);
@@ -171,7 +136,6 @@ const Info: React.FC = () => {
 
   const closeLogWindow = () => {
     setShLog(false);
-    startUpdtTimer();
   }
 
 
