@@ -94,12 +94,6 @@ const Tab3: React.FC = () => {
   // message number from long press event
   const [msgNrAS, setMsgNrAS] = useState<number>();
 
-  // handle keyboard events and place chat accordingly
-  const [chatBoxPadding, setchatBoxPadding] = useState("3px");
-
-  // remember that keyboard is already open on rerenders
-  const keyBopen = useRef<boolean>(false);
-
   // reference to bottom of chat
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -410,40 +404,19 @@ const Tab3: React.FC = () => {
 
 
 
-  // run once at mount - setup listeners and handle CSS id change of chatbox
+  // run once at mount - the webview is resized natively for the keyboard,
+  // we only have to keep the newest message in view when it opens or closes
   useEffect(() => {
-    // check if keyboard hides
-    Keyboard.addListener('keyboardDidHide', () => {
+    const listeners = [
+      Keyboard.addListener('keyboardDidShow', () => scrollToBottom()),
+      Keyboard.addListener('keyboardDidHide', () => scrollToBottom())
+    ];
 
-      console.log('keyboard did hide');
-      const newPading = "3px";
-      console.log("new Padding: " + newPading)
-      setchatBoxPadding(newPading);
-      scrollToBottom();
-      keyBopen.current = false;
-    });
-
-    Keyboard.addListener('keyboardDidShow', info => {
-
-      console.log('keyboard open with height:', info.keyboardHeight);
-      console.log("Keybopen: " + keyBopen.current);
-
-      if (!keyBopen.current) {
-        
-        keyBopen.current = true;
-        let newPading = info.keyboardHeight;
-
-        if (shCallsign) newPading = newPading + 50;
-        const newPadding_str = newPading + "px";
-        console.log("new Padding: " + newPadding_str);
-        setchatBoxPadding(newPadding_str);
-
-        scrollToBottom();
-        const newPading1 = "3px";
-        setchatBoxPadding(newPading1);
-      }
-    });
     LogS.log(0,"Chat - Mounted Page");
+
+    return () => {
+      listeners.forEach(l => l.then(handle => handle.remove()));
+    };
   }, []);
 
 
@@ -1324,7 +1297,7 @@ const Tab3: React.FC = () => {
               ))}
 
             </div>
-            <div id="bottom" style={{ height: chatBoxPadding }}/>
+            <div id="bottom" style={{ height: "3px" }}/>
             <div ref={bottomRef} id="bottomRefID"/>
           </>
         )}
