@@ -32,8 +32,7 @@ export interface PosType {
     qnh:number,
     comment: string,
     // node name, split from the APRS comment tail by the last `#` (§1.8 of
-    // the wire-format doc); transient UI-only field, never persisted to the
-    // Positions table.
+    // the wire-format doc); persisted in the Positions `name` column.
     name?: string,
     temp_2:number,
     co2:number,

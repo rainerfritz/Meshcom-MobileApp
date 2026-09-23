@@ -99,6 +99,26 @@ describe("parsePositionPayload", () => {
     expect(p!.bat).toBe(85);
   });
 
+  it("splits comment and name from real beacons, incl. '#' as the symbol char", () => {
+    const a = parsePositionPayload("4812.84N/01556.68E#Buchberg#OE3MZC/B=100/A=001539/N26");
+    expect(a).not.toBeNull();
+    expect(a!.symbol).toBe("#");
+    expect(a!.comment).toBe("Buchberg");
+    expect(a!.name).toBe("OE3MZC");
+
+    const b = parsePositionPayload("4812.81N/01614.23E[QTHNorth#Georg/B=088/A=000889/N4/R=232;2321;2323;");
+    expect(b).not.toBeNull();
+    expect(b!.symbol).toBe("[");
+    expect(b!.comment).toBe("QTHNorth");
+    expect(b!.name).toBe("Georg");
+
+    const c = parsePositionPayload("4809.54N/01544.72E-/B=100/A=001312");
+    expect(c).not.toBeNull();
+    expect(c!.symbol).toBe("-");
+    expect(c!.comment).toBe("");
+    expect(c!.name).toBe("");
+  });
+
   it("uses backslash table char, last-wins on a repeated key, comment stops at the first token", () => {
     const p = parsePositionPayload(
       "4825.35N\\01147.19E-Standort/H=520m Dach/T=22.6/H=42.5/P=940.3"
