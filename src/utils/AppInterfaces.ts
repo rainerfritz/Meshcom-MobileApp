@@ -373,6 +373,14 @@ export interface AprsSettings {
     NAME: string
 }
 
+// Via (manual routing) settings from node
+// {"TYP":"SV","VIA":true,"VIACALL":"OE1KFR-12"}
+export interface ViaSettings {
+    TYP: string,
+    VIA: boolean,
+    VIACALL: string
+}
+
 // Mheard interface
 // {"TYP":"MH","CALL":"OE1MOJ-1","DATE":"2026-04-28","TIME":"19:47:06","PLT":58,"HW":3,"MOD":136,"RSSI":-91,"SNR":-1,"DIST":1.8,"PL":3,"MESH":1,"NCNT":7}
 export interface Mheard {

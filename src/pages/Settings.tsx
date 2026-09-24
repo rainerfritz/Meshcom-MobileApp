@@ -8,7 +8,7 @@ import { useStoreState } from 'pullstate';
 import { DevIDStore } from '../store';
 import { getDevID, getBLEconnStore, getConfigStore, getScanResult } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
-import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1, WifiSettings2 } from '../utils/AppInterfaces';
+import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1, WifiSettings2, ViaSettings } from '../utils/AppInterfaces';
 import { iosTransitionAnimation, RangeValue } from '@ionic/core';
 import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
@@ -28,6 +28,7 @@ import { usePhoneGps } from '../utils/PhoneGps';
 import WxDataStore from '../store/WxData';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
 import WifiSettingsStore2 from '../store/WiFiSettings2';
+import ViaSettingsStore from '../store/ViaSettingsStore';
 import GpsDataStore from '../store/GpsData';
 
 
@@ -58,6 +59,7 @@ const Tab2: React.FC = () => {
   // wifii settings from store
   const wifiSettings_s:WifiSettings = WifiSettingsStore.useState(s => s.wifiSettings);
   const wifiSettings2_s:WifiSettings2 = WifiSettingsStore2.useState(s => s.wifiSettings2);
+  const viaSettings_s:ViaSettings = ViaSettingsStore.useState(s => s.viaSettings);
 
   // node settings
   const nodeSettings:NodeSettings = useStoreState(NodeSettingsStore, s => s.nodeSettings);
@@ -103,6 +105,8 @@ const Tab2: React.FC = () => {
 
   // Regex for callsign check
   const regexCallsign = /^([A-Z]{1,3}[0-9]{1,2}[A-Z]{0,3}|[0-9][A-Z][0-9][A-Z]{1,3})-[0-9]{1,2}$/;
+  // max length of a callsign incl. SSID (node callsign and via destination callsign)
+  const MAX_CALLSIGN_LEN = 11;
 
   // switch show wifi pwd
   const [shWifiPwd, setShWifiPwd] = useState<boolean>(false);
@@ -270,6 +274,12 @@ const Tab2: React.FC = () => {
   const ext_udp_ip_ref = useRef<HTMLIonInputElement>(null);
   const ext_udp_IP_str = useRef<string>("");
   const ext_udp_enable_str = useRef<string>("");
+
+  // Manual Routing (via callsign) Settings
+  const [shManRouting, setShManRouting] = useState<boolean>(false);
+  const via_call_ref = useRef<HTMLIonInputElement>(null);
+  const via_call_str = useRef<string>("");
+  const via_enable_str = useRef<string>("");
 
   // Manual Position Settings Input Refs
   const [shManualPos, setShManualPos] = useState<boolean>(false);
@@ -514,11 +524,11 @@ const Tab2: React.FC = () => {
         let cal_len = call_s.length;
         console.log("Callsign len: " + cal_len);
         
-        if (cal_len > 11) {
+        if (cal_len > MAX_CALLSIGN_LEN) {
           console.log("Callsign too long!");
           clearInput();
           setAlHeader("Callsign too long!");
-          setAlMsg("Please enter a valid Callsign with max 11 characters");
+          setAlMsg("Please enter a valid Callsign with max " + MAX_CALLSIGN_LEN + " characters");
           setShAlertCard(true);
           return;
         }
@@ -1156,6 +1166,30 @@ const Tab2: React.FC = () => {
         break;
       }
 
+      // via (manual routing) destination callsign
+      case "viaCall": {
+        cmd_ = via_call_str.current;
+        console.log("Via Call CMD to node: " + cmd_);
+        break;
+      }
+
+      // via (manual routing) toggle
+      case "viaToggle": {
+        cmd_ = via_enable_str.current;
+        console.log("Via Toggle CMD to node: " + cmd_);
+        break;
+      }
+
+      // reset via: disable and set destination callsign to none
+      case "RST_VIA": {
+        console.log("Resetting Via Callsign to none and disabling via");
+        cmd_ = "--via off --via none";
+        setAlHeader("Manual Routing reset!");
+        setAlMsg("Destination Callsign set to NONE and disabled.");
+        setShAlertCard(true);
+        break;
+      }
+
       // rest wifi ssid and pwd
       case "RST_WIFI_SSID_PW": {
         console.log("Resetting Wifi SSID and PW to none");
@@ -1555,6 +1589,52 @@ const Tab2: React.FC = () => {
       setAlMsg("Ext UDP Interface disabled!");
       setShAlertCard(true);
     }
+  }
+
+  // Manual Routing Settings ///////
+  // set the via destination callsign
+  const setViaCall = () => {
+    if (via_call_ref.current !== null && via_call_ref.current !== undefined) {
+      const via_call = (via_call_ref.current.value ?? "").toString().toUpperCase().trim();
+      console.log("Via Callsign: " + via_call);
+
+      if (!regexCallsign.test(via_call) || via_call.length > MAX_CALLSIGN_LEN) {
+        console.log("Via Callsign is not valid");
+        setAlHeader("Invalid Callsign!");
+        setAlMsg("The Destination Callsign does not match the callsign rules (eg. OE1KFR-12, max " + MAX_CALLSIGN_LEN + " characters)!");
+        setShAlertCard(true);
+        return;
+      }
+
+      via_call_str.current = "--via " + via_call;
+      sendTxtCmd("viaCall");
+      setAlHeader("Manual Routing set!");
+      setAlMsg("Destination Callsign set: " + via_call);
+      setShAlertCard(true);
+    }
+  }
+
+  // enabling via with toggle. Getting Ion-Event
+  const enableVia = (ev:any) => {
+    console.log("Enable Via: " + ev.detail.checked);
+    if (ev.detail.checked) {
+      // via needs a destination callsign set on the node
+      if (viaSettings_s.VIACALL === "") {
+        console.log("No Via Callsign set on node");
+        setAlHeader("No Destination Callsign!");
+        setAlMsg("Please set a Destination Callsign first!");
+        setShAlertCard(true);
+        // set the toggle back to false
+        ViaSettingsStore.update(s => {
+          s.viaSettings.VIA = false;
+        });
+        return;
+      }
+      via_enable_str.current = "--via on";
+    } else {
+      via_enable_str.current = "--via off";
+    }
+    sendTxtCmd("viaToggle");
   }
 
   // Manual Position Settings ///////
@@ -2062,7 +2142,7 @@ const Tab2: React.FC = () => {
               </div>
             </div>
             <IonItem>
-              <IonInput ref={callInputRef} label='Set Node Callsign' labelPlacement="floating" placeholder="eg. OE1KFR-1" type='text' maxlength={12}></IonInput>
+              <IonInput ref={callInputRef} label='Set Node Callsign' labelPlacement="floating" placeholder="eg. OE1KFR-1" type='text' maxlength={MAX_CALLSIGN_LEN}></IonInput>
             </IonItem>
           </div>
 
@@ -2652,6 +2732,42 @@ const Tab2: React.FC = () => {
                 </IonItem>
                 <IonItem>
                   <IonToggle enableOnOffLabels={true} checked={wifiSettings2_s.EUDP} onIonChange={(ev) => enableExtUDP(ev)}>Enable</IonToggle>
+                </IonItem>
+              </div>
+            </>}
+          </div>
+
+          <div id="spacer-buttons" />
+          {/*Manual Routing (via) Settings with a destination callsign input and a toggle to switch on/off*/}
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shManRouting ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShManRouting(!shManRouting)} />
+              </div>
+              <IonText >Manual Routing (VIA)</IonText>
+            </div>
+            {shManRouting && <>
+              <div className='setting_wrapper'>
+                <div className="flex-row mb-3">
+                  <div>
+                    <IonText id="wifi-text">Destination Call</IonText>
+                  </div>
+                  <div className='rst-set-btns'>
+                    <div>
+                      <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_VIA")}>RST</IonButton>
+                    </div>
+                    <div>
+                      <IonButton size="small" fill="outline" color='success' onClick={() => setViaCall()}>
+                        <IonIcon icon={checkmarkCircle} ></IonIcon>
+                      </IonButton>
+                    </div>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={viaSettings_s.VIACALL} ref={via_call_ref} label='Set Dest. Call' labelPlacement="floating" placeholder="eg. OE1KFR-12" type='text' maxlength={MAX_CALLSIGN_LEN}></IonInput>
+                </IonItem>
+                <IonItem>
+                  <IonToggle enableOnOffLabels={true} checked={viaSettings_s.VIA} onIonChange={(ev) => enableVia(ev)}>Enable</IonToggle>
                 </IonItem>
               </div>
             </>}
