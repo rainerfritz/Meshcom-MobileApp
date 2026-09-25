@@ -2746,7 +2746,12 @@ const Tab2: React.FC = () => {
               </div>
               <IonText >Manual Routing (VIA)</IonText>
             </div>
-            {shManRouting && <>
+            {shManRouting && nodeSettingsS1_s.TYP !== "SN1" && <>
+              <div className='setting_wrapper'>
+                <IonText>Manual Route Settings not provided by node. Check FW Update or Re-Connect</IonText>
+              </div>
+            </>}
+            {shManRouting && nodeSettingsS1_s.TYP === "SN1" && <>
               <div className='setting_wrapper'>
                 <div className="flex-row mb-3">
                   <div>

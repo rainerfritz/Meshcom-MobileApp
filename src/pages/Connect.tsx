@@ -28,6 +28,7 @@ import DatabaseService from '../DBservices/DataBaseService';
 import ConfigObject from '../utils/ConfigObject';
 import MheardStaticStore from '../utils/MheardStaticStore';
 import BleConfigFinish from '../store/BLEConfFin';
+import NodeSettingsStoreS1, { defaultNodeSettingsS1 } from '../store/NodeSettingsStoreS1';
 import UpdateFW from '../store/UpdtFW';
 import { usePhoneGps } from '../utils/PhoneGps';
 import DataBaseService from '../DBservices/DataBaseService';
@@ -894,6 +895,11 @@ const Tab1: React.FC = () => {
     // reset ble_conf_finish state
     BleConfigFinish.update(s => {
       s.BleConfFin = 0;
+    });
+
+    // reset node settings S1, so a node without SN1 (older firmware) does not show the values of the previous node
+    NodeSettingsStoreS1.update(s => {
+      s.nodeSettingsS1 = { ...defaultNodeSettingsS1 };
     });
 
     // reset manual disco flag (BLEconnStore.manual_disconnect was already captured atomically

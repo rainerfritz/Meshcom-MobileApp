@@ -10,8 +10,10 @@ import {NodeSettingsS1} from "../utils/AppInterfaces";
     VIACALL: string
  */
 
-const defaultNodeSettingsS1:NodeSettingsS1 = {
-    TYP: "SN1",
+// TYP "" = not received from the node in this connection (firmware without SN1),
+// set to "SN1" when the node sends it
+export const defaultNodeSettingsS1:NodeSettingsS1 = {
+    TYP: "",
     VIA: false,
     VIACALL: ""
 }
