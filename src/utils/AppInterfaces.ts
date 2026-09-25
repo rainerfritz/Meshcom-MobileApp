@@ -200,6 +200,16 @@ export interface InfoData {
     BPIN: number
 }
 
+// Node Info S1 interface (second info json)
+/**
+ * idoc1["TYP"] = "IS1";
+            idoc1["BDATE"] = bdate;     // build date "YYYYMMDD-HHMMSS"
+ */
+export interface InfoDataS1 {
+    TYP: string,
+    BDATE: string
+}
+
 
 // sensor settings interface
 /**

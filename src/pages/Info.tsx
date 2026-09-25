@@ -5,7 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { useStoreState } from 'pullstate';
 import { getConfigStore, getGpsData, getSensorSettings, getWxData, getDevID, getBLEconnStore, getAppActiveState } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
-import { ConfType, GpsData, WxData, SensorSettings, SensorSettingsS1 } from '../utils/AppInterfaces';
+import { ConfType, GpsData, WxData, SensorSettings, SensorSettingsS1, InfoDataS1 } from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
 import AppActiveState  from '../store/AppActive';
 import { DevIDStore } from '../store';
@@ -20,6 +20,7 @@ import BLEconnStore from '../store/BLEconnected';
 import ConfigObject from '../utils/ConfigObject';
 import LogS from '../utils/LogService';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
+import NodeInfoStoreS1 from '../store/NodeInfoStoreS1';
 
 
 
@@ -41,6 +42,9 @@ const Info: React.FC = () => {
   const SensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, getSensorSettings);
 
   const sensorSettingsS1_s:SensorSettingsS1 = SensorSettingsS1Store.useState(s => s.sensorSettingsS1);
+
+  // node info S1 (build date)
+  const infoDataS1_s:InfoDataS1 = NodeInfoStoreS1.useState(s => s.infoDataS1);
 
   // app active state
   const app_active_s:boolean = AppActiveState.useState(s => s.active);
@@ -232,7 +236,8 @@ const Info: React.FC = () => {
         <div className="info-box">
           <div>
             <div>Node FW: {config_s.fw_ver}</div>
-            <div>App Version: 4.28a</div>
+            <div>Build: {infoDataS1_s.BDATE}</div>
+            <div>App Version: 4.29</div>
           </div>
         </div>
 

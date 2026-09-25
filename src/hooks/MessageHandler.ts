@@ -40,7 +40,7 @@ import WxDataStore from '../store/WxData';
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
 import { useRef } from 'react';
-import { PosType, MsgType, ConfType, MheardType, SensorSettings, WxData, GpsData, WifiSettings, InfoData, NodeSettings, AprsSettings, Mheard, SensorSettingsS1, WifiSettings2, NodeSettingsS1 } from '../utils/AppInterfaces';
+import { PosType, MsgType, ConfType, MheardType, SensorSettings, WxData, GpsData, WifiSettings, InfoData, NodeSettings, AprsSettings, Mheard, SensorSettingsS1, WifiSettings2, NodeSettingsS1, InfoDataS1 } from '../utils/AppInterfaces';
 import ConfigObject from '../utils/ConfigObject';
 import DatabaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
@@ -52,6 +52,7 @@ import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
 import AprsSettingsStore from '../store/AprSettingsStore';
 import NodeSettingsStoreS1 from '../store/NodeSettingsStoreS1';
+import NodeInfoStoreS1 from '../store/NodeInfoStoreS1';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
 import WifiSettingsStore2 from '../store/WiFiSettings2';
 
@@ -1007,6 +1008,22 @@ export function useMSG() {
 
                                 break;
 
+                            }
+
+                            case "IS1": {
+                                //{"TYP":"IS1","BDATE":"20260925-110603"}
+                                LogS.log(0, "NodeInfo S1 Data received!");
+
+                                const info_data_s1:InfoDataS1 = json_data;
+
+                                console.log("Build Date: " + info_data_s1.BDATE);
+
+                                // update node info S1 store
+                                NodeInfoStoreS1.update(s => {
+                                    s.infoDataS1 = info_data_s1;
+                                });
+
+                                break;
                             }
 
                             case "SE": {
