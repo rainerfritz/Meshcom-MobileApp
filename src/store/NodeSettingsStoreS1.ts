@@ -7,7 +7,9 @@ import {NodeSettingsS1} from "../utils/AppInterfaces";
 /**
  * TYP: string,
     VIA: boolean,
-    VIACALL: string
+    VIACALL: string,
+    WSPWD?: string,
+    ASYM?: boolean
  */
 
 // TYP "" = not received from the node in this connection (firmware without SN1),
@@ -15,7 +17,9 @@ import {NodeSettingsS1} from "../utils/AppInterfaces";
 export const defaultNodeSettingsS1:NodeSettingsS1 = {
     TYP: "",
     VIA: false,
-    VIACALL: ""
+    VIACALL: "",
+    WSPWD: "",
+    ASYM: false
 }
 
 const NodeSettingsStoreS1 = new Store({

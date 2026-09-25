@@ -107,6 +107,8 @@ const Tab2: React.FC = () => {
   const regexCallsign = /^([A-Z]{1,3}[0-9]{1,2}[A-Z]{0,3}|[0-9][A-Z][0-9][A-Z]{1,3})-[0-9]{1,2}$/;
   // max length of a callsign incl. SSID (node callsign and via destination callsign)
   const MAX_CALLSIGN_LEN = 11;
+  // max length of the web ui password (node_webpwd[20] in firmware, --webpwd cuts at 19)
+  const MAX_WEBPWD_LEN = 19;
 
   // switch show wifi pwd
   const [shWifiPwd, setShWifiPwd] = useState<boolean>(false);
@@ -280,6 +282,12 @@ const Tab2: React.FC = () => {
   const via_call_ref = useRef<HTMLIonInputElement>(null);
   const via_call_str = useRef<string>("");
   const via_enable_str = useRef<string>("");
+
+  // Web UI Password Settings
+  const [shWebPwdSect, setShWebPwdSect] = useState<boolean>(false);
+  const [shWebPwd, setShWebPwd] = useState<boolean>(false);
+  const webpwd_ref = useRef<HTMLIonInputElement>(null);
+  const webpwd_str = useRef<string>("");
 
   // Manual Position Settings Input Refs
   const [shManualPos, setShManualPos] = useState<boolean>(false);
@@ -1190,6 +1198,23 @@ const Tab2: React.FC = () => {
         break;
       }
 
+      // web ui password
+      case "webPwd": {
+        cmd_ = webpwd_str.current;
+        console.log("Web Password CMD to node");
+        break;
+      }
+
+      // reset web ui password to none
+      case "RST_WEBPWD": {
+        console.log("Resetting Web Password to none");
+        cmd_ = "--webpwd none";
+        setAlHeader("Web Password reset!");
+        setAlMsg("Web UI is now without password.");
+        setShAlertCard(true);
+        break;
+      }
+
       // rest wifi ssid and pwd
       case "RST_WIFI_SSID_PW": {
         console.log("Resetting Wifi SSID and PW to none");
@@ -1666,6 +1691,39 @@ const Tab2: React.FC = () => {
       via_enable_str.current = "--via off";
     }
     sendTxtCmd("viaToggle");
+  }
+
+  // Web UI Password Settings ///////
+  const setWebPwd = () => {
+    const web_pwd = (webpwd_ref.current?.value ?? "").toString().trim();
+
+    if (web_pwd === "") {
+      setAlHeader("No Password!");
+      setAlMsg("Please enter a password or use RST to remove it.");
+      setShAlertCard(true);
+      return;
+    }
+
+    // "none" resets the password in the firmware
+    if (web_pwd.toLowerCase() === "none") {
+      setAlHeader("Invalid Password!");
+      setAlMsg("\"none\" is reserved. Use RST to remove the password.");
+      setShAlertCard(true);
+      return;
+    }
+
+    if (web_pwd.length > MAX_WEBPWD_LEN) {
+      setAlHeader("Invalid Password!");
+      setAlMsg("The password can have max " + MAX_WEBPWD_LEN + " characters.");
+      setShAlertCard(true);
+      return;
+    }
+
+    webpwd_str.current = "--webpwd " + web_pwd;
+    sendTxtCmd("webPwd");
+    setAlHeader("Web Password set!");
+    setAlMsg("The Web UI of the node now asks for this password.");
+    setShAlertCard(true);
   }
 
   // Manual Position Settings ///////
@@ -2804,6 +2862,41 @@ const Tab2: React.FC = () => {
                 </IonItem>
                 <IonItem>
                   <IonToggle enableOnOffLabels={true} checked={nodeSettingsS1_s.VIA} onIonChange={(ev) => enableVia(ev)}>Enable</IonToggle>
+                </IonItem>
+              </div>
+            </>}
+          </div>
+
+          <div id="spacer-buttons" />
+
+          {/*Web UI Password dropdown: set or reset, current value comes from SN1 (empty with older firmware)*/}
+          <div className='dropdown_arrow'>
+            <div className='dropdown_arrow_header'>
+              <div id="advIcon">
+                <IonIcon icon={shWebPwdSect ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShWebPwdSect(!shWebPwdSect)} />
+              </div>
+              <IonText >Web UI Password</IonText>
+            </div>
+            {shWebPwdSect && <>
+              <div className='setting_wrapper'>
+                <div className="flex-row mb-3">
+                  <div>
+                    <IonText id="wifi-text">Password</IonText>
+                  </div>
+                  <div className='rst-set-btns'>
+                    <div>
+                      <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_WEBPWD")}>RST</IonButton>
+                    </div>
+                    <div>
+                      <IonButton size="small" fill="outline" color='success' onClick={() => setWebPwd()}>
+                        <IonIcon icon={checkmarkCircle} ></IonIcon>
+                      </IonButton>
+                    </div>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput ref={webpwd_ref} value={nodeSettingsS1_s.WSPWD ?? ""} label='Set Web Password' labelPlacement="floating" placeholder='PWD' type={shWebPwd ? 'text' : 'password'} maxlength={MAX_WEBPWD_LEN}></IonInput>
+                  <IonIcon slot='end' icon={shWebPwd ? eyeOffOutline : eyeOutline} onClick={() => setShWebPwd(!shWebPwd)}></IonIcon>
                 </IonItem>
               </div>
             </>}

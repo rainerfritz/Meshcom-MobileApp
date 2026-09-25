@@ -372,11 +372,16 @@ export interface NodeSettings {
  * nsetdoc1["TYP"] = "SN1";
     nsetdoc1["VIA"] = bVIA;
     nsetdoc1["VIACALL"] = meshcom_settings.node_via;
+    nsetdoc1["WSPWD"] = meshcom_settings.node_webpwd;
+    nsetdoc1["ASYM"] = bGPSAutosymbol;
+ * WSPWD and ASYM moved from SN to SN1, missing with older firmware
  */
 export interface NodeSettingsS1 {
     TYP: string,
     VIA: boolean,
-    VIACALL: string
+    VIACALL: string,
+    WSPWD?: string,
+    ASYM?: boolean
 }
 
 // APRS Settings interface 
