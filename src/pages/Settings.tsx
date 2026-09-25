@@ -8,7 +8,7 @@ import { useStoreState } from 'pullstate';
 import { DevIDStore } from '../store';
 import { getDevID, getBLEconnStore, getConfigStore, getScanResult } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
-import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1, WifiSettings2, ViaSettings } from '../utils/AppInterfaces';
+import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1, WifiSettings2, NodeSettingsS1 } from '../utils/AppInterfaces';
 import { iosTransitionAnimation, RangeValue } from '@ionic/core';
 import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
@@ -28,7 +28,7 @@ import { usePhoneGps } from '../utils/PhoneGps';
 import WxDataStore from '../store/WxData';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
 import WifiSettingsStore2 from '../store/WiFiSettings2';
-import ViaSettingsStore from '../store/ViaSettingsStore';
+import NodeSettingsStoreS1 from '../store/NodeSettingsStoreS1';
 import GpsDataStore from '../store/GpsData';
 
 
@@ -59,7 +59,7 @@ const Tab2: React.FC = () => {
   // wifii settings from store
   const wifiSettings_s:WifiSettings = WifiSettingsStore.useState(s => s.wifiSettings);
   const wifiSettings2_s:WifiSettings2 = WifiSettingsStore2.useState(s => s.wifiSettings2);
-  const viaSettings_s:ViaSettings = ViaSettingsStore.useState(s => s.viaSettings);
+  const nodeSettingsS1_s:NodeSettingsS1 = NodeSettingsStoreS1.useState(s => s.nodeSettingsS1);
 
   // node settings
   const nodeSettings:NodeSettings = useStoreState(NodeSettingsStore, s => s.nodeSettings);
@@ -1619,14 +1619,14 @@ const Tab2: React.FC = () => {
     console.log("Enable Via: " + ev.detail.checked);
     if (ev.detail.checked) {
       // via needs a destination callsign set on the node
-      if (viaSettings_s.VIACALL === "") {
+      if (nodeSettingsS1_s.VIACALL === "") {
         console.log("No Via Callsign set on node");
         setAlHeader("No Destination Callsign!");
         setAlMsg("Please set a Destination Callsign first!");
         setShAlertCard(true);
         // set the toggle back to false
-        ViaSettingsStore.update(s => {
-          s.viaSettings.VIA = false;
+        NodeSettingsStoreS1.update(s => {
+          s.nodeSettingsS1.VIA = false;
         });
         return;
       }
@@ -2764,10 +2764,10 @@ const Tab2: React.FC = () => {
                   </div>
                 </div>
                 <IonItem>
-                  <IonInput value={viaSettings_s.VIACALL} ref={via_call_ref} label='Set Dest. Call' labelPlacement="floating" placeholder="eg. OE1KFR-12" type='text' maxlength={MAX_CALLSIGN_LEN}></IonInput>
+                  <IonInput value={nodeSettingsS1_s.VIACALL} ref={via_call_ref} label='Set Dest. Call' labelPlacement="floating" placeholder="eg. OE1KFR-12" type='text' maxlength={MAX_CALLSIGN_LEN}></IonInput>
                 </IonItem>
                 <IonItem>
-                  <IonToggle enableOnOffLabels={true} checked={viaSettings_s.VIA} onIonChange={(ev) => enableVia(ev)}>Enable</IonToggle>
+                  <IonToggle enableOnOffLabels={true} checked={nodeSettingsS1_s.VIA} onIonChange={(ev) => enableVia(ev)}>Enable</IonToggle>
                 </IonItem>
               </div>
             </>}

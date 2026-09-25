@@ -40,7 +40,7 @@ import WxDataStore from '../store/WxData';
 import ScanI2CStore from '../store/ScanI2CStore';
 import SensorSettingsStore from '../store/SensorSettings';
 import { useRef } from 'react';
-import { PosType, MsgType, ConfType, MheardType, SensorSettings, WxData, GpsData, WifiSettings, InfoData, NodeSettings, AprsSettings, Mheard, SensorSettingsS1, WifiSettings2, ViaSettings } from '../utils/AppInterfaces';
+import { PosType, MsgType, ConfType, MheardType, SensorSettings, WxData, GpsData, WifiSettings, InfoData, NodeSettings, AprsSettings, Mheard, SensorSettingsS1, WifiSettings2, NodeSettingsS1 } from '../utils/AppInterfaces';
 import ConfigObject from '../utils/ConfigObject';
 import DatabaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
@@ -51,7 +51,7 @@ import MheardStaticStore from '../utils/MheardStaticStore';
 import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
 import AprsSettingsStore from '../store/AprSettingsStore';
-import ViaSettingsStore from '../store/ViaSettingsStore';
+import NodeSettingsStoreS1 from '../store/NodeSettingsStoreS1';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
 import WifiSettingsStore2 from '../store/WiFiSettings2';
 
@@ -1138,6 +1138,23 @@ export function useMSG() {
                                 break;
                             }
 
+                            case "SN1": {
+                                //{"TYP":"SN1","VIA":true,"VIACALL":"OE1KFR-12"}
+                                LogS.log(0, "Node Settings S1 received!");
+
+                                const node_settings_s1:NodeSettingsS1 = json_data;
+
+                                console.log("VIA: " + node_settings_s1.VIA);
+                                console.log("VIACALL: " + node_settings_s1.VIACALL);
+
+                                // update nodesettings S1 store
+                                NodeSettingsStoreS1.update(s => {
+                                    s.nodeSettingsS1 = node_settings_s1;
+                                });
+
+                                break;
+                            }
+
                             case "SA": {
                                 //{"TYP":"SA","ATXT":"none","SYMID":"/","SYMCD":"#"}
                                 LogS.log(0, "APRS Settings received!");
@@ -1181,23 +1198,6 @@ export function useMSG() {
                                 // update aprs settings store
                                 AprsSettingsStore.update(s => {
                                     s.aprsSettings = aprs_settings;
-                                });
-
-                                break;
-                            }
-
-                            case "SV": {
-                                //{"TYP":"SV","VIA":true,"VIACALL":"OE1KFR-12"}
-                                LogS.log(0, "Via Settings received!");
-
-                                const via_settings:ViaSettings = json_data;
-
-                                console.log("Via enabled: " + via_settings.VIA);
-                                console.log("Via Callsign: " + via_settings.VIACALL);
-
-                                // update via settings store
-                                ViaSettingsStore.update(s => {
-                                    s.viaSettings = via_settings;
                                 });
 
                                 break;

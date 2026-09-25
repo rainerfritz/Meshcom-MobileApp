@@ -357,6 +357,18 @@ export interface NodeSettings {
     GWS: string
 }
 
+// Node Settings additional interface
+/**
+ * nsetdoc1["TYP"] = "SN1";
+    nsetdoc1["VIA"] = bVIA;
+    nsetdoc1["VIACALL"] = meshcom_settings.node_via;
+ */
+export interface NodeSettingsS1 {
+    TYP: string,
+    VIA: boolean,
+    VIACALL: string
+}
+
 // APRS Settings interface 
 /**
  * aprsdoc["TYP"] = "SA";
@@ -371,14 +383,6 @@ export interface AprsSettings {
     SYMID: string,
     SYMCD: string,
     NAME: string
-}
-
-// Via (manual routing) settings from node
-// {"TYP":"SV","VIA":true,"VIACALL":"OE1KFR-12"}
-export interface ViaSettings {
-    TYP: string,
-    VIA: boolean,
-    VIACALL: string
 }
 
 // Mheard interface
