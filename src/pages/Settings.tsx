@@ -59,6 +59,8 @@ const Tab2: React.FC = () => {
   // wifii settings from store
   const wifiSettings_s:WifiSettings = WifiSettingsStore.useState(s => s.wifiSettings);
   const wifiSettings2_s:WifiSettings2 = WifiSettingsStore2.useState(s => s.wifiSettings2);
+  // own NTP server is set on the node (empty or "none" = not set)
+  const ownNtpSet = !!wifiSettings2_s.OWNNTP && wifiSettings2_s.OWNNTP.trim() !== "" && wifiSettings2_s.OWNNTP.trim().toLowerCase() !== "none";
   const nodeSettingsS1_s:NodeSettingsS1 = NodeSettingsStoreS1.useState(s => s.nodeSettingsS1);
 
   // node settings
@@ -250,10 +252,13 @@ const Tab2: React.FC = () => {
   const ip_gw_ref = useRef<HTMLIonInputElement>(null);
   const ip_snm_ref = useRef<HTMLIonInputElement>(null);
   const ip_dns_ref = useRef<HTMLIonInputElement>(null);
+  const ip_ntp_ref = useRef<HTMLIonInputElement>(null);
   const ip_addr_str =useRef<string>("");
   const ip_gw_str = useRef<string>("");
   const ip_snm_str = useRef<string>("");
   const ip_dns_str = useRef<string>("");
+  // optional, empty = --setownntp is not sent
+  const ip_ntp_str = useRef<string>("");
   // make the regex simple with 4 octets and each octet is 0-255
   const ip_regex = /^(?!0\d)(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(?!0\d)(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
@@ -1127,6 +1132,10 @@ const Tab2: React.FC = () => {
       // set fixed IP setting all at once
       case "setFixedIP": {
         cmd_ = "--setownip " + ip_addr_str.current + " --setownms " + ip_snm_str.current + " --setowngw " + ip_gw_str.current + " --setowndns " + ip_dns_str.current;
+        // NTP server is optional
+        if (ip_ntp_str.current !== "") {
+          cmd_ += " --setownntp " + ip_ntp_str.current;
+        }
         console.log("IP CMD to node: " + cmd_);
         break;
       }
@@ -1242,7 +1251,7 @@ const Tab2: React.FC = () => {
       // reset fixed ip settings
       case "RST_FIXED_IP": {
         console.log("Resetting Fixed IP Settings to none");
-        cmd_ = "--setownip none --setownms none --setowngw none --setowndns none";
+        cmd_ = "--setownip none --setownms none --setowngw none --setowndns none --setownntp none";
         setAlHeader("Fixed IP Settings reset!");
         setAlMsg("Fixed IP Settings reset to none! Will reboot in 15s.");
         setShAlertCard(true);
@@ -1474,14 +1483,18 @@ const Tab2: React.FC = () => {
       ip_snm_str.current = ip_snm_ref.current!.value!.toString();
       ip_gw_str.current = ip_gw_ref.current!.value!.toString();
       ip_dns_str.current = ip_dns_ref.current!.value!.toString();
+      ip_ntp_str.current = (ip_ntp_ref.current?.value ?? "").toString().trim();
       console.log("IP Address: " + ip_addr_str.current);
       console.log("IP Subnet Mask: " + ip_snm_str.current);
       console.log("IP Gateway: " + ip_gw_str.current);
       console.log("IP DNS: " + ip_dns_str.current);
+      console.log("IP NTP: " + ip_ntp_str.current);
 
       // check if the IP adresses are valid
       if(ip_addr_str && ip_snm_str && ip_gw_str && ip_dns_str) {
-        if(ip_regex.test(ip_addr_str.current) && ip_regex.test(ip_snm_str.current) && ip_regex.test(ip_gw_str.current) && ip_regex.test(ip_dns_str.current)) {
+        // NTP is optional: only checked when set
+        const ntp_ok = ip_ntp_str.current === "" || ip_regex.test(ip_ntp_str.current);
+        if(ip_regex.test(ip_addr_str.current) && ip_regex.test(ip_snm_str.current) && ip_regex.test(ip_gw_str.current) && ip_regex.test(ip_dns_str.current) && ntp_ok) {
           // all IP adresses are valid
           console.log("IP Adresses are valid");
           // send the IP adresses to the node
@@ -1489,7 +1502,7 @@ const Tab2: React.FC = () => {
         } else {
           console.log("IP Adresses not valid!");
           setAlHeader("IP Adresses not valid!");
-          setAlMsg("Please enter a valid IP Address, Subnet Mask Gateway and DNS!");
+          setAlMsg("Please enter a valid IP Address, Subnet Mask, Gateway, DNS and optional NTP!");
           setShAlertCard(true);
         }
       }
@@ -2208,6 +2221,7 @@ const Tab2: React.FC = () => {
               <div>Wifi GW: {wifiSettings_s.GW}</div>
               <div>Wifi SNM: {wifiSettings_s.SUB}</div>
               <div>WiFi DNS: {wifiSettings_s.DNS}</div>
+              {ownNtpSet && <div>WiFi NTP: {wifiSettings2_s.OWNNTP}</div>}
               </>:<> 
               <div>ETH IP: {wifiSettings_s.IP}</div>
               <div>ETH GW: {wifiSettings_s.GW}</div>
@@ -2787,9 +2801,13 @@ const Tab2: React.FC = () => {
                 <IonItem>
                   <IonInput value={wifiSettings2_s.OWNGW} ref={ip_gw_ref} label='Set Gateway' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Gateway</div>
+                <div className='mt-3 mb-3'>DNS</div>
                 <IonItem>
                   <IonInput value={wifiSettings2_s.OWNDNS} ref={ip_dns_ref} label='Set DNS' labelPlacement="floating" type='text' maxlength={15}></IonInput>
+                </IonItem>
+                <div className='mt-3 mb-3'>NTP (Optional leave empty)</div>
+                <IonItem>
+                  <IonInput value={wifiSettings2_s.OWNNTP === "none" ? "" : wifiSettings2_s.OWNNTP} ref={ip_ntp_ref} label='Set NTP' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
               </div>
             }
