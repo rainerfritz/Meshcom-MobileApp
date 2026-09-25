@@ -84,7 +84,8 @@ http://ionicframework.com/docs/theming/ */
   --bubble-received-border: #96c8ea;
   --bubble-received-text: #0b2e42;
 
-  --bubble-meta-color: #5b6b73;
+  --bubble-meta-color: #36444b;
+  --bubble-via-opacity: 1;
   --bubble-sender-color: #0d5f9e;
   --bubble-ack-color: #147a6d;
 
@@ -179,6 +180,7 @@ http://ionicframework.com/docs/theming/ */
     --bubble-received-text: #eaf6ff;
 
     --bubble-meta-color: #a9c2cc;
+    --bubble-via-opacity: 0.85;
     --bubble-sender-color: #6ec8ff;
     --bubble-ack-color: #3fe5c8;
 

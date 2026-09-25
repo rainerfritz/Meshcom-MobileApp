@@ -121,7 +121,7 @@ ion-textarea.customTextAreaInput{
 .msg-via {
     font-size: 0.72em;
     color: var(--bubble-meta-color);
-    opacity: 0.85;
+    opacity: var(--bubble-via-opacity);
 }
 
 .msg-sender {
