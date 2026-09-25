@@ -18,9 +18,21 @@ interface MapOverlayProps extends PosType {
                   onCloseOverlay={onCloseOverlay}
    */
 
-export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign, lat, lon, alt, bat, hw, pressure, humidity, temperature, qnh, timestamp, comment, name, temp_2, co2, gas_res, neighbour_count, groups, symbol_table, symbol, onCloseOverlay }) => {
+export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign, lat, lon, alt, bat, hw, pressure, humidity, temperature, qnh, timestamp, comment, name, temp_2, co2, gas_res, neighbour_count, groups, symbol_table, symbol, din, vbus, vcurrent, onCloseOverlay }) => {
 
     const navigate = useNavigate();
+
+    // sanitize optional INA226 / MCP23017 values; DB rows may hold null, never call number methods on those
+    const toNum = (v: unknown): number | undefined => {
+        if (v === null || v === undefined || v === "") return undefined;
+        const n = typeof v === "number" ? v : parseFloat(String(v));
+        return Number.isFinite(n) ? n : undefined;
+    };
+    // max 4 decimals, trailing zeros dropped
+    const fmt4 = (n: number) => String(parseFloat(n.toFixed(4)));
+    const vbusNum = toNum(vbus);
+    const vcurrentNum = toNum(vcurrent);
+    const dinStr = typeof din === "string" ? din.trim() : "";
 
     // state to show more info like pressure, etc
     const [shExtInfo, setShExtInfo] = useState(false);
@@ -74,6 +86,9 @@ export const MapOverlay: React.FunctionComponent<MapOverlayProps> = ({ callSign,
                                     {qnh !== 0 && <><IonText>QNH: {qnh}hPa</IonText><br /></>}
                                     {co2 !== 0 && <><IonText>eCO2: {co2}ppm</IonText><br /></>}
                                     {gas_res !== 0 && <><IonText>Gas Res.: {gas_res}k&Omega;</IonText><br /></>}
+                                    {vbusNum !== undefined && <><IonText>VBus: {fmt4(vbusNum)}V</IonText><br /></>}
+                                    {vcurrentNum !== undefined && <><IonText>Current: {fmt4(vcurrentNum)}mA</IonText><br /></>}
+                                    {dinStr !== "" && <><IonText>DIN (GPA0-7): {dinStr}</IonText><br /></>}
                                 </div>
                             )}
                         </div>
