@@ -1592,19 +1592,30 @@ const Tab2: React.FC = () => {
   }
 
   // Manual Routing Settings ///////
+  // read the via destination callsign from the input field (uppercased, trimmed)
+  const readViaCallInput = (): string => {
+    return (via_call_ref.current?.value ?? "").toString().toUpperCase().trim();
+  }
+
+  // check the via destination callsign, shows an alert if it is not valid
+  const isValidViaCall = (via_call: string): boolean => {
+    if (!regexCallsign.test(via_call) || via_call.length > MAX_CALLSIGN_LEN) {
+      console.log("Via Callsign is not valid");
+      setAlHeader("Invalid Callsign!");
+      setAlMsg("The Destination Callsign does not match the callsign rules (eg. OE1KFR-12, max " + MAX_CALLSIGN_LEN + " characters)!");
+      setShAlertCard(true);
+      return false;
+    }
+    return true;
+  }
+
   // set the via destination callsign
   const setViaCall = () => {
     if (via_call_ref.current !== null && via_call_ref.current !== undefined) {
-      const via_call = (via_call_ref.current.value ?? "").toString().toUpperCase().trim();
+      const via_call = readViaCallInput();
       console.log("Via Callsign: " + via_call);
 
-      if (!regexCallsign.test(via_call) || via_call.length > MAX_CALLSIGN_LEN) {
-        console.log("Via Callsign is not valid");
-        setAlHeader("Invalid Callsign!");
-        setAlMsg("The Destination Callsign does not match the callsign rules (eg. OE1KFR-12, max " + MAX_CALLSIGN_LEN + " characters)!");
-        setShAlertCard(true);
-        return;
-      }
+      if (!isValidViaCall(via_call)) return;
 
       via_call_str.current = "--via " + via_call;
       sendTxtCmd("viaCall");
@@ -1618,6 +1629,26 @@ const Tab2: React.FC = () => {
   const enableVia = (ev:any) => {
     console.log("Enable Via: " + ev.detail.checked);
     if (ev.detail.checked) {
+      // a callsign was typed but not confirmed with the checkmark button:
+      // set it and enable via in one command
+      const typed_call = readViaCallInput();
+      if (typed_call !== "" && typed_call !== nodeSettingsS1_s.VIACALL) {
+        console.log("Via Callsign typed but not set: " + typed_call);
+        if (!isValidViaCall(typed_call)) {
+          // set the toggle back to false
+          NodeSettingsStoreS1.update(s => {
+            s.nodeSettingsS1.VIA = false;
+          });
+          return;
+        }
+        via_enable_str.current = "--via " + typed_call + " --via on";
+        sendTxtCmd("viaToggle");
+        setAlHeader("Manual Routing set!");
+        setAlMsg("Destination Callsign set: " + typed_call + " and enabled.");
+        setShAlertCard(true);
+        return;
+      }
+
       // via needs a destination callsign set on the node
       if (nodeSettingsS1_s.VIACALL === "") {
         console.log("No Via Callsign set on node");
