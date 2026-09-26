@@ -236,7 +236,7 @@ const Info: React.FC = () => {
         <div className="info-box">
           <div>
             <div>Node FW: {config_s.fw_ver}</div>
-            <div>Build: {infoDataS1_s.BDATE}</div>
+            <div>FW Build: {infoDataS1_s.BDATE}</div>
             <div>App Version: 4.29</div>
           </div>
         </div>
