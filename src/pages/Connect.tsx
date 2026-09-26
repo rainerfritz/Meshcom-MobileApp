@@ -73,6 +73,7 @@ const Tab1: React.FC = () => {
   const [connFlag, setConnFlag] = useState<boolean>(false);
   const [showProgrBar, setShowProgrBar] = useState<boolean>(false);
   const connInProgress = useRef<boolean>(false);  // Flag to avoid multiple connect attempts
+  const bleConnT0 = useRef<number | null>(null);  // start time of the last connect attempt (BLE diagnostics)
   const ble_scan_devices_filtered = useRef<ScanRes[]>([]); // filtered scan devices for MC only
 
 
@@ -547,6 +548,14 @@ const Tab1: React.FC = () => {
 
     connInProgress.current = true;
 
+    // BLE diagnostics: log each phase of the connect attempt with the time since start
+    bleConnT0.current = Date.now();
+    let phase = "start";
+    const bleDiag = (msg: string) => {
+      LogS.log(0, "[BLE] " + msg + " (+" + (Date.now() - (bleConnT0.current ?? Date.now())) + " ms)");
+    };
+    bleDiag("connect attempt start, platform: " + pltfrm.current + ", devID: " + devID + ", timeout: 15000");
+
     LogS.log(0, "Connecting DeviceID: " + devID);
     setShowProgrBar(true);
     // set devId state here local
@@ -598,10 +607,23 @@ const Tab1: React.FC = () => {
       }
 
       //connect to device
+      phase = "connect";
+      bleDiag("BleClient.connect called");
       await BleClient.connect(devID, (deviceId) => onDisconnect(deviceId),{timeout:15000});
+      bleDiag("link up");
       
       //get services of the device
+      phase = "getServices";
       const services = await BleClient.getServices(devID);
+      bleDiag("services discovered: " + services.length);
+
+      // negotiated MTU as seen by the phone
+      try {
+        const mtu = await BleClient.getMtu(devID);
+        bleDiag("MTU: " + mtu);
+      } catch (error) {
+        bleDiag("MTU not available: " + error);
+      }
 
       for (let s of services) {
         console.log("Service UUID: " + s.uuid);
@@ -617,6 +639,7 @@ const Tab1: React.FC = () => {
       // check if notifications enabling is successfull. If not we are not connected or pairing was not set
       // or Pairing ran into timeout. There is no pairing check in the library
 
+      phase = "startNotifications";
       await BleClient.startNotifications(
         devID,
         RAK_BLE_UART_SERVICE,
@@ -648,6 +671,8 @@ const Tab1: React.FC = () => {
 
           })}).then(async () => {
 
+        phase = "hello";
+        bleDiag("notifications started");
         LogS.log(0, "Connected to Device: " + devID);
 
         // Update Recon State in DB
@@ -717,7 +742,10 @@ const Tab1: React.FC = () => {
         }
         try{
           await sendDV(hello_view, devID);
+          phase = "done";
+          bleDiag("hello sent, setup complete");
         } catch (error) {
+          bleDiag("sending hello failed: " + error);
           // if the pairing / bonding process is running on android we get here an error if we try to send data
           // but the hello message is then received on the node
           if(pltfrm.current !== "android"){
@@ -739,6 +767,7 @@ const Tab1: React.FC = () => {
       }).catch((error) => {
         
         LogS.log(1, "Error on Start Notifications! " + error);
+        bleDiag("setup failed in phase '" + phase + "': " + error);
         // connection happened so we need to to disconnect
         doDisco(devID);
         // initiate a new scan, so the user can click connect again without manual scan
@@ -757,6 +786,7 @@ const Tab1: React.FC = () => {
     } catch (error: any) {
       
       LogS.log(1,"Error on connect: " + error.message);
+      bleDiag("connect failed in phase '" + phase + "': " + error.message);
 
       const errmsg_str:string = error.message;
 
@@ -825,6 +855,8 @@ const Tab1: React.FC = () => {
   async function onDisconnect(deviceId: string) {
 
     LogS.log(0,"Device disconnected callback from DevID: " + deviceId);
+    LogS.log(0, "[BLE] disconnect callback, devID: " + deviceId + ", connect in progress: " + connInProgress.current
+      + (bleConnT0.current !== null ? ", since connect start: " + (Date.now() - bleConnT0.current) + " ms" : ""));
 
     // stop Timesync Service
     TimeSyncManager.getInstance().stopSync();
