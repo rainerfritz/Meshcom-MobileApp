@@ -149,6 +149,11 @@ const Tab2: React.FC = () => {
   // OTA Update Card Yes/No
   const [shOTAUpdateCard, setShOTAUpdateCard] = useState<boolean>(false);
 
+  // Send POS in TRACK mode without GPS fix: choose LoRa-APRS or MeshCom position
+  const [shSendPosChoice, setShSendPosChoice] = useState<boolean>(false);
+  const sendPosBusy = useRef<boolean>(false);
+  const GPS_FIX_WAIT_MS = 3000;
+
   // onewire pin ref
   const owPinInputRef = useRef<HTMLIonInputElement>(null);
   const owPinNr = useRef<number>(0);
@@ -2093,6 +2098,67 @@ const Tab2: React.FC = () => {
   }
 
 
+  // ask the node for a fresh GPS json and return its fix state
+  // firmware only sends the GPS json (SFIX = posinfo_fix) on --pos, so the store can be stale
+  // falls back to the stored fix state if no answer arrives in time
+  const requestGpsFix = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      let done = false;
+      let timer: ReturnType<typeof setTimeout>;
+      const unsubscribe = GpsDataStore.subscribe(s => s.gpsData, (gps) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        unsubscribe();
+        resolve(gps.SFIX);
+      });
+      timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        unsubscribe();
+        LogS.log(1, "Send POS: no GPS data from node, using stored fix state");
+        resolve(GpsDataStore.getRawState().gpsData.SFIX);
+      }, GPS_FIX_WAIT_MS);
+      sendTxtCmdNode("--pos");
+    });
+  }
+
+
+  // Send POS button
+  // TRACK off: --sendpos as before
+  // TRACK on with GPS fix: --sendpos, firmware sends LoRa-APRS (and MeshCom if the channel was quiet)
+  // TRACK on without GPS fix: firmware would only send MeshCom, so let the user choose
+  const handleSendPos = async () => {
+    if (sendPosBusy.current) return;
+
+    if (Date.now() - txpos_last.current < minWaitTime_txpos) {
+      setAlHeader("TXPOS already sent!");
+      setAlMsg("TX POS only every " + minWaitTime_txpos / 1000 + " sec possible!");
+      setShAlertCard(true);
+      return;
+    }
+
+    if (!config_s.track_on) {
+      sendTxtCmd("txpos");
+      return;
+    }
+
+    sendPosBusy.current = true;
+    const hasFix = await requestGpsFix();
+    sendPosBusy.current = false;
+    LogS.log(0, "Send POS in TRACK mode, GPS fix: " + hasFix);
+
+    if (hasFix) {
+      sendTxtCmd("txpos");
+      setAlHeader("Send POS");
+      setAlMsg("LoRa-APRS Position TX triggered!");
+      setShAlertCard(true);
+    } else {
+      setShSendPosChoice(true);
+    }
+  }
+
+
 
 
   return (
@@ -2181,6 +2247,33 @@ const Tab2: React.FC = () => {
                 setShOTAUpdateCard(false);
                 sendTxtCmd("otaupdate");
               },
+            },
+          ]}
+        />
+
+        <IonAlert
+          isOpen={shSendPosChoice}
+          header="No GPS fix"
+          message="TRACK mode is on but the node has no GPS fix. Which position should be sent?"
+          onDidDismiss={() => setShSendPosChoice(false)}
+          buttons={[
+            {
+              text: 'Manual LoRa-APRS POS',
+              handler: () => {
+                console.log('Send POS: manual LoRa-APRS position');
+                sendTxtCmd("txtrack");
+              },
+            },
+            {
+              text: 'Manual MeshCom POS',
+              handler: () => {
+                console.log('Send POS: manual MeshCom position');
+                sendTxtCmd("txpos");
+              },
+            },
+            {
+              text: 'Cancel',
+              role: 'cancel',
             },
           ]}
         />
@@ -2572,7 +2665,7 @@ const Tab2: React.FC = () => {
                 </div>
                 <div className='settings_btns_r'>
                   <div>
-                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("txpos")}>Send POS</IonButton>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={handleSendPos}>Send POS</IonButton>
                   </div>
                   <div>
                     <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("posdebug")}>POS-Info</IonButton>
