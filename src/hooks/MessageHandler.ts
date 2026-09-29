@@ -34,6 +34,7 @@ import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
 import {hwName} from '../store/HwTable';
 import { format } from "date-fns";
 import { parsePositionPayload, readFrameTrailer, readMsgId, readNodeTimestampMs, decodeFlags } from "../utils/AprsParser";
+import { isForeignDm } from "../utils/MsgFilter";
 import GpsDataStore from '../store/GpsData';
 import WxDataStore from '../store/WxData';
 //import AprsCmtStore from '../store/AprsCmtStore';
@@ -567,6 +568,12 @@ export function useMSG() {
                     if(timestamp_node !== 0){
                         now_timestamp = timestamp_node;
                         time = format(timestamp_node, "HH:mm:ss");
+                    }
+
+                    // a gateway also passes relayed server frames between third parties to the phone - no DM chat entry / notification for those
+                    if(isForeignDm(from_callsign_, to_callsign_, node_call_ref.current, isDM_, isGrpMsg_)){
+                        LogS.log(0, `Discarding DM not addressed to us: ${from_callsign_} > ${to_callsign_} (own ${node_call_ref.current})`);
+                        return;
                     }
 
                     // add it to DB
