@@ -1,6 +1,6 @@
 
 // import components
-import { IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonItem, IonLabel, IonList, IonModal, IonPage, IonProgressBar, IonTitle, IonToolbar } from '@ionic/react';
+import { IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonItem, IonLabel, IonList, IonModal, IonPage, IonProgressBar, IonTitle, IonToast, IonToolbar } from '@ionic/react';
 import { useLocation } from 'react-router-dom';
 import { useStoreState } from 'pullstate';
 import { getConfigStore, getGpsData, getSensorSettings, getWxData, getDevID, getBLEconnStore, getAppActiveState } from '../store/Selectors';
@@ -21,6 +21,9 @@ import ConfigObject from '../utils/ConfigObject';
 import LogS from '../utils/LogService';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
 import NodeInfoStoreS1 from '../store/NodeInfoStoreS1';
+import { Clipboard } from '@capacitor/clipboard';
+import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 
 
 
@@ -73,6 +76,7 @@ const Info: React.FC = () => {
   // log window state - the update timer pauses while the log is open
   const [shLog, setShLog] = useState<boolean>(false);
   const [logMsgs, setLogMsgs] = useState<string []>([]);
+  const [copyToastMsg, setCopyToastMsg] = useState<string>("");
 
 
   // owns the whole update timer lifecycle. Runs with a fresh closure on every relevant change,
@@ -129,8 +133,28 @@ const Info: React.FC = () => {
   // of the timer effect above.
   const openLogWindow = () => {
     setShLog(true);
-    const newLogs = LogS.logs;
-    setLogMsgs(newLogs);
+    // copy the array, LogS mutates its own array in place
+    setLogMsgs([...LogS.logs]);
+  }
+
+  // copy the whole log to the clipboard, oldest entry first, so users can paste it into a mail
+  const copyLogMsgs = async () => {
+    let appVersion = "unknown";
+    try {
+      const info = await App.getInfo();
+      appVersion = info.version + " (" + info.build + ")";
+    } catch (error) {
+      // App.getInfo is not available on web
+    }
+    const header = "MeshCom App " + appVersion + " - " + Capacitor.getPlatform() + " - " + new Date().toLocaleString();
+    const logText = header + "\n\n" + [...LogS.logs].reverse().join("\n");
+
+    try {
+      await Clipboard.write({ string: logText });
+      setCopyToastMsg("Log copied to clipboard");
+    } catch (error) {
+      setCopyToastMsg("Copy failed");
+    }
   }
 
   const clearLogMsgs = () => {
@@ -253,6 +277,7 @@ const Info: React.FC = () => {
                 <IonButton onClick={() => clearLogMsgs()}>Clear</IonButton>
               </IonButtons>
               <IonButtons slot="end">
+                <IonButton onClick={() => copyLogMsgs()}>Copy</IonButton>
                 <IonButton onClick={() => closeLogWindow()}>Close</IonButton>
               </IonButtons>
             </IonToolbar>
@@ -266,6 +291,12 @@ const Info: React.FC = () => {
               ))}
             </IonList>
           </IonContent>
+          <IonToast
+            isOpen={copyToastMsg !== ""}
+            message={copyToastMsg}
+            duration={2000}
+            onDidDismiss={() => setCopyToastMsg("")}
+          />
         </IonModal>
 
       </IonContent>

@@ -10,7 +10,7 @@
 class LogS {
 
     public static logs: string[] = [];
-    private static MAX_LOG_MSGS = 250;
+    private static MAX_LOG_MSGS = 500;
     
     /**
      * @param level 0 -> log, 1 -> error
@@ -44,13 +44,13 @@ class LogS {
     }
 
     /**
-     * delete the oldest log messages if the log size exceeds the limit
-     * @param limit Log size limit
+     * delete the oldest log messages if the log size exceeds the limit.
+     * New messages are added at the front (unshift), so the oldest ones are at the end.
      * @returns void
      */
     private static checkLogSize(): void {
         if (this.logs.length > this.MAX_LOG_MSGS) {
-            this.logs.splice(0, this.logs.length - this.MAX_LOG_MSGS);
+            this.logs.splice(this.MAX_LOG_MSGS);
         }
     }
 
