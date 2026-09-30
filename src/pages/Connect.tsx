@@ -65,6 +65,7 @@ const Tab1: React.FC = () => {
   const RAK_BLE_UART_TXCHAR = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
   const LEGACY_DFU_SERVICE = '00001530-1212-efde-1523-785feabcd123';
   const BLE_WAIT_SCAN = 5000; // sleep time we wait for a scan to finish
+  const BLE_RECONNECT_DELAY = 2500; // min. ms between a BLE disconnect and the next connect (android needs time to tear down the old connection)
   const TIMESYNC_INTERVAL = 20000; // 20 seconds interval for timesync
 
   const [scanDevices, setScanDevices] = useState<ScanRes[]>([]);
@@ -75,6 +76,7 @@ const Tab1: React.FC = () => {
   const [showProgrBar, setShowProgrBar] = useState<boolean>(false);
   const connInProgress = useRef<boolean>(false);  // Flag to avoid multiple connect attempts
   const bleConnT0 = useRef<number | null>(null);  // start time of the last connect attempt (BLE diagnostics)
+  const lastBleDiscoTs = useRef<number | null>(null);  // time of the last BLE disconnect, used for the reconnect delay
   const ble_scan_devices_filtered = useRef<ScanRes[]>([]); // filtered scan devices for MC only
 
 
@@ -594,15 +596,34 @@ const Tab1: React.FC = () => {
     }
 
     try {
-      // if we are connected already to a device, disco that and connect new
-      if(connFlag){
-        doDisco(devID);
-      }
+      // The node is disconnected in handleBtn before connDev is called, so no disconnect here.
+      // (connFlag is stale in the closure when switching directly to another node.)
 
-      // make a disconnect before connecting when on android
       if(pltfrm.current === "android"){
+        // give android time to tear down the previous connection, otherwise the next connect can fail with GATT_ERROR
+        if(lastBleDiscoTs.current !== null){
+          const sinceDisco = Date.now() - lastBleDiscoTs.current;
+          if(sinceDisco < BLE_RECONNECT_DELAY){
+            const waitMs = BLE_RECONNECT_DELAY - sinceDisco;
+            bleDiag("reconnect delay: last disconnect " + sinceDisco + " ms ago, waiting " + waitMs + " ms");
+            await sleep(waitMs);
+            bleDiag("reconnect delay done");
+          } else {
+            bleDiag("no reconnect delay needed, last disconnect " + sinceDisco + " ms ago");
+          }
+        }
+
+        // make a disconnect before connecting when on android
         await BleClient.initialize();
-        await BleClient.disconnect(devID);
+        // A failing disconnect (e.g. "Disconnection timeout." on a closed GATT object left over from a
+        // connect timeout) must not block the connect. The plugin closes the old GATT object itself.
+        const tDisco = Date.now();
+        try {
+          await BleClient.disconnect(devID);
+          bleDiag("pre-connect disconnect ok (" + (Date.now() - tDisco) + " ms)");
+        } catch (error: any) {
+          bleDiag("pre-connect disconnect failed after " + (Date.now() - tDisco) + " ms: " + error?.message + " - continuing with connect");
+        }
       }
 
       //connect to device
@@ -854,6 +875,7 @@ const Tab1: React.FC = () => {
   async function onDisconnect(deviceId: string) {
 
     LogS.log(0,"Device disconnected callback from DevID: " + deviceId);
+    lastBleDiscoTs.current = Date.now();
     LogS.log(0, "[BLE] disconnect callback, devID: " + deviceId + ", connect in progress: " + connInProgress.current
       + (bleConnT0.current !== null ? ", since connect start: " + (Date.now() - bleConnT0.current) + " ms" : ""));
 
@@ -1049,6 +1071,7 @@ const Tab1: React.FC = () => {
     try {
       await BleClient.stopNotifications(devID, RAK_BLE_UART_SERVICE, RAK_BLE_UART_RXCHAR);
       await BleClient.disconnect(devID);
+      lastBleDiscoTs.current = Date.now();
 
       const newConnState = false;
       setConnFlag(newConnState);
