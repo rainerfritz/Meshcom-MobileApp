@@ -31,6 +31,7 @@ import BleConfigFinish from '../store/BLEConfFin';
 import NodeSettingsStoreS1, { defaultNodeSettingsS1 } from '../store/NodeSettingsStoreS1';
 import NodeInfoStoreS1, { defaultInfoDataS1 } from '../store/NodeInfoStoreS1';
 import UpdateFW from '../store/UpdtFW';
+import { MIN_FW_VERSION, isFwOlderThan } from '../utils/FwVersion';
 import { usePhoneGps } from '../utils/PhoneGps';
 import DataBaseService from '../DBservices/DataBaseService';
 import NotifyMsgState from '../store/NotifyMsg';
@@ -100,8 +101,6 @@ const Tab1: React.FC = () => {
   const nodeConfFin = BleConfigFinish.useState(s => s.BleConfFin);
   // show loading indicator till we get the bleconfig finish state
   const [shLoadConf, setShLoadConf] = useState<boolean>(false);
-  // trigger to update firmware if to old
-  const updtFW = UpdateFW.useState(s => s.updatefw);
 
   // reconnect BLE
   const MAX_RETRIES = 15;
@@ -1115,6 +1114,15 @@ const Tab1: React.FC = () => {
       // set the can notify flag to true
       canNotify.current = true;
 
+      // node runs a firmware older than the app expects - the chat page shows the update hint
+      const node_fw = ConfigObject.getConf().FWVER;
+      if (isFwOlderThan(node_fw)) {
+        LogS.log(0, "Connect - Node firmware " + node_fw + " is older than " + MIN_FW_VERSION);
+        UpdateFW.update(s => {
+          s.updatefw = true;
+        });
+      }
+
       // redirect to chat
       if (isAppActive && !setConfAl) {
         navigate("/chat");
@@ -1126,24 +1134,6 @@ const Tab1: React.FC = () => {
 
 
 
-  // when the update firmware trigger fires we dismiss the ShLoadConf and fire the alertcard
-  useEffect(()=>{
-    if(updtFW){
-      console.log("Update Firmware Triggered!");
-      setShLoadConf(false);
-      setAlHeader("Firmware Update needed!");
-      setAlMsg("Please update the Firmware to 4.30 or newer!");
-      setShAlertCard(true);
-      // do a manual disconnect
-      const devid = ConfigObject.getBleDevId();
-      doDisco(devid);
-
-      // set state in store
-      UpdateFW.update(s => {
-        s.updatefw = false;
-      });
-    }
-  }, [updtFW]);
 
 
 

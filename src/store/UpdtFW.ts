@@ -1,6 +1,7 @@
 import {Store} from "pullstate";
 
-// triggers when the node sends the finish message after BLE connection
+// set by the connect page when the connected node runs a firmware older than MIN_FW_VERSION (utils/FwVersion.ts),
+// the chat page shows the update hint and resets it
 const UpdateFW = new Store({
     updatefw:false
 })

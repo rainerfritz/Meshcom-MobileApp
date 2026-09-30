@@ -29,6 +29,8 @@ import ChatSettingsStore from '../store/ChatSettingsStore';
 import ChatUnseenStore from '../store/ChatUnseenStore';
 import ChatPreviewStore from '../store/ChatPreviewStore';
 import { buildTestMsgs } from '../utils/TestMsgsPosis';
+import UpdateFW from '../store/UpdtFW';
+import { MIN_FW_VERSION } from '../utils/FwVersion';
 import { PN_CONFIRM_TIMEOUT_MS, displayAckState, isOwnPn } from '../utils/PnRetry';
 
 
@@ -934,6 +936,22 @@ const Tab3: React.FC = () => {
     return localDateString;
   }
 
+
+
+  // node firmware is older than MIN_FW_VERSION (set by the connect page once the node config is loaded)
+  const updtFW = UpdateFW.useState(s => s.updatefw);
+
+  useEffect(() => {
+    if (updtFW) {
+      setAlHeader("Firmware update recommended");
+      setAlMsg(`This node runs firmware ${nodeInfo_s.FWVER}. Please update it to ${MIN_FW_VERSION} or newer. With older firmware some functions may not work as expected.`);
+      setShAlertCard(true);
+
+      UpdateFW.update(s => {
+        s.updatefw = false;
+      });
+    }
+  }, [updtFW]);
 
 
   // handle no Db connection in offline mode - no node connected
