@@ -161,6 +161,11 @@ ion-textarea.customTextAreaInput{
     flex-shrink: 0;
 }
 
+/* own DM without ACK after the retry timeout */
+.ack-icon.ack-icon-unconfirmed {
+    color: var(--ion-color-warning);
+}
+
 .msg-ack-call {
     font-size: 0.75em;
     color: var(--bubble-meta-color);

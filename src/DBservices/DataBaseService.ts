@@ -11,6 +11,7 @@ import ChatPreviewStore from "../store/ChatPreviewStore";
 import { format, sub } from "date-fns";
 import LogS from "../utils/LogService";
 import ConfigObject from "../utils/ConfigObject";
+import { PN_CORE_MASK, PN_DEDUP_WINDOW_MS, pnCore } from "../utils/PnRetry";
 
 // a single text filter entry: matches a message's text either exactly or as a substring
 export interface TextFilter {
@@ -285,15 +286,25 @@ class DatabaseService {
     }
 
     // writeTxtMsg to the TextMessages table
-    static async writeTxtMsg(msg: MsgType, isInitMsg: boolean) {
+    // returns true if the message was inserted, false if it was a duplicate or could not be written
+    static async writeTxtMsg(msg: MsgType, isInitMsg: boolean): Promise<boolean> {
         msg.msgTXT = DatabaseService.escapeQuotes(msg.msgTXT);
 
         if (DatabaseService.db) {
-            // check first if we have that message alredy in the database
-            const res = await DatabaseService.db.query(`SELECT * FROM TextMessages WHERE msgNr = ${msg.msgNr} AND fromCall = '${msg.fromCall}' AND msgTXT = '${msg.msgTXT}'`);
+            // check first if we have that message alredy in the database: same sender and text with
+            // either the same msgNr, or - for a DM - the same 30 bit msg_id core within the dedup window.
+            // A PN retry copy carries its own msg_id (bits 10-11 flipped, see PnRetry.ts).
+            // Bound values, because msgTXT is stored in its escaped form.
+            const res = await DatabaseService.db.query(
+                `SELECT id FROM TextMessages WHERE fromCall = ? AND msgTXT = ? AND (
+                    msgNr = ?
+                    OR (isDM = 1 AND isGrpMsg = 0 AND (msgNr & ${PN_CORE_MASK}) = ? AND timestamp BETWEEN ? AND ?)
+                ) LIMIT 1`,
+                [msg.fromCall, msg.msgTXT, msg.msgNr, pnCore(msg.msgNr), msg.timestamp - PN_DEDUP_WINDOW_MS, msg.timestamp + PN_DEDUP_WINDOW_MS]
+            );
             if (res.values && res.values.length > 0) {
-                console.log('DB Writing Txt Msg: Message already in database');
-                return;
+                LogS.log(0, 'DB Writing Txt Msg: Message already in database, msgNr: ' + msg.msgNr);
+                return false;
             }
 
             console.log('DB Writing text message:' + msg.msgTXT);
@@ -324,12 +335,14 @@ class DatabaseService {
                         ConfigObject.addInitChatSegmentMarker(msg.grpNum.toString());
                     }
                 }
+                return true;
             } catch (error) {
                 LogS.log(1, 'Error writing text message:' + error);
             }
         } else {
             LogS.log(1, 'Error writing text message. Database not open.');
         }
+        return false;
     }
 
     // escape single and double quotes in a single message
@@ -350,14 +363,16 @@ class DatabaseService {
         if (DatabaseService.db) {
             console.log('DB Acknowledging text message:' + msgNr);
             try {
-                // get message(s) with msgNr
-                const res = await DatabaseService.db.query(`SELECT * FROM TextMessages WHERE msgNr = ${msgNr}`);
+                // get the newest own message with msgNr. The node counter wraps after 1000 messages, so
+                // older own messages can carry the same msgNr - they must not be touched. The node
+                // always reports the original msg_id, also when a PN retry copy was acked.
+                const res = await DatabaseService.db.query(
+                    `SELECT * FROM TextMessages WHERE msgNr = ? AND fromCall = ? ORDER BY timestamp DESC LIMIT 1`,
+                    [msgNr, ConfigObject.getConf().CALL]
+                );
                 if (res.values) {
-                    if(res.values.length > 1) {
-                        LogS.log(1, 'More than one message with the same msgNr!');
-                    }
                     for (let i = 0; i < res.values.length; i++) {
-                        const msg: MsgType = res.values[i];
+                        const msg: MsgType & { id: number } = res.values[i];
                         if (msg.ack !== 2) {
                             console.log("Setting Ack for MSGID: " + msgNr);
                             console.log("Ack Type: " + ack_type);
@@ -378,7 +393,7 @@ class DatabaseService {
                             msg.ackCall = ack_call;
 
                             // update in DB
-                            const query_str = `UPDATE TextMessages SET ack = ${msg.ack}, ackCall = '${DatabaseService.escapeQuotes(ack_call)}' WHERE msgNr = ${msgNr}`;
+                            const query_str = `UPDATE TextMessages SET ack = ${msg.ack}, ackCall = '${DatabaseService.escapeQuotes(ack_call)}' WHERE id = ${msg.id}`;
                             const ret = await DatabaseService.db.execute(query_str);
                             console.log('DB ackTxtMsg ret:', ret.changes);
                             // read back all messages

@@ -8,7 +8,7 @@ import { DevIDStore } from '../store';
 import { getConfigStore, getDevID, getMsgStore, getPlatformStore } from '../store/Selectors';
 import MsgStore from '../store/MsgStore';
 import ConfigStore from '../store/ConfStore';
-import { checkmark, cloudDoneOutline, cloudOutline, caretForwardCircle, settings, mail, arrowBack, volumeHigh, volumeMute, chevronDownCircle, funnel, close as closeIcon, add as addIcon, createOutline } from 'ionicons/icons';
+import { checkmark, cloudDoneOutline, cloudOutline, cloudOfflineOutline, caretForwardCircle, settings, mail, arrowBack, volumeHigh, volumeMute, chevronDownCircle, funnel, close as closeIcon, add as addIcon, createOutline } from 'ionicons/icons';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import PlatformStore from '../store/PlatformStore';
 import { Keyboard } from '@capacitor/keyboard';
@@ -29,6 +29,7 @@ import ChatSettingsStore from '../store/ChatSettingsStore';
 import ChatUnseenStore from '../store/ChatUnseenStore';
 import ChatPreviewStore from '../store/ChatPreviewStore';
 import { buildTestMsgs } from '../utils/TestMsgsPosis';
+import { PN_CONFIRM_TIMEOUT_MS, displayAckState, isOwnPn } from '../utils/PnRetry';
 
 
 // dev only: inject demo bubbles into the chat to check the bubble design without a connected
@@ -174,6 +175,9 @@ const Tab3: React.FC = () => {
   // Flag that we send a DM when in DM or group segment
   const [sendDMGrpFlag, setSendDMGrpFlag] = useState<boolean>(false);
 
+  // reference time for the derived ack state of own DMs ("unconfirmed" after PN_CONFIRM_TIMEOUT_MS without ACK)
+  const [ackNow, setAckNow] = useState<number>(Date.now());
+
 
 
 
@@ -205,6 +209,7 @@ const Tab3: React.FC = () => {
 
     //const devid = devID_s;
     //updateDevID(devid);
+    setAckNow(Date.now());
     if (activeChatFilter !== null) scrollToBottom();
   }, [activeChatFilter]);
 
@@ -233,10 +238,30 @@ const Tab3: React.FC = () => {
     console.log("Chat - BLE DevID: " + devID_s);
     // scroll down if Chat screen gets active again
     if (isAppActive) {
+      setAckNow(Date.now());
 
       if (activeChatFilter !== null) scrollToBottom();
     } 
   }, [isAppActive]);
+
+
+  // The node does not report when it gives up retrying a DM, so the "unconfirmed" state is derived
+  // from the message timestamp. Re-render periodically, but only while an own DM is still waiting for its ACK.
+  useEffect(() => {
+    const hasPendingOwnDm = (now: number) =>
+      msgArr_s.some(m => m.ack !== 2 && isOwnPn(m, config_s.callSign) && now - m.timestamp <= PN_CONFIRM_TIMEOUT_MS);
+
+    setAckNow(Date.now());
+    if (!hasPendingOwnDm(Date.now())) return;
+
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setAckNow(now);
+      // the last waiting DM ran into the timeout - nothing left to watch
+      if (!hasPendingOwnDm(now)) clearInterval(timer);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [msgArr_s, config_s.callSign]);
 
 
 
@@ -1003,6 +1028,9 @@ const Tab3: React.FC = () => {
   
 
 
+  // ack state to show per message (own DMs turn "unconfirmed" after the timeout without ACK)
+  const ackStates = msgArr_s.map(m => displayAckState(m, config_s.callSign, ackNow));
+
   return (
     <IonPage>
       <IonHeader>
@@ -1275,17 +1303,20 @@ const Tab3: React.FC = () => {
                       <div className='chkIcon'>
 
                         {msg.fromCall === config_s.callSign ? <>
-                          {msg.ackCall && (msg.ack === 1 || msg.ack === 2) ? <>
+                          {msg.ackCall && (ackStates[i] === 'heard' || ackStates[i] === 'acked') ? <>
                             <IonText className="msg-ack-call">{msg.ackCall}</IonText>
                           </> : <></>}
-                          {msg.ack === 0 ? <>
+                          {ackStates[i] === 'sent' ? <>
                             <IonIcon icon={checkmark} className="ack-icon" size='small' slot='end' title="sent" />
                           </> : <></>}
-                          {msg.ack === 1 ? <>
+                          {ackStates[i] === 'heard' ? <>
                             <IonIcon icon={cloudOutline} className="ack-icon" size='small' slot='end' title={msg.ackCall ? `heard by ${msg.ackCall}` : 'heard'} />
                           </> : <></>}
-                          {msg.ack === 2 ? <>
+                          {ackStates[i] === 'acked' ? <>
                             <IonIcon icon={cloudDoneOutline} className="ack-icon" size='small' slot='end' title={msg.ackCall ? `acked by ${msg.ackCall}` : 'acked'} />
+                          </> : <></>}
+                          {ackStates[i] === 'unconfirmed' ? <>
+                            <IonIcon icon={cloudOfflineOutline} className="ack-icon ack-icon-unconfirmed" size='small' slot='end' title="not confirmed" />
                           </> : <></>}
                         </> : <></>}
                       </div>

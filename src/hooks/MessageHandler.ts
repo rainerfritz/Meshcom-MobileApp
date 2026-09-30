@@ -35,6 +35,7 @@ import {hwName} from '../store/HwTable';
 import { format } from "date-fns";
 import { parsePositionPayload, readFrameTrailer, readMsgId, readNodeTimestampMs, decodeFlags } from "../utils/AprsParser";
 import { isForeignDm } from "../utils/MsgFilter";
+import { stripPnSuffix } from "../utils/PnRetry";
 import GpsDataStore from '../store/GpsData';
 import WxDataStore from '../store/WxData';
 //import AprsCmtStore from '../store/AprsCmtStore';
@@ -555,13 +556,8 @@ export function useMSG() {
 
                     // if the message is a DM remove {number at end
                     if(msg_text_.includes("{") && isDM_ === 1. && from_callsign_ === node_call_ref.current){
-                        // if we have more than one sign, we remove the text before the last one
-                        // get the last sign index
-                        const last_sign_index = msg_text_.lastIndexOf("{");
-                        console.log("Last Sign Index: " + last_sign_index);
-                        console.log("Msg Text Len: " + msg_text_.length);   
-                        const slicedTxt = msg_text_.slice(0, last_sign_index);
-                        msg_text_ = slicedTxt;
+                        // only the trailing {NNN the node appended, a "{" inside the text stays
+                        msg_text_ = stripPnSuffix(msg_text_);
                     }
 
                     // set the time if it is a valid time

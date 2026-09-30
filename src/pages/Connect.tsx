@@ -649,10 +649,10 @@ const Tab1: React.FC = () => {
             if (res !== undefined && 'msgTXT' in res) {
               // escape all quotation marks
               LogS.log(0,"Connect - Txt Msg: " + res.msgTXT);
-              await DatabaseService.writeTxtMsg(res, !canNotify.current);  // we need to send a flag if this is during init load on node connection or normal msg for marking segmentbuttons in chat
-              // do the notification if from another callsign
+              const isNewMsg = await DatabaseService.writeTxtMsg(res, !canNotify.current);  // we need to send a flag if this is during init load on node connection or normal msg for marking segmentbuttons in chat
+              // do the notification if from another callsign - not for a duplicate (e.g. a PN retry copy) that was not stored
               const curr_call = ConfigObject.getConf().CALL;
-              if (res.fromCall !== curr_call && (!res.msgTXT.startsWith("--")) && canNotify.current) {
+              if (isNewMsg && res.fromCall !== curr_call && (!res.msgTXT.startsWith("--")) && canNotify.current) {
                 console.log("Connect: Notification from: " + res.fromCall);
                 NotifyMsgState.update(s => {
                   s.notifyMsg = res;
