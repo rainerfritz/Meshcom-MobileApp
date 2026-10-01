@@ -25,6 +25,7 @@ import LogS from '../utils/LogService';
 import MheardStaticStore from '../utils/MheardStaticStore';
 import AprsSettingsStore from '../store/AprSettingsStore';
 import { usePhoneGps } from '../utils/PhoneGps';
+import { normalizeCallsignSsid } from '../utils/Callsign';
 import WxDataStore from '../store/WxData';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
 import WifiSettingsStore2 from '../store/WiFiSettings2';
@@ -527,6 +528,7 @@ const Tab2: React.FC = () => {
         let call_s = nodeCall.toString();
         call_s = call_s.toUpperCase();
         call_s = call_s.trim();
+        call_s = normalizeCallsignSsid(call_s);
         console.log("Callsign setting: " + call_s);
 
         // check if callsign is valid
