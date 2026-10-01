@@ -56,6 +56,7 @@ import { App } from '@capacitor/app';
 
 import DataBaseService from './DBservices/DataBaseService';
 import ChatUnseenStore from './store/ChatUnseenStore';
+import NodeInfoStore from './store/NodeInfoStore';
 
 
 
@@ -64,8 +65,12 @@ setupIonicReact();
 const Appl: React.FC = () => {
 
     // any channel with an unseen message shows a badge dot on the Chat tab icon
+    // only channels listed on the Chat page count: "ALL", "DM" and the groups of the currently connected node,
+    // otherwise a flag left over from a group of a previously connected node could never be cleared
     const unseenFlags = ChatUnseenStore.useState(s => s.unseenFlags);
-    const hasUnseenChat = Object.values(unseenFlags).some(v => v);
+    const nodeGroups = NodeInfoStore.useState(s => [s.infoData.GCB0, s.infoData.GCB1, s.infoData.GCB2, s.infoData.GCB3, s.infoData.GCB4, s.infoData.GCB5].join(','));
+    const visibleChatKeys = ["ALL", "DM", ...nodeGroups.split(',').filter(g => g !== '0' && g !== '')];
+    const hasUnseenChat = visibleChatKeys.some(k => unseenFlags[k]);
 
   // set initial app is axctive state and add event listener
   useEffect(() => {
