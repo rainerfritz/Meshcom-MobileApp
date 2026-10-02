@@ -10,7 +10,7 @@ import { getDevID, getBLEconnStore, getConfigStore, getScanResult } from '../sto
 import ConfigStore from '../store/ConfStore';
 import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1, WifiSettings2, NodeSettingsS1 } from '../utils/AppInterfaces';
 import { iosTransitionAnimation, RangeValue } from '@ionic/core';
-import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle } from 'ionicons/icons';
+import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle, idCardOutline, wifiOutline, mapOutline, chatboxOutline, pricetagOutline, bluetoothOutline, timeOutline, locationOutline, globeOutline, peopleOutline, toggleOutline, flashOutline, serverOutline, hardwareChipOutline, thermometerOutline, gitNetworkOutline, swapHorizontalOutline, gitBranchOutline, keyOutline, constructOutline, listOutline } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
 import AlertCard from '../components/AlertCard';
 import { useNavigate } from "react-router-dom";
@@ -2166,13 +2166,13 @@ const Tab2: React.FC = () => {
   return (
     <IonPage>
       <IonHeader>
-        <IonToolbar>
+        <IonToolbar className="mc-toolbar">
           <IonTitle>Node Settings</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="ion-padding">
+      <IonContent className="ion-padding mc-page">
         <IonHeader collapse="condense">
-          <IonToolbar>
+          <IonToolbar className="mc-toolbar">
             <IonTitle size="large">Node Settings</IonTitle>
           </IonToolbar>
         </IonHeader>
@@ -2280,59 +2280,80 @@ const Tab2: React.FC = () => {
           ]}
         />
 
-        <div id="page">
-          <div id="spacer-top" />
-          <div className='settings_panel'>
-            <div className='sp_header'>
-              <div>{config_s.callSign}</div>
-            </div>
-
-            <div className='settings_cont'>
-              <div className='set_val'>QRG: {config_s.frequency} MHz</div>
-              <div className='set_val'>TX Pwr: {nodeSettings.TXP} dBm</div>
-            </div>
-            <div className='settings_cont'>
-              <div>APRS Symbol ID: {aprs_settings_s.SYMID}</div>
-              <div>APRS Symbol: {aprs_settings_s.SYMCD}</div>
-              <div>APRS Comment: {aprs_settings_s.ATXT}</div>
-              {aprs_settings_s.NAME.length > 0 && <div>APRS Name: {aprs_settings_s.NAME}</div>}
-            </div>
-
-            {(grp0 > 0 || grp1 > 0 || grp2 > 0 || grp3 > 0 || grp4 > 0 || grp5 > 0) && <div className='settings_cont'>
-              <div>Call Groups:</div>
-              {grp0 > 0 && <div>Group 1: {grp0}</div>}
-              {grp1 > 0 && <div>Group 2: {grp1}</div>}
-              {grp2 > 0 && <div>Group 3: {grp2}</div>}
-              {grp3 > 0 && <div>Group 4: {grp3}</div>}
-              {grp4 > 0 && <div>Group 5: {grp4}</div>}
-              {grp5 > 0 && <div>Group 6: {grp5}</div>}
-            </div>
-            }
-
-            <div className='settings_cont'>
-              {config_s.hw != "RAK4631" ? <>
-              <div>Wifi SSID: {wifiSettings_s.SSID}</div>
-              <div>Wifi IP: {wifiSettings_s.IP}</div>
-              <div>Wifi GW: {wifiSettings_s.GW}</div>
-              <div>Wifi SNM: {wifiSettings_s.SUB}</div>
-              <div>WiFi DNS: {wifiSettings_s.DNS}</div>
-              {ownNtpSet && <div>WiFi NTP: {wifiSettings2_s.OWNNTP}</div>}
-              </>:<> 
-              <div>ETH IP: {wifiSettings_s.IP}</div>
-              <div>ETH GW: {wifiSettings_s.GW}</div>
-              <div>ETH SNM: {wifiSettings_s.SUB}</div>
-              <div>ETH DNS: {wifiSettings_s.DNS}</div>
-              </>}
-              
+        <div className="mc-stack">
+          <div className="mc-card mc-hero st-hero">
+            <div className="mc-hero-top">
+              <div>
+                <div className="mc-hero-main st-call">{config_s.callSign}</div>
+                <div className="mc-hero-sub">Node Callsign</div>
+              </div>
+              <div className="mc-stats st-stats">
+                <div className="mc-stat">
+                  <div className="mc-stat-value">{config_s.frequency}<small> MHz</small></div>
+                  <div className="mc-stat-label">QRG</div>
+                </div>
+                <div className="mc-stat">
+                  <div className="mc-stat-value">{nodeSettings.TXP}<small> dBm</small></div>
+                  <div className="mc-stat-label">TX Pwr</div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div id="spacer-buttons" />
-          <div className='setting_wrapper'>
-            <div className="flex-row mb-3">
-              <div>
-                <IonText id="wifi-text">Callsign</IonText>
-              </div>
+          <div className='mc-card'>
+            <div className="mc-card-head">
+              <div className="mc-icon"><IonIcon icon={mapOutline} /></div>
+              <div className="mc-card-title">APRS</div>
+            </div>
+            <div className="mc-rows">
+              <div className="mc-row"><div className="mc-label">Symbol ID</div><div className="mc-value">{aprs_settings_s.SYMID}</div></div>
+              <div className="mc-row"><div className="mc-label">Symbol</div><div className="mc-value">{aprs_settings_s.SYMCD}</div></div>
+              <div className="mc-row"><div className="mc-label">Comment</div><div className="mc-value">{aprs_settings_s.ATXT}</div></div>
+              {aprs_settings_s.NAME.length > 0 && <div className="mc-row"><div className="mc-label">Name</div><div className="mc-value">{aprs_settings_s.NAME}</div></div>}
+            </div>
+          </div>
+
+          {(grp0 > 0 || grp1 > 0 || grp2 > 0 || grp3 > 0 || grp4 > 0 || grp5 > 0) && <div className='mc-card'>
+            <div className="mc-card-head">
+              <div className="mc-icon"><IonIcon icon={peopleOutline} /></div>
+              <div className="mc-card-title">Call Groups</div>
+            </div>
+            <div className="mc-rows">
+              {grp0 > 0 && <div className="mc-row"><div className="mc-label">Group 1</div><div className="mc-value">{grp0}</div></div>}
+              {grp1 > 0 && <div className="mc-row"><div className="mc-label">Group 2</div><div className="mc-value">{grp1}</div></div>}
+              {grp2 > 0 && <div className="mc-row"><div className="mc-label">Group 3</div><div className="mc-value">{grp2}</div></div>}
+              {grp3 > 0 && <div className="mc-row"><div className="mc-label">Group 4</div><div className="mc-value">{grp3}</div></div>}
+              {grp4 > 0 && <div className="mc-row"><div className="mc-label">Group 5</div><div className="mc-value">{grp4}</div></div>}
+              {grp5 > 0 && <div className="mc-row"><div className="mc-label">Group 6</div><div className="mc-value">{grp5}</div></div>}
+            </div>
+          </div>
+          }
+
+          <div className='mc-card'>
+            <div className="mc-card-head">
+              <div className="mc-icon"><IonIcon icon={config_s.hw != "RAK4631" ? wifiOutline : gitNetworkOutline} /></div>
+              <div className="mc-card-title">{config_s.hw != "RAK4631" ? "WiFi" : "Ethernet"}</div>
+            </div>
+            <div className="mc-rows">
+              {config_s.hw != "RAK4631" ? <>
+              <div className="mc-row"><div className="mc-label">SSID</div><div className="mc-value">{wifiSettings_s.SSID}</div></div>
+              <div className="mc-row"><div className="mc-label">IP</div><div className="mc-value">{wifiSettings_s.IP}</div></div>
+              <div className="mc-row"><div className="mc-label">Gateway</div><div className="mc-value">{wifiSettings_s.GW}</div></div>
+              <div className="mc-row"><div className="mc-label">Subnet Mask</div><div className="mc-value">{wifiSettings_s.SUB}</div></div>
+              <div className="mc-row"><div className="mc-label">DNS</div><div className="mc-value">{wifiSettings_s.DNS}</div></div>
+              {ownNtpSet && <div className="mc-row"><div className="mc-label">NTP</div><div className="mc-value">{wifiSettings2_s.OWNNTP}</div></div>}
+              </>:<>
+              <div className="mc-row"><div className="mc-label">IP</div><div className="mc-value">{wifiSettings_s.IP}</div></div>
+              <div className="mc-row"><div className="mc-label">Gateway</div><div className="mc-value">{wifiSettings_s.GW}</div></div>
+              <div className="mc-row"><div className="mc-label">Subnet Mask</div><div className="mc-value">{wifiSettings_s.SUB}</div></div>
+              <div className="mc-row"><div className="mc-label">DNS</div><div className="mc-value">{wifiSettings_s.DNS}</div></div>
+              </>}
+            </div>
+          </div>
+
+          <div className='mc-card'>
+            <div className="mc-card-head mc-split">
+              <div className="mc-title"><span className="mc-icon"><IonIcon icon={idCardOutline} /></span><span className="mc-card-title">Callsign</span></div>
               <div>
                 <IonButton size="small" fill="outline" color='success' onClick={() => setCallSign()}>
                   <IonIcon icon={checkmarkCircle} ></IonIcon>
@@ -2344,13 +2365,10 @@ const Tab2: React.FC = () => {
             </IonItem>
           </div>
 
-          <div id="spacer-buttons" />
 
-          <div className='setting_wrapper'>
-            <div className="flex-row mb-3">
-              <div>
-                <IonText id="wifi-text">WiFi Settings</IonText>
-              </div>
+          <div className='mc-card'>
+            <div className="mc-card-head mc-split">
+              <div className="mc-title"><span className="mc-icon"><IonIcon icon={wifiOutline} /></span><span className="mc-card-title">WiFi Settings</span></div>
               <div className='rst-set-btns'>
                 <div>
                   <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_WIFI_SSID_PW")}>RST</IonButton>
@@ -2371,13 +2389,10 @@ const Tab2: React.FC = () => {
             </IonItem>
           </div>
 
-          <div id="spacer-buttons" />
 
-          <div className='setting_wrapper'>
-            <div className="flex-row mb-3">
-              <div>
-                <IonText id="wifi-text">APRS Symbol</IonText>
-              </div>
+          <div className='mc-card'>
+            <div className="mc-card-head mc-split">
+              <div className="mc-title"><span className="mc-icon"><IonIcon icon={mapOutline} /></span><span className="mc-card-title">APRS Symbol</span></div>
               <div>
                 <IonButton size="small" fill="outline" color='success' onClick={() => setAprsSymbols()}>
                   <IonIcon icon={checkmarkCircle} ></IonIcon>
@@ -2385,9 +2400,8 @@ const Tab2: React.FC = () => {
               </div>
             </div>
 
-            <div className='mt-3 mb-3'>APRS Map Symbol Preset:</div>
+            <div className="mc-field-label">APRS Map Symbol Preset:</div>
 
-            <div id="spacer-toggle" />
             <IonItem>
               <IonSelect interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="APRS Symbol" onIonChange={(ev) => aprsSymChanged(ev.detail.value)}>
                 {aprs_symbols_mapped.current.map((sym) => (
@@ -2397,23 +2411,20 @@ const Tab2: React.FC = () => {
                 ))}
               </IonSelect>
             </IonItem>
-            <div className='mt-3 mb-3'>Symbol Group Char</div>
+            <div className="mc-field-label">Symbol Group Char</div>
             <IonItem>
               <IonInput value={aprs_settings_s.SYMID} ref={aprs_pri_sec_char_Input_ref} onIonInput={(ev) => aprsPriSecChangedManual(ev)} label='Set Group Character' labelPlacement="floating" type='text' maxlength={1}></IonInput>
             </IonItem>
-            <div className='mt-3 mb-3'>Symbol Char</div>
+            <div className="mc-field-label">Symbol Char</div>
             <IonItem>
               <IonInput value={aprs_settings_s.SYMCD} ref={aprs_sym_char_Input_ref} onIonInput={(ev) => aprsSymChangedManual(ev)} label='Set Character' labelPlacement="floating" type='text' maxlength={1}></IonInput>
             </IonItem>
             </div>
 
-            <div id="spacer-buttons" />
 
-          <div className='setting_wrapper'>
-            <div className="flex-row mb-3">
-              <div>
-                <IonText id="wifi-text">APRS Comment</IonText>
-              </div>
+          <div className='mc-card'>
+            <div className="mc-card-head mc-split">
+              <div className="mc-title"><span className="mc-icon"><IonIcon icon={chatboxOutline} /></span><span className="mc-card-title">APRS Comment</span></div>
               <div className='rst-set-btns'>
                 <div>
                   <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_APRS_COMMENT")}>RST</IonButton>
@@ -2430,13 +2441,10 @@ const Tab2: React.FC = () => {
             </IonItem>
           </div>
 
-          <div id="spacer-buttons" />
 
-          <div className='setting_wrapper'>
-            <div className="flex-row mb-3">
-              <div>
-                <IonText id="wifi-text">APRS Name</IonText>
-              </div>
+          <div className='mc-card'>
+            <div className="mc-card-head mc-split">
+              <div className="mc-title"><span className="mc-icon"><IonIcon icon={pricetagOutline} /></span><span className="mc-card-title">APRS Name</span></div>
               <div>
                 <div className='rst-set-btns'>
                   <div>
@@ -2463,12 +2471,9 @@ const Tab2: React.FC = () => {
           </div>
 
 
-          <div id="spacer-buttons" />
-          <div className='setting_wrapper'>
-            <div className="flex-row mb-3">
-              <div>
-                <IonText id="wifi-text">Custom BLE PIN 6 Digits</IonText>
-              </div>
+          <div className='mc-card'>
+            <div className="mc-card-head mc-split">
+              <div className="mc-title"><span className="mc-icon"><IonIcon icon={bluetoothOutline} /></span><span className="mc-card-title">Custom BLE PIN 6 Digits</span></div>
               <div className='rst-set-btns'>
                 <IonButton size="small" fill="outline" color='success' onClick={() => resetBLEPin()}>RST</IonButton>
                 <IonButton size="small" fill="outline" color='success' onClick={() => setBLEParingPin()}>
@@ -2481,12 +2486,9 @@ const Tab2: React.FC = () => {
             </IonItem>
           </div>
 
-          <div id="spacer-buttons" />
-          <div className='setting_wrapper'>
-            <div className="flex-row mb-3">
-              <div>
-                <IonText id="wifi-text">Node UTC-Time-Offset</IonText>
-              </div>
+          <div className='mc-card'>
+            <div className="mc-card-head mc-split">
+              <div className="mc-title"><span className="mc-icon"><IonIcon icon={timeOutline} /></span><span className="mc-card-title">Node UTC-Time-Offset</span></div>
               <div>
                 <IonButton size="small" fill="outline" color='success' onClick={() => setUTCOffset()}>
                   <IonIcon icon={checkmarkCircle} ></IonIcon>
@@ -2498,26 +2500,21 @@ const Tab2: React.FC = () => {
             </IonItem>
           </div>
 
-          <div id="spacer-buttons" />
-          <div className='txt-center'>
-            <IonButton id="settings_button" fill='outline' slot='start' onClick={() => setCurrentPosGPS()}>Set Location - Phone GPS</IonButton>
+          <div>
+            <IonButton className="mc-action" expand="block" fill='outline' slot='start' onClick={() => setCurrentPosGPS()}>Set Location - Phone GPS</IonButton>
           </div>
 
-          <div id="spacer-buttons" />
             {/*Manual Position Settings*/}
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shManualPos ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShManualPos(!shManualPos)} />
-              </div>
-              <IonText >Manual Location</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShManualPos(!shManualPos)}>
+              <div className="mc-icon"><IonIcon icon={locationOutline} /></div>
+              <div className="mc-card-title">Manual Location</div>
+              <IonIcon className="mc-fold-chev" icon={shManualPos ? chevronDown : chevronForward} />
             </div>
             {shManualPos &&
-              <div className='setting_wrapper'>
-                <div className="flex-row mb-3">
-                  <div>
-                    <IonText className='mt-3 mb-3'>Latitude</IonText>
-                  </div>
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">Latitude</span></div>
                   <div>
                     <IonButton size="small" fill="outline" color='success' onClick={() => setManualPos()}>
                       <IonIcon icon={checkmarkCircle} ></IonIcon>
@@ -2527,11 +2524,11 @@ const Tab2: React.FC = () => {
                 <IonItem>
                   <IonInput value={ownPosData.LAT} ref={manual_lat_ref} label='Set Latitude' labelPlacement="floating" type='text' maxlength={10} inputmode="text"></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Longitude</div>
+                <div className="mc-field-label">Longitude</div>
                     <IonItem>
                       <IonInput value={ownPosData.LON} ref={manual_lon_ref} label='Set Longitude' labelPlacement="floating" type='text' maxlength={11} inputmode="text"></IonInput>
                     </IonItem>
-                <div className='mt-3 mb-3'>Altitude (m)</div>
+                <div className="mc-field-label">Altitude (m)</div>
                     <IonItem>
                       <IonInput value={ownPosData.ALT} ref={manual_alt_ref} label='Set Altitude' labelPlacement="floating" type='text' maxlength={6} inputmode="text"></IonInput>
                     </IonItem>
@@ -2539,13 +2536,11 @@ const Tab2: React.FC = () => {
             }
           </div>
 
-          <div id="spacer-buttons" />
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shCtrySetting ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShCtrySetting(!shCtrySetting)} />
-              </div>
-              <IonText>Country Setting</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShCtrySetting(!shCtrySetting)}>
+              <div className="mc-icon"><IonIcon icon={globeOutline} /></div>
+              <div className="mc-card-title">Country Setting</div>
+              <IonIcon className="mc-fold-chev" icon={shCtrySetting ? chevronDown : chevronForward} />
             </div>
             {shCtrySetting && 
               <IonItem>
@@ -2564,37 +2559,35 @@ const Tab2: React.FC = () => {
             }
           </div>
 
-          <div id="spacer-buttons" />
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shGroupCallSet ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShGroupCallSet(!shGroupCallSet)} />
-              </div>
-              <IonText>Group Subscription</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShGroupCallSet(!shGroupCallSet)}>
+              <div className="mc-icon"><IonIcon icon={peopleOutline} /></div>
+              <div className="mc-card-title">Group Subscription</div>
+              <IonIcon className="mc-fold-chev" icon={shGroupCallSet ? chevronDown : chevronForward} />
             </div>
             {shGroupCallSet &&
-              <div className='setting_wrapper'>
-                <div className='mt-3 mb-3'>Group 1</div>
+              <div className='mc-card'>
+                <div className="mc-field-label">Group 1</div>
                 <IonItem>
                   <IonInput value={grp0} onIonInput={(ev) => grp0Changed(ev)} label='Set Group 1' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Group 2</div>
+                <div className="mc-field-label">Group 2</div>
                 <IonItem>
                   <IonInput value={grp1} onIonInput={(ev) => grp1Changed(ev)} label='Set Group 2' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Group 3</div>
+                <div className="mc-field-label">Group 3</div>
                 <IonItem>
                   <IonInput value={grp2} onIonInput={(ev) => grp2Changed(ev)} label='Set Group 3' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Group 4</div>
+                <div className="mc-field-label">Group 4</div>
                 <IonItem>
                   <IonInput value={grp3} onIonInput={(ev) => grp3Changed(ev)} label='Set Group 4' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Group 5</div>
+                <div className="mc-field-label">Group 5</div>
                 <IonItem>
                   <IonInput value={grp4} onIonInput={(ev) => grp4Changed(ev)} label='Set Group 5' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Group 6</div>
+                <div className="mc-field-label">Group 6</div>
                 <IonItem>
                   <IonInput value={grp5} onIonInput={(ev) => grp5Changed(ev)} label='Set Group 6' labelPlacement="floating" type='number' maxlength={5} inputmode="numeric"></IonInput>
                 </IonItem>
@@ -2609,13 +2602,11 @@ const Tab2: React.FC = () => {
           </div>
 
           
-          <div id="spacer-buttons" />
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shUserBtns ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShUserBtns(!shUserBtns)} />
-              </div>
-              <IonText >User Buttons</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShUserBtns(!shUserBtns)}>
+              <div className="mc-icon"><IonIcon icon={toggleOutline} /></div>
+              <div className="mc-card-title">User Buttons</div>
+              <IonIcon className="mc-fold-chev" icon={shUserBtns ? chevronDown : chevronForward} />
             </div>
             {shUserBtns ? <>
               <div className='settings_btns'>
@@ -2653,9 +2644,7 @@ const Tab2: React.FC = () => {
                 </div>
               </div>
 
-              <IonText color="primary" className='txt-center'>
-                <h3>GPS - Position</h3>
-              </IonText>
+              <div className="mc-section-title">GPS - Position</div>
               <div className='settings_btns'>
                 <div className='settings_btns_l'>
                   <div >
@@ -2675,9 +2664,7 @@ const Tab2: React.FC = () => {
                 </div>
               </div>
 
-              <IonText color="primary" className='txt-center'>
-                <h3>Sensors</h3>
-              </IonText>
+              <div className="mc-section-title">Sensors</div>
               <div className='settings_btns'>
                 <div className='settings_btns_l'>
                   <div>
@@ -2715,9 +2702,7 @@ const Tab2: React.FC = () => {
                 </div>
               </div>
 
-              <IonText color="primary" className='txt-center'>
-                <h3>Utilities</h3>
-              </IonText>
+              <div className="mc-section-title">Utilities</div>
               <div className='settings_btns'>
                 <div className='settings_btns_l'>
                   <div>
@@ -2742,14 +2727,12 @@ const Tab2: React.FC = () => {
 
           
 
-          <div id="spacer-buttons" />
 
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shTxPwrSlider ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShTxPwrSlider(!shTxPwrSlider)} />
-              </div>
-              <IonText >TX-Power</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShTxPwrSlider(!shTxPwrSlider)}>
+              <div className="mc-icon"><IonIcon icon={flashOutline} /></div>
+              <div className="mc-card-title">TX-Power</div>
+              <IonIcon className="mc-fold-chev" icon={shTxPwrSlider ? chevronDown : chevronForward} />
             </div>
             {shTxPwrSlider ? <>
               <div className='ionrange_box'>
@@ -2760,13 +2743,11 @@ const Tab2: React.FC = () => {
             </> : <></>}
           </div>
 
-          <div id="spacer-buttons" />
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shGwServerSet ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShGwServerSet(!shGwServerSet)} />
-              </div>
-              <IonText>Gateway Server</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShGwServerSet(!shGwServerSet)}>
+              <div className="mc-icon"><IonIcon icon={serverOutline} /></div>
+              <div className="mc-card-title">Gateway Server</div>
+              <IonIcon className="mc-fold-chev" icon={shGwServerSet ? chevronDown : chevronForward} />
             </div>
             {shGwServerSet && 
               <IonItem>
@@ -2786,20 +2767,16 @@ const Tab2: React.FC = () => {
           </div>
 
 
-          <div id="spacer-buttons" />
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shHwPins ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShHwPins(!shHwPins)} />
-              </div>
-              <IonText>Hardware Pins</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShHwPins(!shHwPins)}>
+              <div className="mc-icon"><IonIcon icon={hardwareChipOutline} /></div>
+              <div className="mc-card-title">Hardware Pins</div>
+              <IonIcon className="mc-fold-chev" icon={shHwPins ? chevronDown : chevronForward} />
             </div>
             {shHwPins &&
-              <div className='setting_wrapper'>
-                <div className="flex-row mb-3">
-                  <div>
-                    <IonText id="wifi-text">Userbutton Pin</IonText>
-                  </div>
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">Userbutton Pin</span></div>
                   <div>
                     <IonButton size="small" fill="outline" color='success' onClick={() => setUserButtonPin()}>
                       <IonIcon icon={checkmarkCircle} ></IonIcon>
@@ -2809,10 +2786,8 @@ const Tab2: React.FC = () => {
                 <IonItem>
                   <IonInput value={userBtnNr.current} ref={userBtnInputRef} label='Set Userbutton Pin' labelPlacement="floating" type='number' maxlength={2} inputmode="numeric"></IonInput>
                 </IonItem>
-                <div className="flex-row mb-3 mt-3">
-                  <div>
-                    <IonText id="wifi-text">OneWire Pin</IonText>
-                  </div>
+                <div className="mc-card-head mc-split mc-sub">
+                  <div className="mc-title"><span className="mc-card-title">OneWire Pin</span></div>
                   <div>
                     <IonButton size="small" fill="outline" color='success' onClick={() => setOnewirePin()}>
                       <IonIcon icon={checkmarkCircle} ></IonIcon>
@@ -2826,21 +2801,17 @@ const Tab2: React.FC = () => {
             }
           </div>
 
-          <div id="spacer-buttons" />
             {/*Temperature Offset Settings*/}
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shTempOffset ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShTempOffset(!shTempOffset)} />
-              </div>
-              <IonText >Temperature Offset</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShTempOffset(!shTempOffset)}>
+              <div className="mc-icon"><IonIcon icon={thermometerOutline} /></div>
+              <div className="mc-card-title">Temperature Offset</div>
+              <IonIcon className="mc-fold-chev" icon={shTempOffset ? chevronDown : chevronForward} />
             </div>
             {shTempOffset &&
-              <div className='setting_wrapper'>
-                <div className="flex-row mb-3">
-                  <div>
-                    <IonText id="wifi-text">BME/BMP Offset</IonText>
-                  </div>
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">BME/BMP Offset</span></div>
                   <div>
                     <IonButton size="small" fill="outline" color='success' onClick={() => setTempOffset()}>
                       <IonIcon icon={checkmarkCircle} ></IonIcon>
@@ -2850,7 +2821,7 @@ const Tab2: React.FC = () => {
                 <IonItem>
                   <IonInput value={wxData_s.TOFFI} ref={temp_offset_ref} label='Set BME/BMP Offset' labelPlacement="floating" type='text' maxlength={5} inputmode="text"></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Onewire Offset</div>
+                <div className="mc-field-label">Onewire Offset</div>
                     <IonItem>
                       <IonInput value={wxData_s.TOFFO} ref={temp_ow_offset_ref} label='Set Onewire Offset' labelPlacement="floating" type='text' maxlength={5} inputmode="text"></IonInput>
                     </IonItem>
@@ -2859,21 +2830,17 @@ const Tab2: React.FC = () => {
             }
           </div>
 
-          <div id="spacer-buttons" />
 
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shFixedIPSet ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShFixedIPSet(!shFixedIPSet)} />
-              </div>
-              <IonText >Fixed IP Settings</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShFixedIPSet(!shFixedIPSet)}>
+              <div className="mc-icon"><IonIcon icon={gitNetworkOutline} /></div>
+              <div className="mc-card-title">Fixed IP Settings</div>
+              <IonIcon className="mc-fold-chev" icon={shFixedIPSet ? chevronDown : chevronForward} />
             </div>
             {shFixedIPSet &&
-              <div className='setting_wrapper'>
-                <div className="flex-row mb-3">
-                  <div>
-                    <IonText id="wifi-text">IP Address</IonText>
-                  </div>
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">IP Address</span></div>
                   <div className='rst-set-btns'>
                     <div>
                       <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_FIXED_IP")}>RST</IonButton>
@@ -2888,19 +2855,19 @@ const Tab2: React.FC = () => {
                 <IonItem>
                   <IonInput value={wifiSettings2_s.OWNIP} ref={ip_addr_ref} label='Set IP Adress' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Subnet Mask</div>
+                <div className="mc-field-label">Subnet Mask</div>
                 <IonItem>
                   <IonInput value={wifiSettings2_s.OWNMS} ref={ip_snm_ref} label='Set NMS' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>Gateway</div>
+                <div className="mc-field-label">Gateway</div>
                 <IonItem>
                   <IonInput value={wifiSettings2_s.OWNGW} ref={ip_gw_ref} label='Set Gateway' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>DNS</div>
+                <div className="mc-field-label">DNS</div>
                 <IonItem>
                   <IonInput value={wifiSettings2_s.OWNDNS} ref={ip_dns_ref} label='Set DNS' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
-                <div className='mt-3 mb-3'>NTP (Optional leave empty)</div>
+                <div className="mc-field-label">NTP (Optional leave empty)</div>
                 <IonItem>
                   <IonInput value={wifiSettings2_s.OWNNTP === "none" ? "" : wifiSettings2_s.OWNNTP} ref={ip_ntp_ref} label='Set NTP' labelPlacement="floating" type='text' maxlength={15}></IonInput>
                 </IonItem>
@@ -2908,21 +2875,17 @@ const Tab2: React.FC = () => {
             }
           </div>
 
-          <div id="spacer-buttons" />
           {/*ext. UDP Settings with one toggle to switch on/off and a text input for the ip address*/}
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shExtUdp ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShExtUdp(!shExtUdp)} />
-              </div>
-              <IonText >Ext. UDP Interface</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShExtUdp(!shExtUdp)}>
+              <div className="mc-icon"><IonIcon icon={swapHorizontalOutline} /></div>
+              <div className="mc-card-title">Ext. UDP Interface</div>
+              <IonIcon className="mc-fold-chev" icon={shExtUdp ? chevronDown : chevronForward} />
             </div>
             {shExtUdp && <>
-              <div className='setting_wrapper'>
-                <div className="flex-row mb-3">
-                  <div>
-                    <IonText id="wifi-text">UDP Dest. Addr.</IonText>
-                  </div>
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">UDP Dest. Addr.</span></div>
                   <div>
                     <IonButton size="small" fill="outline" color='success' onClick={() => setExtUdpIP()}>
                       <IonIcon icon={checkmarkCircle} ></IonIcon>
@@ -2939,26 +2902,22 @@ const Tab2: React.FC = () => {
             </>}
           </div>
 
-          <div id="spacer-buttons" />
           {/*Manual Routing (via) Settings with a destination callsign input and a toggle to switch on/off*/}
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shManRouting ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShManRouting(!shManRouting)} />
-              </div>
-              <IonText >Manual Routing (VIA)</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShManRouting(!shManRouting)}>
+              <div className="mc-icon"><IonIcon icon={gitBranchOutline} /></div>
+              <div className="mc-card-title">Manual Routing (VIA)</div>
+              <IonIcon className="mc-fold-chev" icon={shManRouting ? chevronDown : chevronForward} />
             </div>
             {shManRouting && nodeSettingsS1_s.TYP !== "SN1" && <>
-              <div className='setting_wrapper'>
+              <div className='mc-card'>
                 <IonText>Manual Route Settings not provided by node. Check FW Update or Re-Connect</IonText>
               </div>
             </>}
             {shManRouting && nodeSettingsS1_s.TYP === "SN1" && <>
-              <div className='setting_wrapper'>
-                <div className="flex-row mb-3">
-                  <div>
-                    <IonText id="wifi-text">Destination Call</IonText>
-                  </div>
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">Destination Call</span></div>
                   <div className='rst-set-btns'>
                     <div>
                       <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_VIA")}>RST</IonButton>
@@ -2980,22 +2939,18 @@ const Tab2: React.FC = () => {
             </>}
           </div>
 
-          <div id="spacer-buttons" />
 
           {/*Web UI Password dropdown: set or reset, current value comes from SN1 (empty with older firmware)*/}
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shWebPwdSect ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setShWebPwdSect(!shWebPwdSect)} />
-              </div>
-              <IonText >Web UI Password</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShWebPwdSect(!shWebPwdSect)}>
+              <div className="mc-icon"><IonIcon icon={keyOutline} /></div>
+              <div className="mc-card-title">Web UI Password</div>
+              <IonIcon className="mc-fold-chev" icon={shWebPwdSect ? chevronDown : chevronForward} />
             </div>
             {shWebPwdSect && <>
-              <div className='setting_wrapper'>
-                <div className="flex-row mb-3">
-                  <div>
-                    <IonText id="wifi-text">Password</IonText>
-                  </div>
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">Password</span></div>
                   <div className='rst-set-btns'>
                     <div>
                       <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("RST_WEBPWD")}>RST</IonButton>
@@ -3015,24 +2970,18 @@ const Tab2: React.FC = () => {
             </>}
           </div>
 
-          <div id="spacer-buttons" />
 
-          <div className='dropdown_arrow'>
-            <div className='dropdown_arrow_header'>
-              <div id="advIcon">
-                <IonIcon icon={shAdvSetting ? chevronDown : chevronForward} id="advIcon" color="primary" onClick={() => setshAdvSetting(!shAdvSetting)} />
-              </div>
-              <IonText >Advanced Settings</IonText>
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setshAdvSetting(!shAdvSetting)}>
+              <div className="mc-icon"><IonIcon icon={constructOutline} /></div>
+              <div className="mc-card-title">Advanced Settings</div>
+              <IonIcon className="mc-fold-chev" icon={shAdvSetting ? chevronDown : chevronForward} />
             </div>
             {shAdvSetting ? <>
-              <div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>deletePositions()}>Clear received nodes</IonButton>
-              <div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>DataBaseService.clearTextMessages()}>Clear Text Msgs</IonButton>
-              <div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>MheardStaticStore.clearMheards()}>Clear Mheards</IonButton>
-              <div id="spacer-advTop" />
-              <IonButton id="settings_button" fill='outline' slot='start' onClick={()=>clearAllBLEPins_()}>Clear All BLE PINs</IonButton>
+              <IonButton className="mc-action" expand="block" color="danger" fill='outline' slot='start' onClick={()=>deletePositions()}>Clear received nodes</IonButton>
+              <IonButton className="mc-action" expand="block" color="danger" fill='outline' slot='start' onClick={()=>DataBaseService.clearTextMessages()}>Clear Text Msgs</IonButton>
+              <IonButton className="mc-action" expand="block" color="danger" fill='outline' slot='start' onClick={()=>MheardStaticStore.clearMheards()}>Clear Mheards</IonButton>
+              <IonButton className="mc-action" expand="block" color="danger" fill='outline' slot='start' onClick={()=>clearAllBLEPins_()}>Clear All BLE PINs</IonButton>
 
             </> : <></>}
             
