@@ -9,10 +9,11 @@
   --mc-surface: #141416;
   --mc-surface-top: #1d1d20;
   --mc-surface-2: #232327;
+  --mc-popup: #2e2e33;
   --mc-border: rgba(255, 255, 255, 0.08);
   --mc-separator: rgba(255, 255, 255, 0.07);
   --mc-text: #ffffff;
-  --mc-text-2: rgba(235, 235, 245, 0.58);
+  --mc-text-2: rgba(235, 235, 245, 0.74);
   --mc-accent: #9fd6fd;
   --mc-accent-soft: rgba(159, 214, 253, 0.14);
   --mc-glow: 0 0 18px rgba(159, 214, 253, 0.35);
@@ -23,6 +24,15 @@
   --mc-bad: #ff453a;
   --mc-shadow: none;
   --mc-radius: 18px;
+}
+
+/* alerts, loading overlays, toasts and the sync dialog sit a bit lighter than the cards */
+ion-alert,
+ion-loading,
+ion-toast,
+ion-action-sheet,
+ion-modal.config-sync-retry {
+  --background: var(--mc-popup);
 }
 
 /* page + toolbar */
