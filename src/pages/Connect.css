@@ -1,85 +1,91 @@
-#ionlist{
-    padding-top: 3%;
-    height: 80%;
-    width: auto;
+.cn-status {
+  margin-bottom: 0;
 }
 
-.ion-text-center {
-    text-align: center;
-    font-size: 1.2rem;
+.cn-status ion-toggle {
+  flex: 0 0 auto;
+  font-size: 0.9rem;
 }
 
-#spacer-top {
-   height: 3%;
-    width: auto;
+.cn-status .mc-card-title {
+  white-space: nowrap;
 }
 
-#spacer-button {
-    height: 5%;
-    width: auto;
-}
-#spacer-progress{
-    height: 2%;
-    width: auto;
-}
-.buttons{
-    padding-top: 8px;
-}
-#ble_item{
-    height: 40px;
-    width: auto;
-    border: 1px;
-    border-radius: 4px;
-}
-#ble_item_id{
-    float:left;
-    align-content: center;
-    font-size: 1.1em;
-    width: 50%;
-}
-#ble_item_rssi{
-    float:left;
-    align-content: center;
-    font-size: 1.1em;
-    width: 15%;
-}
-#ble_item_button{
-    float:right;
-    margin-top: auto;
-    margin-bottom: auto;
-    height: 90%;
-}
-#spacer_items{
-    width: 35px;
-    float: left;
-}
-#spacer_items_top{
-    height: 25px;
-    width: auto;
-}
-#toggle_filter{
-    display: flex;
-    justify-content: center;
-    align-items: center;
+.cn-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--mc-text-2);
+  margin-top: 1px;
 }
 
-.ble-device-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+/* pulsing dot while the scan runs */
+.cn-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mc-good);
+  animation: cn-pulse 1.4s ease-in-out infinite;
 }
 
-.ble-conn-btn {
-    flex: 1;
+@keyframes cn-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
 }
 
-.ble-pin-btn {
-    flex-shrink: 0;
+.cn-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--mc-accent);
+  text-shadow: var(--mc-glow);
+  overflow-wrap: anywhere;
+}
+
+.cn-signal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.cn-rssi {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--mc-text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cn-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.cn-connect {
+  flex: 1;
+  margin: 0;
+  --border-radius: 14px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.cn-key {
+  flex: 0 0 auto;
+  margin: 0;
+  --border-radius: 14px;
+}
+
+.cn-hint {
+  font-size: 0.85rem;
+  margin-top: 6px;
+  opacity: 0.85;
 }
 
 .pin-modal-btns {
-    margin-top: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }

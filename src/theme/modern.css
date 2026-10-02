@@ -292,6 +292,28 @@ ion-toolbar.mc-toolbar {
 .mc-meter.is-warn > span { background: var(--mc-warn); }
 .mc-meter.is-bad > span { background: var(--mc-bad); }
 
+/* four bar signal indicator */
+.mc-signal {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 20px;
+}
+
+.mc-signal-bar {
+  width: 5px;
+  border-radius: 2px;
+  background: var(--mc-surface-2);
+  border: 1px solid var(--mc-border);
+  box-sizing: border-box;
+}
+
+.mc-signal.is-super .mc-signal-bar.is-lit { background: var(--mc-good); border-color: var(--mc-good); }
+.mc-signal.is-good .mc-signal-bar.is-lit { background: var(--mc-lime); border-color: var(--mc-lime); }
+.mc-signal.is-ok .mc-signal-bar.is-lit { background: var(--mc-warn); border-color: var(--mc-warn); }
+.mc-signal.is-weak .mc-signal-bar.is-lit { background: var(--mc-weak); border-color: var(--mc-weak); }
+.mc-signal.is-bad .mc-signal-bar.is-lit { background: var(--mc-bad); border-color: var(--mc-bad); }
+
 /* empty state */
 .mc-empty {
   text-align: center;

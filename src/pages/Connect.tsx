@@ -1,8 +1,8 @@
 import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar,
-  IonProgressBar, IonAlert, useIonViewDidEnter, isPlatform, IonLoading, IonModal,
+  IonAlert, useIonViewDidEnter, isPlatform, IonLoading, IonModal,
 IonButtons, IonList, IonItem, IonLabel, IonInput, IonIcon, IonText,
-IonToggle} from '@ionic/react';
-import { keyOutline, trashOutline, checkmarkCircle } from 'ionicons/icons';
+IonToggle, IonSpinner} from '@ionic/react';
+import { keyOutline, trashOutline, checkmarkCircle, radioOutline, bluetoothOutline } from 'ionicons/icons';
 
 import './Connect.css';
 
@@ -14,7 +14,7 @@ import { useMSG } from '../hooks/MessageHandler';
 import { DevIDStore } from '../store';
 import { useStoreState } from 'pullstate';
 import { getDevID, getRedirChatStore, getShouldConfStore, getConfigStore } from '../store/Selectors';
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import ShouldConfStore from '../store/ShouldConfNode';
 import RedirectChatStore from '../store/RedirectChat';
 import PlatformStore from '../store/PlatformStore';
@@ -22,6 +22,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import ConfigStore from '../store/ConfStore';
 import { ConfType, MheardType } from '../utils/AppInterfaces';
 import { AlertCard } from '../components/AlertCard';
+import { SignalBars } from '../components/SignalBars';
 import AppActiveState  from '../store/AppActive';
 import ConfigSyncWatchdog, { SyncProgress } from '../utils/ConfigSyncWatchdog';
 import { ConfigSyncRetry } from '../components/ConfigSyncRetry';
@@ -48,6 +49,14 @@ export interface ScanRes {
   dev_id_:string
 }
 
+// internal live scan entry: the smoothed RSSI and when we heard the device last
+interface ScanEntry {
+  res: ScanRes,
+  rssi: number,
+  lastSeen: number,
+  nameFromMf: boolean
+}
+
 
 const Tab1: React.FC = () => {
 
@@ -67,6 +76,9 @@ const Tab1: React.FC = () => {
   const RAK_BLE_UART_TXCHAR = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
   const LEGACY_DFU_SERVICE = '00001530-1212-efde-1523-785feabcd123';
   const BLE_WAIT_SCAN = 5000; // sleep time we wait for a scan to finish
+  const SCAN_REFRESH_MS = 1000; // how often the live scan publishes its results to the list
+  const SCAN_STALE_MS = 10000; // a device we did not hear for this long leaves the list
+  const RSSI_SMOOTHING = 0.4; // weight of a new RSSI value, the RSSI of a node jumps by some dB between packets
   const BLE_RECONNECT_DELAY = 2500; // min. ms between a BLE disconnect and the next connect (android needs time to tear down the old connection)
   const TIMESYNC_INTERVAL = 20000; // 20 seconds interval for timesync
   const SYNC_DIALOG_MIN_MS = 2000; // minimum time the config sync dialog stays on screen
@@ -76,11 +88,25 @@ const Tab1: React.FC = () => {
   const ble_scan_ongoing = useRef<boolean>(false);  // scan ongoing flag, avoid multiple scans at once
   const isAppActive_Ref = useRef<boolean>(false);
   const [connFlag, setConnFlag] = useState<boolean>(false);
-  const [showProgrBar, setShowProgrBar] = useState<boolean>(false);
+  const [connecting, setConnecting] = useState<boolean>(false);  // connect attempt running (until the setup is done or failed)
   const connInProgress = useRef<boolean>(false);  // Flag to avoid multiple connect attempts
   const bleConnT0 = useRef<number | null>(null);  // start time of the last connect attempt (BLE diagnostics)
   const lastBleDiscoTs = useRef<number | null>(null);  // time of the last BLE disconnect, used for the reconnect delay
   const ble_scan_devices_filtered = useRef<ScanRes[]>([]); // filtered scan devices for MC only
+
+  // live scan: results are collected in a map by device ID and published to the list once a second
+  const scan_map = useRef<Map<string, ScanEntry>>(new Map());
+  const scan_running = useRef<boolean>(false);
+  const scan_refresh_timer = useRef<number | null>(null);
+  const scan_queue = useRef<Promise<void>>(Promise.resolve());  // start and stop run one after the other
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const showMConly_ref = useRef<boolean>(true);
+
+  // the scan only runs while the Connect tab is shown, see the scan effect
+  const location = useLocation();
+  const pageActive = location.pathname.replace(/\/+$/, "") === "/connect";
+  const pageActive_ref = useRef<boolean>(pageActive);
+  pageActive_ref.current = pageActive;
 
 
   // store device id
@@ -261,10 +287,9 @@ const Tab1: React.FC = () => {
   }, []);
 
 
-  // when we enter for the first time the screen we want to do an initial scan
+  // remember the app did run. The scan itself is driven by the scan effect below
   useIonViewDidEnter(() => {
     if (!didrun.current) {
-      getScan();
       didrun.current = true;
     }
   });
@@ -329,150 +354,137 @@ const Tab1: React.FC = () => {
    * BLE Library Doc: https://github.com/capacitor-community/bluetooth-le
    */
 
-  // scan BLE devices
-  const getScan = async () => {
-    ble_scan_ongoing.current = true;
+  // make sure BLE is initialized and usable on the phone before a scan
+  const initBleForScan = async () => {
+    if (pltfrm.current === "android") {
+      await BleClient.initialize({ androidNeverForLocation: true });
+    }
+    if (pltfrm.current === "ios") {
+      await BleClient.initialize();
+    }
+
+    // check if BLE is enabled
+    const ble_enabled = await BleClient.isEnabled();
+    LogS.log(0, "BLE enabled on phone: " + ble_enabled);
+
+    if (!ble_enabled) {
+      // alert that BLE is not enabled - iOS comes with alert message, check android
+      LogS.log(1, "BLE not enabled on phone!");
+
+      if (pltfrm.current === "android") {
+        setAlHeader("Bluetooth is not enabled!");
+        setAlMsg("Please enable BT");
+        setShAlertCard(true);
+      }
+    }
+
+    // on android we need to have location services enabled to work with BLE
+    if (pltfrm.current === "android") {
+      const loc_enabled = await BleClient.isLocationEnabled();
+
+      if (!loc_enabled) {
+        LogS.log(1, "Android Location Service disabled!");
+        // open Location settings in android
+        await BleClient.openLocationSettings();
+      }
+    }
+  }
+
+  // a scan result arrives: update the entry of the device
+  const handleScanResult = (result: ScanResult) => {
+    // only devices with a name are of interest
+    if (!result.device.name) return;
+
+    let blename = result.device.name.toString();
+    let nameFromMf = false;
+    const ble_rssi = result.rssi ?? -127;
+
+    // the manufacturer data of a MeshCom node carries its callsign. Key 17229 = "MC"
+    const manuf_data = result.manufacturerData;
+    if (manuf_data) {
+      const mkey_str = Object.keys(manuf_data)[0];
+
+      if (mkey_str === "17229") {
+        const mval = manuf_data[mkey_str];
+        const mf_call_arr: number[] = [];
+
+        for (let i = 0; i < mval.buffer.byteLength; i++) {
+          mf_call_arr[i] = mval.getInt8(i);
+        }
+
+        blename = convBARRtoStr(mf_call_arr);
+        nameFromMf = true;
+      }
+    }
+
+    const id = result.device.deviceId;
+    const old = scan_map.current.get(id);
+
+    // an advertisement without manufacturer data must not throw away the callsign we already know
+    if (old && old.nameFromMf && !nameFromMf) {
+      blename = old.res.devName;
+      nameFromMf = true;
+    }
+
+    const rssi = old ? old.rssi + (ble_rssi - old.rssi) * RSSI_SMOOTHING : ble_rssi;
+
+    scan_map.current.set(id, {
+      res: { devName: blename, rssi_: Math.round(rssi).toString(), dev_id_: id },
+      rssi: rssi,
+      lastSeen: Date.now(),
+      nameFromMf: nameFromMf
+    });
+  }
+
+  // publish the collected scan results to the list. Devices we did not hear for a while are dropped
+  const refreshScanList = () => {
+    const now = Date.now();
+
+    scan_map.current.forEach((entry, id) => {
+      if (now - entry.lastSeen > SCAN_STALE_MS) scan_map.current.delete(id);
+    });
+
+    const all: ScanRes[] = Array.from(scan_map.current.values()).map((e) => ({ ...e.res, rssi_: Math.round(e.rssi).toString() }));
+    all.sort((a, b) => (a.devName > b.devName) ? 1 : -1);
+    ble_scan_devices.current = all;
+
+    // filter if we want to see only MC devices
+    setScanDevices(showMConly_ref.current ? all.filter((dev) => dev.devName.startsWith("MC-")) : all);
+  }
+
+  // queue a start or stop of the scan, so they never overlap
+  const enqueueScan = (task: () => Promise<void>) => {
+    scan_queue.current = scan_queue.current.then(task).catch(() => { });
+    return scan_queue.current;
+  }
+
+  // start the scan, it runs until stopLiveScan. Results come in continuously
+  const startLiveScan = async () => {
+    if (scan_running.current) return;
+
     LogS.log(0, "Scanning BLE Devices");
-    // if we are in reconnect state ignore scanning
-    /*DatabaseService.getReconState().then((reconstate) => {
-      if (reconstate) return;
-    });*/
-
-    setShowProgrBar(true);
-
-    let scan_res: ScanRes[] = [];
 
     try {
-      if (pltfrm.current === "android") {
-        await BleClient.initialize({ androidNeverForLocation: true });
-      }
-      if (pltfrm.current === "ios") {
-        await BleClient.initialize();
-      }
-
-      // check if BLE is enabled
-      const ble_enabled = await BleClient.isEnabled();
-      LogS.log(0, "BLE enabled on phone: " + ble_enabled);
-
-      if (!ble_enabled) {
-        // alert that BLE is not enabled - iOS comes with alert message, check android
-        LogS.log(1, "BLE not enabled on phone!");
-
-        if (pltfrm.current === "android") {
-          setAlHeader("Bluetooth is not enabled!");
-          setAlMsg("Please enable BT");
-          setShAlertCard(true);
-        }
-      }
-
-      // on android we need to have location services enabled to work with BLE
-      if (pltfrm.current === "android") {
-        const loc_enabled = await BleClient.isLocationEnabled();
-
-        if (!loc_enabled) {
-          LogS.log(1, "Android Location Service disabled!");
-          // open Location settings in android
-          await BleClient.openLocationSettings();
-        }
-      }
-
-      // do BLE scan. 
-      let localname_str = "";
+      await initBleForScan();
 
       await BleClient.requestLEScan(
         {
           services: [],
           optionalServices: [],
+          allowDuplicates: true,  // without it iOS reports every device once and the RSSI would never update
         },
-        (result) => {
-          console.log('\n----------------------------');
-          console.log('received new scan result');
-          console.log("Device ID: " + result.device.deviceId);
-
-          if (result.device.name) {
-            if (result.localName) {
-              localname_str = result.localName!.toString();
-              console.log("Local Name: " + localname_str);
-            } else {
-              console.log("No Local Name provided!");
-            }
-
-            let blename = result.device.name.toString();
-            console.log("Device Name: " + blename);
-
-            const ble_rssi = result.rssi!.toString();
-            console.log("RSSI: " + ble_rssi);
-
-            const manuf_data = result.manufacturerData;
-
-            if (manuf_data) {
-              console.log("Manuf Data available");
-
-              let mkey = Object.keys(manuf_data);
-              const mkey_str = mkey[0];
-              console.log("MF Data Key: " + mkey_str);
-
-              // take only mf data if key is 17229 = "MC"
-              if (mkey_str === "17229") {
-                let mval = manuf_data[mkey_str];
-
-                let mf_call_arr: number[] = [];
-                console.log("Buffer bytelen: " + mval.buffer.byteLength);
-                let mf_call_str = "";
-
-                for (let i = 0; i < mval.buffer.byteLength; i++) {
-                  mf_call_arr[i] = mval.getInt8(i);
-                }
-
-                mf_call_str = convBARRtoStr(mf_call_arr);
-                console.log("MF Call: " + mf_call_str);
-                blename = mf_call_str;
-              }
-
-            }
-
-            const newScanRes: ScanRes = {
-              devName: blename,
-              rssi_: ble_rssi,
-              dev_id_: result.device.deviceId
-            }
-
-            scan_res.push(newScanRes);
-            console.log("ScanRes Array Len: " + scan_res.length);
-            localname_str = "";
-          }
-        }
+        handleScanResult
       );
 
-      // stop the scan after 5 seconds
-      await sleep(BLE_WAIT_SCAN);
-      await BleClient.stopLEScan();
-
-      LogS.log(0, "Stopped Scanning");
-      setShowProgrBar(false);
-
-      // sort the scan results by their name
-      scan_res.sort((a, b) => (a.devName > b.devName) ? 1 : -1);
-      const newDev = scan_res;
-      //setScanDevices(newDev);
-      ble_scan_devices.current = newDev;
-      ble_scan_ongoing.current = false;
-
-      // filter if we want to see only MC devices
-      if(showMConly){
-        const mc_filtered = newDev.filter((dev) => {
-          return dev.devName.startsWith("MC-");
-        });
-        setScanDevices(mc_filtered);
-      } else {
-        setScanDevices(newDev);
-      }
-
-      return;
+      scan_running.current = true;
+      ble_scan_ongoing.current = true;
+      setIsScanning(true);
+      refreshScanList();
+      scan_refresh_timer.current = window.setInterval(refreshScanList, SCAN_REFRESH_MS);
 
     } catch (error) {
       LogS.log(1, "Error on BLE Scan! " + error);
-      setShowProgrBar(false);
+      setIsScanning(false);
       setAlHeader("Error on BLE Scan!");
       const err_msg = (error as Error).message;
       if(err_msg.includes("Permission")){
@@ -487,6 +499,53 @@ const Tab1: React.FC = () => {
       setShAlertCard(true);
     }
   }
+
+  // stop the scan. The list keeps its last state
+  const stopLiveScan = async () => {
+    if (scan_refresh_timer.current !== null) {
+      window.clearInterval(scan_refresh_timer.current);
+      scan_refresh_timer.current = null;
+    }
+    ble_scan_ongoing.current = false;
+    setIsScanning(false);
+
+    if (!scan_running.current) return;
+    scan_running.current = false;
+
+    try {
+      await BleClient.stopLEScan();
+      LogS.log(0, "Stopped Scanning");
+    } catch (error) {
+      LogS.log(1, "Error on stopping the BLE Scan! " + error);
+    }
+  }
+
+
+  // The scan runs whenever no node is connected or being connected, as long as the Connect tab
+  // is shown and the app is in the foreground. It stops for the connect and starts again after
+  // a failed connect or a disconnect. The decision reads only refs and stores, which are always current,
+  // because React can merge fast state changes (e.g. a connect that fails at once) into no change at all.
+  const wantScan = () => pageActive_ref.current
+    && AppActiveState.getRawState().active
+    && !BLEconnStore.getRawState().ble_connected
+    && !connInProgress.current;
+
+  const syncScan = () => enqueueScan(async () => {
+    const want = wantScan();
+    if (want && !scan_running.current) await startLiveScan();
+    if (!want && scan_running.current) await stopLiveScan();
+  });
+
+  useEffect(() => {
+    syncScan();
+  }, [pageActive, isAppActive, connFlag, connecting]);
+
+  // stop the scan when the page goes away
+  useEffect(() => {
+    return () => {
+      enqueueScan(stopLiveScan);
+    };
+  }, []);
 
 
   // open PIN modal for a device
@@ -546,6 +605,7 @@ const Tab1: React.FC = () => {
   // handle the filter toggle for MC only devices
   const handleMConly = (state: boolean) => {
     setShowMConly(state);
+    showMConly_ref.current = state;
     // filter if we want to see only MC devices
     if(state){
       const mc_filtered = ble_scan_devices.current.filter((dev) => {
@@ -664,6 +724,15 @@ const Tab1: React.FC = () => {
 
   // connect to device
   const connDev = async (devID: string) => {
+    try {
+      await connDevAttempt(devID);
+    } finally {
+      // the attempt is over, a failed one has to bring the scan back
+      syncScan();
+    }
+  }
+
+  const connDevAttempt = async (devID: string) => {
 
     // check if we are already connecting to a device
     if (connInProgress.current) {
@@ -672,6 +741,9 @@ const Tab1: React.FC = () => {
     }
 
     connInProgress.current = true;
+
+    // no scan while we connect, it disturbs the connection setup
+    await syncScan();
 
     // BLE diagnostics: log each phase of the connect attempt with the time since start
     bleConnT0.current = Date.now();
@@ -682,7 +754,7 @@ const Tab1: React.FC = () => {
     bleDiag("connect attempt start, platform: " + pltfrm.current + ", devID: " + devID + ", timeout: 15000");
 
     LogS.log(0, "Connecting DeviceID: " + devID);
-    setShowProgrBar(true);
+    setConnecting(true);
     // set devId state here local
     setDevIDs(devID);
     // set devID in ConfigObject
@@ -694,7 +766,6 @@ const Tab1: React.FC = () => {
       await DatabaseService.checkDbConn(); 
     } catch (error) {
       LogS.log(1, "Error on DB Connection! " + error);
-      setShowProgrBar(false);
       setAlHeader("Error on DB Connection!");
       const err_msg = (error as Error).message;
       setAlMsg(err_msg);
@@ -709,7 +780,6 @@ const Tab1: React.FC = () => {
         await DatabaseService.initializeDatabase();
       } catch (error) {
         LogS.log(1, "BLE Connect - Error on DB Initialization! " + error);
-        setShowProgrBar(false);
         setAlHeader("Error on DB Initialization!");
         const err_msg = (error as Error).message;
         setAlMsg(err_msg);
@@ -871,7 +941,7 @@ const Tab1: React.FC = () => {
             setAlHeader("Error on setting up connection! Remove node from BLE Devices and pair newly!");
             setAlMsg("Err: " + error);
             setShAlertCard(true);
-            setShowProgrBar(false);
+            setConnecting(false);
             setShLoadConf(false);
           }
           return;
@@ -880,7 +950,7 @@ const Tab1: React.FC = () => {
         // update BLE connected state in BLE Hook
         updateBLEConnected(true);
         
-        setShowProgrBar(false);
+        setConnecting(false);
 
       }).catch((error) => {
         
@@ -888,8 +958,6 @@ const Tab1: React.FC = () => {
         bleDiag("setup failed in phase '" + phase + "': " + error);
         // connection happened so we need to to disconnect
         doDisco(devID);
-        // initiate a new scan, so the user can click connect again without manual scan
-        //getScan();
         setShReconProgr(false);
         // alert user
         setAlHeader("Error on Connecting to Node!");
@@ -897,7 +965,7 @@ const Tab1: React.FC = () => {
         setShAlertCard(true);
       });
 
-      setShowProgrBar(false);
+      setConnecting(false);
 
       connInProgress.current = false;
 
@@ -908,7 +976,7 @@ const Tab1: React.FC = () => {
 
       const errmsg_str:string = error.message;
 
-      setShowProgrBar(false);
+      setConnecting(false);
       setShReconProgr(false);
 
       if(errmsg_str.includes("removed pairing")){
@@ -1008,7 +1076,7 @@ const Tab1: React.FC = () => {
     // reset notification flag
     canNotify.current = false;
 
-    setShowProgrBar(false);
+    setConnecting(false);
 
     // BLE disconnect was not manually triggered - Reconnect
     console.log("Manual disco state: " + manual_ble_disco.current);
@@ -1088,7 +1156,7 @@ const Tab1: React.FC = () => {
       // reset recon button and recon progress
       setShReconProgr(false);
       setShStopReconBtn(false);
-      setShowProgrBar(false);
+      setConnecting(false);
       // set the flag to stop reconnect
       doReconnect.current = false;
       // close DB connection
@@ -1112,7 +1180,7 @@ const Tab1: React.FC = () => {
         timerID_ref.current = setInterval(async () => {
           console.log('Reconnect Timer, scanning for BLE devices!');
           // do a ble scan and check if the lost node is in the list
-          await getScan(); // scan takes 5 sec
+          await sleep(BLE_WAIT_SCAN); // the live scan keeps ble_scan_devices up to date
 
           // check the scan results if the lost node is in the list
           let found_node = false;
@@ -1154,7 +1222,7 @@ const Tab1: React.FC = () => {
     if (timerID_ref.current !== null) clearInterval(timerID_ref.current);
     doReconnect.current = false;
     setShReconProgr(false);
-    setShowProgrBar(false);
+    setConnecting(false);
     setShStopReconBtn(false);
   }
 
@@ -1324,13 +1392,13 @@ const Tab1: React.FC = () => {
     <>
       <IonPage>
         <IonHeader>
-          <IonToolbar>
+          <IonToolbar className="mc-toolbar">
             <IonTitle>Devices</IonTitle>
           </IonToolbar>
         </IonHeader>
-        <IonContent className="ion-padding">
+        <IonContent className="ion-padding mc-page">
           <IonHeader collapse="condense">
-            <IonToolbar>
+            <IonToolbar className="mc-toolbar">
               <IonTitle size="large">Devices</IonTitle>
             </IonToolbar>
           </IonHeader>
@@ -1372,44 +1440,71 @@ const Tab1: React.FC = () => {
             duration={3000}  // Duration in milliseconds, adjust as needed
           />
 
-          <div id="spacer-progress"></div>
-          <div id="progr_bar">
-            {showProgrBar ?
-              <>
-                <IonProgressBar type="indeterminate"></IonProgressBar>
-              </> : <></>}
+          <div className="mc-stack">
 
-          </div>
-          <div id="spacer-top"></div>
-
-          <div id="ionlist">
-          <div id="toggle_filter">
-              <IonToggle onIonChange={() => handleMConly(!showMConly)} checked={showMConly} color="primary" alignment="center" aria-label="Primary toggle">MeshCom only</IonToggle>
-          </div>
-          <div id="spacer_items_top"></div>
-
-            {shStopReconBtn ? <>
-              <IonButton expand='block' size="default" fill='solid' slot='start' color='danger' onClick={() => handleReconActive(false)}>Cancel Reconnecting</IonButton>
-              <div id="spacer-button"></div>
-            </> : <>
-              <IonButton onClick={getScan} disabled={connFlag ? true : false} expand="block">Scan BLE Devices</IonButton>
-              <div id="spacer-button"></div>
-            </>}
-
-            {scanDevices.map((dev, i) => (
-              <>
-                <div className='buttons ble-device-row'>
-                  {dev.dev_id_ === devID_s ? <>
-                    <IonButton className='ble-conn-btn' expand='block' size="default" fill='solid' slot='start' color={connFlag ? 'success' : 'primary'} onClick={() => handleBtn(dev.dev_id_)}>{dev.devName} | RSSI:{dev.rssi_}</IonButton>
-                  </> : <>
-                    <IonButton className='ble-conn-btn' expand='block' size="default" fill='solid' slot='start' onClick={() => handleBtn(dev.dev_id_)}>{dev.devName} | RSSI:{dev.rssi_}</IonButton>
-                  </>}
-                  <IonButton size="small" fill="outline" color="medium" className='ble-pin-btn' onClick={() => openPinModal(dev)}>
-                    <IonIcon icon={keyOutline}></IonIcon>
-                  </IonButton>
+            <div className="mc-card">
+              <div className="mc-card-head mc-split cn-status">
+                <div className="mc-title">
+                  <span className="mc-icon"><IonIcon icon={bluetoothOutline} /></span>
+                  <div>
+                    <div className="mc-card-title">Nearby Nodes</div>
+                    <div className="cn-state">
+                      {connFlag ? "Connected" : connecting ? "Connecting..." : isScanning ? <><span className="cn-pulse"></span>Scanning</> : "Scan paused"}
+                    </div>
+                  </div>
                 </div>
-              </>
-            ))}
+                <IonToggle onIonChange={() => handleMConly(!showMConly)} checked={showMConly} color="primary" aria-label="MeshCom only">MeshCom only</IonToggle>
+              </div>
+            </div>
+
+            {shStopReconBtn &&
+              <IonButton expand='block' size="large" fill='solid' color='danger' onClick={() => handleReconActive(false)}>Cancel Reconnecting</IonButton>
+            }
+
+            {/* while connecting or connected only the node in use is shown */}
+            {scanDevices.filter((dev) => !(connFlag || connecting) || dev.dev_id_ === devID_s).map((dev) => {
+              const isTarget = dev.dev_id_ === devID_s && (connFlag || connecting);
+              const rssi = parseInt(dev.rssi_);
+
+              return (
+                <div className="mc-card cn-card" key={dev.dev_id_}>
+                  <div className="mc-card-head mc-split">
+                    <div className="mc-title">
+                      <span className="mc-icon"><IonIcon icon={radioOutline} /></span>
+                      <div className="mc-card-title cn-name">{dev.devName}</div>
+                    </div>
+                    {isTarget ?
+                      <span className={"mc-badge " + (connFlag ? "is-good" : "is-warn")}>{connFlag ? "Connected" : "Connecting"}</span>
+                    :
+                      <div className="cn-signal">
+                        <span className="cn-rssi">{dev.rssi_} dBm</span>
+                        <SignalBars rssi={rssi} />
+                      </div>
+                    }
+                  </div>
+
+                  <div className="cn-actions">
+                    <IonButton className="cn-connect" expand="block" size="large"
+                      color={isTarget && connFlag ? 'danger' : 'primary'}
+                      disabled={connecting}
+                      onClick={() => handleBtn(dev.dev_id_)}>
+                      {isTarget && connecting ? <><IonSpinner name="crescent" slot="start" /> Connecting</> : isTarget && connFlag ? "Disconnect" : "Connect"}
+                    </IonButton>
+                    <IonButton className="cn-key" size="large" fill="outline" color="medium" aria-label="BLE PIN" onClick={() => openPinModal(dev)}>
+                      <IonIcon slot="icon-only" icon={keyOutline}></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+              );
+            })}
+
+            {scanDevices.length === 0 && !connFlag && !connecting &&
+              <div className="mc-empty">
+                <IonIcon icon={radioOutline} />
+                <div>{isScanning ? "Searching for nodes..." : "Scan paused"}</div>
+                <div className="cn-hint">Make sure the node is switched on and Bluetooth is enabled.</div>
+              </div>
+            }
 
           </div>
         </IonContent>
@@ -1417,14 +1512,15 @@ const Tab1: React.FC = () => {
         {/* PIN Management Modal */}
         <IonModal isOpen={shPinModal} onDidDismiss={() => setShPinModal(false)}>
           <IonHeader>
-            <IonToolbar>
+            <IonToolbar className="mc-toolbar">
               <IonTitle>{pinModalDevice.current?.devName}</IonTitle>
               <IonButtons slot="end">
                 <IonButton onClick={() => setShPinModal(false)}>Close</IonButton>
               </IonButtons>
             </IonToolbar>
           </IonHeader>
-          <IonContent className="ion-padding">
+          <IonContent className="ion-padding mc-page">
+            <div className="mc-stack"><div className="mc-card">
             {pinModalCurrentPin ? (
               <IonText color="medium"><p>Current PIN: <strong>{pinModalCurrentPin}</strong></p></IonText>
             ) : (
@@ -1454,6 +1550,7 @@ const Tab1: React.FC = () => {
                 <IonText color="warning"><p>Node not connected! Pin change only in Phone DB.</p></IonText>
               )}
             </div>
+            </div></div>
           </IonContent>
         </IonModal>
 
