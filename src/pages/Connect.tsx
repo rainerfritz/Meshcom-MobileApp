@@ -23,6 +23,8 @@ import ConfigStore from '../store/ConfStore';
 import { ConfType, MheardType } from '../utils/AppInterfaces';
 import { AlertCard } from '../components/AlertCard';
 import AppActiveState  from '../store/AppActive';
+import ConfigSyncWatchdog, { SyncProgress } from '../utils/ConfigSyncWatchdog';
+import { ConfigSyncRetry } from '../components/ConfigSyncRetry';
 import BLEconnStore from '../store/BLEconnected';
 import DatabaseService from '../DBservices/DataBaseService';
 import ConfigObject from '../utils/ConfigObject';
@@ -67,6 +69,7 @@ const Tab1: React.FC = () => {
   const BLE_WAIT_SCAN = 5000; // sleep time we wait for a scan to finish
   const BLE_RECONNECT_DELAY = 2500; // min. ms between a BLE disconnect and the next connect (android needs time to tear down the old connection)
   const TIMESYNC_INTERVAL = 20000; // 20 seconds interval for timesync
+  const SYNC_DIALOG_MIN_MS = 2000; // minimum time the config sync dialog stays on screen
 
   const [scanDevices, setScanDevices] = useState<ScanRes[]>([]);
   const ble_scan_devices = useRef<ScanRes[]>([]); // scan devices ref for reconnect etc.
@@ -103,6 +106,13 @@ const Tab1: React.FC = () => {
   const nodeConfFin = BleConfigFinish.useState(s => s.BleConfFin);
   // show loading indicator till we get the bleconfig finish state
   const [shLoadConf, setShLoadConf] = useState<boolean>(false);
+  // progress of the config sync watchdog, shown while missing config data is requested again
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  // the sync dialog stays at least SYNC_DIALOG_MIN_MS on screen, so the user can read it
+  const syncShownAt = useRef<number | null>(null);
+  const syncHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // CONFFIN arrived while the app was in the background, we go to the chat when it comes back
+  const confFinInBackground = useRef<boolean>(false);
 
   // reconnect BLE
   const MAX_RETRIES = 15;
@@ -117,7 +127,7 @@ const Tab1: React.FC = () => {
 
   // send and parse message functions
   const {sendDV, sendTxtCmdNode, updateDevID, updateBLEConnected, syncTimestampToDevice} = useBLE();
-  const {parseMsg, convBARRtoStr} = useMSG();
+  const {parseMsg, convBARRtoStr, resetNodeCall} = useMSG();
 
   // phonegps hook
   const {getGpsLocation, setCurrPosGPS} = usePhoneGps();
@@ -264,6 +274,17 @@ const Tab1: React.FC = () => {
   useEffect(() => {
     // set REF to current state
     isAppActive_Ref.current = isAppActive;
+    // the config sync watchdog has a time limit for the background
+    ConfigSyncWatchdog.getInstance().setAppActive(isAppActive);
+
+    // the config finished while we were in the background, so the chat redirect was skipped
+    if (isAppActive && confFinInBackground.current) {
+      confFinInBackground.current = false;
+      if (nodeConfFin > 0 && !setConfAl) {
+        LogS.log(0, "Connect - Config finished in background, redirect to chat");
+        navigate("/chat");
+      }
+    }
     //App did run already and is not fresh started
     if (didrun.current) {
       console.log("Connect - App active: " + isAppActive_Ref.current);
@@ -538,6 +559,109 @@ const Tab1: React.FC = () => {
 
 
 
+  // build the hello message for the node. With a BLE PIN set it carries the PIN hash
+  const buildHello = async (devID: string): Promise<DataView> => {
+
+    // Look up stored BLE PIN by device ID
+    const storedPin = await DatabaseService.getBlePin(devID);
+    const pinToUse = (storedPin && storedPin !== "000000") ? storedPin : null;
+
+    if (pinToUse) {
+      // Build 36-byte hello: [35, 0x10, 0x20, 0x30, SHA-256(pin)[0..31]]
+      const pinStr = pinToUse.padStart(6, '0');
+      const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pinStr));
+      const hashBytes = new Uint8Array(hashBuf);
+      const buf = new ArrayBuffer(36);
+      const v = new DataView(buf);
+      v.setUint8(0, 35);   // length marker as firmware expects msg_len >= 35
+      v.setUint8(1, 0x10);
+      v.setUint8(2, 0x20);
+      v.setUint8(3, 0x30);
+      hashBytes.forEach((b, i) => v.setUint8(4 + i, b));
+      LogS.log(0, "Sending Hello Msg with PIN hash for device: " + devID);
+      return v;
+    }
+
+    // No PIN — original open hello
+    const buf = new ArrayBuffer(4);
+    const v = new DataView(buf);
+    v.setUint8(0, 4);
+    v.setUint8(1, 0x10);
+    v.setUint8(2, 0x20);
+    v.setUint8(3, 0x30);
+    return v;
+  }
+
+
+
+  // watch the config sync after the hello: request missing config again, fail if it does not come
+  const startConfigSyncWatch = (devID: string) => {
+    const wd = ConfigSyncWatchdog.getInstance();
+    wd.start({
+      sendCmd: async (cmd: string) => {
+        LogS.log(0, "Config sync - requesting again: " + cmd);
+        await sendTxtCmdNode(cmd);
+      },
+      resendHello: async () => {
+        LogS.log(0, "Config sync - nothing received, sending hello again");
+        await sendDV(await buildHello(devID), devID);
+      },
+      onProgress: (p) => {
+        if (p.phase === "retry") {
+          // the retry dialog replaces the normal loading dialog
+          if (syncHideTimer.current) clearTimeout(syncHideTimer.current);
+          syncHideTimer.current = null;
+          if (syncShownAt.current === null) syncShownAt.current = Date.now();
+          setSyncProgress(p);
+          setShLoadConf(false);
+        } else if (p.phase === "initial") {
+          // frames arrive again after the hello was sent once more: keep the open dialog up to date
+          if (syncShownAt.current !== null) setSyncProgress(p);
+        } else if (p.phase === "done") {
+          // the sync ended: after success the dialog shows "done" for the minimum time, otherwise it closes at once
+          const shownAt = syncShownAt.current;
+          syncShownAt.current = null;
+          if (syncHideTimer.current) clearTimeout(syncHideTimer.current);
+          syncHideTimer.current = null;
+          if (shownAt !== null && p.outcome === "complete") {
+            setSyncProgress(p);
+            syncHideTimer.current = setTimeout(() => setSyncProgress(null),
+              Math.max(SYNC_DIALOG_MIN_MS - (Date.now() - shownAt), 0));
+          } else {
+            setSyncProgress(null);
+          }
+        }
+      },
+      onComplete: () => {
+        LogS.log(0, "Config sync - complete");
+        BleConfigFinish.update(s => {
+          s.BleConfFin = Date.now();
+        });
+      },
+      onFail: (missing: string[]) => {
+        LogS.log(1, "Config sync - failed, missing: " + missing.join(", "));
+        setShLoadConf(false);
+        setAlHeader("Config could not be loaded completely!");
+        setAlMsg("Missing from node: " + missing.join(", ") + ". Please connect again.");
+        setShAlertCard(true);
+        doDisco(devID);
+      },
+    });
+    // started while the app is in the background
+    if (!isAppActive_Ref.current) wd.setAppActive(false);
+  }
+
+  // user cancels the config sync while missing data is requested again
+  const cancelConfigSync = () => {
+    LogS.log(0, "Config sync - cancelled by user");
+    ConfigSyncWatchdog.getInstance().stop();
+    setSyncProgress(null);
+    setShLoadConf(false);
+    doDisco(ConfigObject.getBleDevId());
+  }
+
+
+
   // connect to device
   const connDev = async (devID: string) => {
 
@@ -731,35 +855,8 @@ const Tab1: React.FC = () => {
         // finally we send a hello message to the client. It then starts sending data if any
         LogS.log(0, "Sending Hello Msg to Node!");
 
-        // Look up stored BLE PIN by device ID
-        const storedPin = await DatabaseService.getBlePin(devID);
-        const pinToUse = (storedPin && storedPin !== "000000") ? storedPin : null;
-
-        let hello_view: DataView;
-        if (pinToUse) {
-          // Build 36-byte hello: [35, 0x10, 0x20, 0x30, SHA-256(pin)[0..31]]
-          const pinStr = pinToUse.padStart(6, '0');
-          const hashBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pinStr));
-          const hashBytes = new Uint8Array(hashBuf);
-          const buf = new ArrayBuffer(36);
-          const v = new DataView(buf);
-          v.setUint8(0, 35);   // length marker as firmware expects msg_len >= 35
-          v.setUint8(1, 0x10);
-          v.setUint8(2, 0x20);
-          v.setUint8(3, 0x30);
-          hashBytes.forEach((b, i) => v.setUint8(4 + i, b));
-          hello_view = v;
-          LogS.log(0, "Sending Hello Msg with PIN hash for device: " + devID);
-        } else {
-          // No PIN — original open hello
-          const buf = new ArrayBuffer(4);
-          const v = new DataView(buf);
-          v.setUint8(0, 4);
-          v.setUint8(1, 0x10);
-          v.setUint8(2, 0x20);
-          v.setUint8(3, 0x30);
-          hello_view = v;
-        }
+        const hello_view = await buildHello(devID);
+        startConfigSyncWatch(devID);
         try{
           await sendDV(hello_view, devID);
           phase = "done";
@@ -770,6 +867,7 @@ const Tab1: React.FC = () => {
           // but the hello message is then received on the node
           if(pltfrm.current !== "android"){
             LogS.log(1, "Error on sending Hello Msg: " + error);
+            ConfigSyncWatchdog.getInstance().stop();
             setAlHeader("Error on setting up connection! Remove node from BLE Devices and pair newly!");
             setAlMsg("Err: " + error);
             setShAlertCard(true);
@@ -881,6 +979,13 @@ const Tab1: React.FC = () => {
 
     // stop Timesync Service
     TimeSyncManager.getInstance().stopSync();
+
+    // the config sync is over with the connection
+    ConfigSyncWatchdog.getInstance().stop();
+
+    // forget the callsign of this node, so nothing of the next connection is stored under it
+    resetNodeCall();
+    ConfigObject.resetConf();
 
     const newConnState = false;
     setConnFlag(newConnState);
@@ -1060,6 +1165,7 @@ const Tab1: React.FC = () => {
   // disconnect function
   const doDisco = async (devID: string) => {
 
+    ConfigSyncWatchdog.getInstance().stop();
     manual_ble_disco.current = true;
     // broadcast the manual-disconnect intent so other pages (Chat, Settings) can suppress their own disco alert
     BLEconnStore.update(s => {
@@ -1149,6 +1255,9 @@ const Tab1: React.FC = () => {
       // redirect to chat
       if (isAppActive && !setConfAl) {
         navigate("/chat");
+      } else if (!isAppActive) {
+        // do it when the app comes back
+        confFinInBackground.current = true;
       }
     }
   }, [nodeConfFin]);
@@ -1252,8 +1361,9 @@ const Tab1: React.FC = () => {
             isOpen={shLoadConf}
             onDidDismiss={() => setShLoadConf(false)}
             message={'Loading Config from node. Please wait...'}
-            duration={20000}  // Duration in milliseconds, adjust as needed
           />
+
+          <ConfigSyncRetry progress={syncProgress} onCancel={cancelConfigSync} />
 
           <IonLoading
             isOpen={shReconProgr}

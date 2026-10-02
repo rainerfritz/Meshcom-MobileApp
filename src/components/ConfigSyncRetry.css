@@ -1,0 +1,14 @@
+ion-modal.config-sync-retry {
+    --width: 85%;
+    --max-width: 420px;
+    --height: auto;
+    --border-radius: 14px;
+}
+
+.config-sync-retry-body {
+    padding: 20px;
+}
+
+.config-sync-retry-body h3 {
+    margin-top: 0;
+}

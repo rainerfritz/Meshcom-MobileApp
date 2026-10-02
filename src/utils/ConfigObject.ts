@@ -10,7 +10,27 @@ class ConfClass{
     initialChatSegmentMarkers: Record<string, number> = {}; // counts unseen messages per chat segment while connect when loading txt msgs from node
 
     constructor() {
-        this.infodata_obj = {
+        this.infodata_obj = this.defaultInfoData();
+        this.own_position = {
+            TYP: "G",
+            LAT: 0,
+            LON: 0,
+            ALT: 0,
+            SAT: 0,
+            SFIX: false,
+            HDOP: 0,
+            RATE: 0,
+            NEXT: 0,
+            DIST: 0,
+            DIRn: 0,
+            DIRo: 0,
+            DATE: "",
+        }
+    }
+
+    // node info as long as no node info JSON was received
+    private defaultInfoData(): InfoData {
+        return {
             TYP: "I",
             FWVER: "0.0.0",
             CALL: "",
@@ -29,22 +49,12 @@ class ConfClass{
             "CTRY": "none",
             BOOST: false,
             BPIN: 0
-        }
-        this.own_position = {
-            TYP: "G",
-            LAT: 0,
-            LON: 0,
-            ALT: 0,
-            SAT: 0,
-            SFIX: false,
-            HDOP: 0,
-            RATE: 0,
-            NEXT: 0,
-            DIST: 0,
-            DIRn: 0,
-            DIRo: 0,
-            DATE: "",
-        }
+        };
+    }
+
+    // forget the node info (callsign, firmware) of the last node, e.g. on disconnect
+    resetConf(){
+        this.infodata_obj = this.defaultInfoData();
     }
 
     getConf(){

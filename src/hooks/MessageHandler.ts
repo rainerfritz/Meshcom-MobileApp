@@ -47,6 +47,7 @@ import ConfigObject from '../utils/ConfigObject';
 import DatabaseService from '../DBservices/DataBaseService';
 import NodeInfoStore from '../store/NodeInfoStore';
 import BleConfigFinish from '../store/BLEConfFin';
+import ConfigSyncWatchdog from '../utils/ConfigSyncWatchdog';
 import UpdateFW from '../store/UpdtFW';
 import WifiSettingsStore from '../store/WifiSettings';
 import MheardStaticStore from '../utils/MheardStaticStore';
@@ -74,6 +75,8 @@ export function useMSG() {
 
     const parseMsg = async (msg:DataView) => {
 
+        // any frame from the node shows the config sync is still alive
+        ConfigSyncWatchdog.getInstance().noteActivity();
 
         // 0x00 at the end of msg indicates msg end!
         const msg_len = msg.byteLength;
@@ -818,6 +821,12 @@ export function useMSG() {
                         const json_type = json_data.TYP;
                         console.log("Json Type: " + json_type);
 
+                        // the config sync watchdog tracks which config JSONs arrived. While it runs it
+                        // also decides when the config is finished (CONFFIN and all config JSONs there)
+                        const syncWd = ConfigSyncWatchdog.getInstance();
+                        const wdHandlesConfFin = json_type === "CONFFIN" && syncWd.isRunning();
+                        syncWd.noteType(json_type, json_data.FWVER);
+
                         switch (json_type) {
 
                             case "G": {
@@ -1317,10 +1326,13 @@ export function useMSG() {
 
                             case "CONFFIN": {
                                 LogS.log(0, "Config Finished received!");
-                                // set the config finished flag in the store
-                                BleConfigFinish.update(s => {
-                                    s.BleConfFin = Date.now();
-                                });
+                                // set the config finished flag in the store. If the watchdog runs it sets the flag
+                                // itself as soon as the config is complete
+                                if (!wdHandlesConfFin) {
+                                    BleConfigFinish.update(s => {
+                                        s.BleConfFin = Date.now();
+                                    });
+                                }
 
                                 break;
                             }
@@ -1414,9 +1426,15 @@ export function useMSG() {
         return distance;
     }
 
+    // forget the callsign of the last node (on disconnect), so a following connection never uses it
+    const resetNodeCall = () => {
+        node_call_ref.current = "";
+    }
+
     return {
         parseMsg,
         convSTRtoARR,
-        convBARRtoStr
+        convBARRtoStr,
+        resetNodeCall
     }
 }
