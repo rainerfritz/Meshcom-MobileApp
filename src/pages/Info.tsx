@@ -1,6 +1,7 @@
 
 // import components
-import { IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonItem, IonLabel, IonList, IonModal, IonPage, IonProgressBar, IonTitle, IonToast, IonToolbar } from '@ionic/react';
+import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonModal, IonPage, IonTitle, IonToast, IonToolbar } from '@ionic/react';
+import { locationOutline, thermometerOutline, hardwareChipOutline } from 'ionicons/icons';
 import { useLocation } from 'react-router-dom';
 import { useStoreState } from 'pullstate';
 import { getConfigStore, getGpsData, getSensorSettings, getWxData, getDevID, getBLEconnStore, getAppActiveState } from '../store/Selectors';
@@ -169,106 +170,135 @@ const Info: React.FC = () => {
 
 
 
+  // battery meter colour
+  const batLevel = config_s.bat_perc <= 15 ? 'is-bad' : config_s.bat_perc <= 30 ? 'is-warn' : '';
+  const batWidth = Math.max(0, Math.min(100, config_s.bat_perc));
+
+  // one label/value row
+  const row = (label:string, value:React.ReactNode, cls:string = '') => (
+    <div className="mc-row">
+      <div className="mc-label">{label}</div>
+      <div className={"mc-value " + cls}>{value}</div>
+    </div>
+  );
+
+  // sensor ON/OFF chip
+  const chip = (label:string, on:boolean) => (
+    <span className={"mc-chip " + (on ? "is-on" : "")} key={label}>{label}</span>
+  );
+
+
   return (
     <IonPage>
       <IonHeader>
-        <IonToolbar>
+        <IonToolbar className="mc-toolbar">
           <IonTitle>Info</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent className="ion-padding">
+      <IonContent className="ion-padding mc-page">
         <IonHeader collapse="condense">
-          <IonToolbar>
+          <IonToolbar className="mc-toolbar">
             <IonTitle size="large">Info</IonTitle>
           </IonToolbar>
         </IonHeader>
 
-        <div className="info-box">
-          <div className='iBox'>
-            <div>BAT: {config_s.bat_perc}% <IonProgressBar value={(config_s.bat_perc / 100.)}></IonProgressBar></div>
-          </div>
-          <div className='iBox'>
-            <div>{config_s.bat_volt}V</div>
-          </div>
-          <div className='iBox'>
-            <div>HW: {config_s.hw}</div>
-          </div>
-        </div>
+        <div className="mc-stack">
 
-        <IonCard>
-          <IonCardHeader>
-            <IonCardTitle>GPS</IonCardTitle>
-          </IonCardHeader>
-          <IonCardContent>
-            <div className='value_cont'>
-              <div className='lbox'>
-                <div>Lat: {gps_s.LAT.toFixed(4)+"°"}</div>
-                <div>Long: {gps_s.LON.toFixed(4)+"°"}</div>
-                <div >Alt: {gps_s.ALT}m</div>
-                <div>SATs: {gps_s.SAT}</div>
+          <div className="mc-card mc-hero">
+            <div className="mc-hero-top">
+              <div>
+                <div className="mc-hero-main">{config_s.bat_perc}<small>%</small></div>
+                <div className="mc-hero-sub">Battery</div>
               </div>
-              <div className='lbox'>
-                <div>Fix: {gps_s.SFIX ? 'YES' : 'NO'}</div>
-                <div>HDOP: {gps_s.HDOP}</div>
-                <div>Next POS: {gps_s.NEXT}</div>
-                <div>UTC Offset: {config_s.node_utc_offset + " h"}</div>
+              <div className="mc-stats">
+                <div className="mc-stat">
+                  <div className="mc-stat-value">{config_s.bat_volt}V</div>
+                  <div className="mc-stat-label">Voltage</div>
+                </div>
+                <div className="mc-stat">
+                  <div className="mc-stat-value">{config_s.hw}</div>
+                  <div className="mc-stat-label">Hardware</div>
+                </div>
               </div>
             </div>
-            <div className='font-size108'>Date: {gps_s.DATE}</div>
-          </IonCardContent>
-        </IonCard>
+            <div className={"mc-meter " + batLevel}><span style={{ width: batWidth + "%" }}></span></div>
+          </div>
 
-        <IonCard>
-          <IonCardHeader>
-            <IonCardTitle>Sensors</IonCardTitle>
-          </IonCardHeader>
-          <IonCardContent>
-            <div className='value_cont'>
-              <div className='lbox'>
-                <div>Temp: {wx_s.TEMP.toFixed(1)}°</div>
-                <div>TOUT: {wx_s.TOUT.toFixed(1)}°</div>
-                <div>Humidity: {wx_s.HUM.toFixed(1)} %</div>
-                <div>Press: {wx_s.PRES.toFixed(1)} hPa</div>
-                <div>QNH: {wx_s.QNH.toFixed(1)} hPa</div>
-                <div>GasRes: {wx_s.GAS.toFixed(1)} k&Omega;</div>
-                <div>eCO2: {wx_s.CO2.toFixed(0)} ppm</div>
-                <div>Alt Press: {wx_s.ALT.toFixed(0)} m</div>
-                {sensorSettingsS1_s.INA226 && <>
-                  <div>VBUS: {wx_s.VBUS.toFixed(1)} V</div>
-                  <div>VSHUNT: {wx_s.VSHUNT.toFixed(1)} V</div>
-                  <div>VAMP: {wx_s.VAMP.toFixed(1)} A</div>
-                  <div>VPOW: {wx_s.VPOW.toFixed(1)} W</div>
-                </>}
-              </div>
-              <div className='lbox'>
-                <div>BME280: {SensorSettings_s.BME ? 'ON' : 'OFF'}</div>
-                <div>BMP280: {SensorSettings_s.BMP ? 'ON' : 'OFF'}</div>
-                <div>BMP390: {SensorSettings_s.BMP3 ? 'ON' : 'OFF'}</div>
-                <div>BME680: {SensorSettings_s[680] ? 'ON' : 'OFF'}</div>
-                <div>MCU811: {SensorSettings_s[811] ? 'ON' : 'OFF'}</div>
-                <div>LPS: {SensorSettings_s.LPS33 ? 'ON' : 'OFF'}</div>
-                <div>OneWire: {SensorSettings_s.OW ? 'ON' : 'OFF'}</div>
-                <div>OneWire Pin: {SensorSettings_s.OWPIN}</div>
-                <div>AHT-20: {SensorSettings_s.AHT ? 'ON' : 'OFF'}</div>
-                { sensorSettingsS1_s.INA226 ? <div>INA226: ON</div> : <div>INA226: OFF</div>}
+          <div className="mc-card">
+            <div className="mc-card-head">
+              <div className="mc-icon"><IonIcon icon={locationOutline} /></div>
+              <div className="mc-card-title">GPS</div>
+              <div className="mc-card-actions">
+                <span className={"mc-badge " + (gps_s.SFIX ? "is-good" : "is-warn")}>{gps_s.SFIX ? 'Fix' : 'No Fix'}</span>
               </div>
             </div>
-          </IonCardContent>
-        </IonCard>
-
-
-        <div className="info-box">
-          <div>
-            <div>Node FW: {config_s.fw_ver}</div>
-            <div>FW Build: {infoDataS1_s.BDATE}</div>
-            <div>App Version: 4.29</div>
+            <div className="mc-rows">
+              {row("Latitude", gps_s.LAT.toFixed(4) + "°")}
+              {row("Longitude", gps_s.LON.toFixed(4) + "°")}
+              {row("Altitude", gps_s.ALT + " m")}
+              {row("Satellites", gps_s.SAT)}
+              {row("HDOP", gps_s.HDOP)}
+              {row("Next POS", gps_s.NEXT)}
+              {row("UTC Offset", config_s.node_utc_offset + " h")}
+              {row("Date", gps_s.DATE)}
+            </div>
           </div>
-        </div>
 
-        <div id="LogBtn">
-          <IonButton size='small' fill='outline' slot='start' color='primary' onClick={() => openLogWindow()}>Log</IonButton>
+          <div className="mc-card">
+            <div className="mc-card-head">
+              <div className="mc-icon"><IonIcon icon={thermometerOutline} /></div>
+              <div className="mc-card-title">Sensors</div>
+            </div>
+            <div className="mc-rows">
+              {row("Temp", wx_s.TEMP.toFixed(1) + " °")}
+              {row("TOUT", wx_s.TOUT.toFixed(1) + " °")}
+              {row("Humidity", wx_s.HUM.toFixed(1) + " %")}
+              {row("Press", wx_s.PRES.toFixed(1) + " hPa")}
+              {row("QNH", wx_s.QNH.toFixed(1) + " hPa")}
+              {row("GasRes", wx_s.GAS.toFixed(1) + " kΩ")}
+              {row("eCO2", wx_s.CO2.toFixed(0) + " ppm")}
+              {row("Alt Press", wx_s.ALT.toFixed(0) + " m")}
+              {sensorSettingsS1_s.INA226 && <>
+                {row("VBUS", wx_s.VBUS.toFixed(1) + " V")}
+                {row("VSHUNT", wx_s.VSHUNT.toFixed(1) + " V")}
+                {row("VAMP", wx_s.VAMP.toFixed(1) + " A")}
+                {row("VPOW", wx_s.VPOW.toFixed(1) + " W")}
+              </>}
+            </div>
+            <div className="mc-section-title">Enabled sensors</div>
+            <div className="mc-chips">
+              {chip("BME280", SensorSettings_s.BME)}
+              {chip("BMP280", SensorSettings_s.BMP)}
+              {chip("BMP390", SensorSettings_s.BMP3)}
+              {chip("BME680", SensorSettings_s[680])}
+              {chip("MCU811", SensorSettings_s[811])}
+              {chip("LPS", SensorSettings_s.LPS33)}
+              {chip("OneWire", SensorSettings_s.OW)}
+              {chip("AHT-20", SensorSettings_s.AHT)}
+              {chip("INA226", sensorSettingsS1_s.INA226)}
+            </div>
+            <div className="mc-rows mc-rows-after">
+              {row("OneWire Pin", SensorSettings_s.OWPIN)}
+            </div>
+          </div>
+
+          <div className="mc-card">
+            <div className="mc-card-head">
+              <div className="mc-icon"><IonIcon icon={hardwareChipOutline} /></div>
+              <div className="mc-card-title">Firmware</div>
+            </div>
+            <div className="mc-rows">
+              {row("Node FW", config_s.fw_ver)}
+              {row("FW Build", infoDataS1_s.BDATE)}
+              {row("App Version", "4.29")}
+            </div>
+          </div>
+
+          <div id="LogBtn">
+            <IonButton className="mc-pill" size='small' fill='outline' slot='start' color='primary' onClick={() => openLogWindow()}>Log</IonButton>
+          </div>
+
         </div>
-        <div id="spacer-bottom"></div>
         <IonModal isOpen={shLog}>
           <IonHeader>
             <IonToolbar>
