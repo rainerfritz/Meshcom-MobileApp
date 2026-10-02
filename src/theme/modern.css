@@ -1,0 +1,413 @@
+/*
+ * Modern grouped-card design for the Settings, Info and Heard Nodes tabs.
+ * All classes carry the mc- prefix because plain class names and ids in the page css files are global.
+ * Dark is the reference look, the light values below only keep the pages readable in the light system theme.
+ */
+
+:root {
+  --mc-bg: #f2f2f7;
+  --mc-surface: #ffffff;
+  --mc-surface-top: #ffffff;
+  --mc-surface-2: #f2f2f7;
+  --mc-border: rgba(60, 60, 67, 0.12);
+  --mc-separator: rgba(60, 60, 67, 0.14);
+  --mc-text: #000000;
+  --mc-text-2: rgba(60, 60, 67, 0.62);
+  --mc-accent: #0a72c9;
+  --mc-accent-soft: rgba(10, 114, 201, 0.12);
+  --mc-glow: none;
+  --mc-good: #1f9d4c;
+  --mc-warn: #b7791f;
+  --mc-bad: #d62c3b;
+  --mc-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mc-radius: 18px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mc-bg: #000000;
+    --mc-surface: #141416;
+    --mc-surface-top: #1d1d20;
+    --mc-surface-2: #232327;
+    --mc-border: rgba(255, 255, 255, 0.08);
+    --mc-separator: rgba(255, 255, 255, 0.07);
+    --mc-text: #ffffff;
+    --mc-text-2: rgba(235, 235, 245, 0.58);
+    --mc-accent: #9fd6fd;
+    --mc-accent-soft: rgba(159, 214, 253, 0.14);
+    --mc-glow: 0 0 18px rgba(159, 214, 253, 0.35);
+    --mc-good: #32d74b;
+    --mc-warn: #ffd60a;
+    --mc-bad: #ff453a;
+    --mc-shadow: none;
+  }
+}
+
+/* page + toolbar */
+ion-content.mc-page {
+  --background: var(--mc-bg);
+  --color: var(--mc-text);
+}
+
+ion-toolbar.mc-toolbar {
+  --background: var(--mc-bg);
+  --color: var(--mc-text);
+  --border-color: transparent;
+}
+
+.mc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 4px 4px 24px;
+}
+
+/* card */
+.mc-card {
+  background: linear-gradient(180deg, var(--mc-surface-top) 0%, var(--mc-surface) 100%);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  box-shadow: var(--mc-shadow);
+  padding: 14px 16px;
+  color: var(--mc-text);
+}
+
+.mc-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  margin-bottom: 6px;
+}
+
+.mc-icon {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mc-accent-soft);
+  color: var(--mc-accent);
+  font-size: 18px;
+}
+
+.mc-card-title {
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  color: var(--mc-text);
+}
+
+.mc-card-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mc-section-title {
+  font-size: 0.74rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mc-text-2);
+  margin: 10px 2px 2px;
+}
+
+/* label / value rows, always one column so nothing wraps below the other */
+.mc-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.mc-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mc-separator);
+  font-size: 1rem;
+}
+
+.mc-row:last-child {
+  border-bottom: none;
+  padding-bottom: 2px;
+}
+
+.mc-label {
+  color: var(--mc-text-2);
+  flex: 0 0 auto;
+}
+
+.mc-value {
+  color: var(--mc-text);
+  font-weight: 550;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.mc-value.is-good { color: var(--mc-good); }
+.mc-value.is-warn { color: var(--mc-warn); }
+.mc-value.is-bad { color: var(--mc-bad); }
+
+/* chips / badges */
+.mc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.mc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: var(--mc-surface-2);
+  color: var(--mc-text-2);
+  border: 1px solid var(--mc-border);
+}
+
+.mc-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.mc-chip.is-on {
+  color: var(--mc-good);
+  background: color-mix(in srgb, var(--mc-good) 14%, transparent);
+  border-color: color-mix(in srgb, var(--mc-good) 30%, transparent);
+}
+
+.mc-chip.is-on::before {
+  opacity: 1;
+}
+
+.mc-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 650;
+  background: var(--mc-surface-2);
+  color: var(--mc-text-2);
+}
+
+.mc-badge.is-good { color: var(--mc-good); background: color-mix(in srgb, var(--mc-good) 15%, transparent); }
+.mc-badge.is-warn { color: var(--mc-warn); background: color-mix(in srgb, var(--mc-warn) 15%, transparent); }
+.mc-badge.is-bad { color: var(--mc-bad); background: color-mix(in srgb, var(--mc-bad) 15%, transparent); }
+
+/* hero card with big numbers */
+.mc-hero {
+  padding: 18px 18px 16px;
+}
+
+.mc-hero-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mc-hero-main {
+  font-size: 2.9rem;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--mc-accent);
+  text-shadow: var(--mc-glow);
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-hero-main small {
+  font-size: 1.2rem;
+  font-weight: 650;
+  margin-left: 2px;
+  opacity: 0.8;
+}
+
+.mc-hero-sub {
+  font-size: 0.8rem;
+  color: var(--mc-text-2);
+  margin-top: 6px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.mc-stats {
+  display: flex;
+  gap: 18px;
+}
+
+.mc-stat {
+  text-align: right;
+}
+
+.mc-stat-value {
+  font-size: 1.2rem;
+  font-weight: 650;
+  color: var(--mc-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-stat-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mc-text-2);
+}
+
+/* rows that follow a chip block */
+.mc-rows-after {
+  margin-top: 8px;
+  border-top: 1px solid var(--mc-separator);
+}
+
+/* meter bar */
+.mc-meter {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--mc-surface-2);
+  overflow: hidden;
+  margin-top: 14px;
+}
+
+.mc-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--mc-good);
+  transition: width 0.4s ease;
+}
+
+.mc-meter.is-warn > span { background: var(--mc-warn); }
+.mc-meter.is-bad > span { background: var(--mc-bad); }
+
+/* empty state */
+.mc-empty {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--mc-text-2);
+}
+
+.mc-empty ion-icon {
+  font-size: 44px;
+  color: var(--mc-accent);
+  opacity: 0.8;
+  margin-bottom: 10px;
+}
+
+/* pill button */
+ion-button.mc-pill {
+  --border-radius: 999px;
+  --padding-start: 22px;
+  --padding-end: 22px;
+  font-weight: 600;
+}
+
+/* card header variants used by the settings cards */
+.mc-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* title left, action buttons right */
+.mc-card-head.mc-split {
+  justify-content: space-between;
+}
+
+.mc-card-head.mc-sub {
+  margin-top: 16px;
+}
+
+.mc-field-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--mc-text-2);
+  margin: 12px 2px 0;
+}
+
+/* collapsible section: a card whose header toggles its content */
+.mc-fold {
+  background: linear-gradient(180deg, var(--mc-surface-top) 0%, var(--mc-surface) 100%);
+  border: 1px solid var(--mc-border);
+  border-radius: var(--mc-radius);
+  box-shadow: var(--mc-shadow);
+  color: var(--mc-text);
+  overflow: hidden;
+}
+
+.mc-fold-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mc-fold-head:active {
+  background: var(--mc-surface-2);
+}
+
+.mc-fold-chev {
+  margin-left: auto;
+  font-size: 18px;
+  color: var(--mc-text-2);
+}
+
+.mc-fold > :not(.mc-fold-head) {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
+.mc-fold > :not(.mc-fold-head):last-child {
+  margin-bottom: 16px;
+}
+
+/* a card inside a fold is flat, the fold is already the card */
+.mc-fold .mc-card {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+ion-button.mc-action {
+  --border-radius: 12px;
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+/* form fields inside cards: filled, rounded */
+.mc-card ion-item,
+.mc-fold > ion-item {
+  --background: var(--mc-surface-2);
+  --color: var(--mc-text);
+  --border-radius: 12px;
+  --inner-border-width: 0;
+  --padding-start: 14px;
+  --inner-padding-end: 10px;
+  --min-height: 52px;
+  border-radius: 12px;
+  margin-top: 8px;
+}

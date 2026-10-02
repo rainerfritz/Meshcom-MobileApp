@@ -11,3 +11,13 @@
   margin-right: 7px;
   margin-bottom: 10px;
 }
+
+/* grey card look of the overlay. It used to come from a global ion-card rule in Mheard.css */
+.map-overlay-container ion-card {
+  --background: #404544;
+  --color: #fff;
+}
+
+.map-overlay-container ion-card-title {
+  --color: #9fd6fd;
+}
