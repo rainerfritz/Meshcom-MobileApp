@@ -100,7 +100,8 @@ http://ionicframework.com/docs/theming/ */
   --bubble-received-border: #a9c4d6;
 }
 
-@media (prefers-color-scheme: dark) {
+/* The app is always dark, independent of the system theme. The light values above are only the base the dark block overrides. */
+@media all {
   /*
    * Dark Colors
    * -------------------------------------------

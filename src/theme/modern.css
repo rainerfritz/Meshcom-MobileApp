@@ -1,50 +1,28 @@
 /*
  * Modern grouped-card design for the Settings, Info and Heard Nodes tabs.
  * All classes carry the mc- prefix because plain class names and ids in the page css files are global.
- * Dark is the reference look, the light values below only keep the pages readable in the light system theme.
+ * The app is always dark, independent of the system theme.
  */
 
 :root {
-  --mc-bg: #f2f2f7;
-  --mc-surface: #ffffff;
-  --mc-surface-top: #ffffff;
-  --mc-surface-2: #f2f2f7;
-  --mc-border: rgba(60, 60, 67, 0.12);
-  --mc-separator: rgba(60, 60, 67, 0.14);
-  --mc-text: #000000;
-  --mc-text-2: rgba(60, 60, 67, 0.62);
-  --mc-accent: #0a72c9;
-  --mc-accent-soft: rgba(10, 114, 201, 0.12);
-  --mc-glow: none;
-  --mc-good: #1f9d4c;
-  --mc-lime: #6a9a14;
-  --mc-weak: #d9730d;
-  --mc-warn: #b7791f;
-  --mc-bad: #d62c3b;
-  --mc-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mc-bg: #000000;
+  --mc-surface: #141416;
+  --mc-surface-top: #1d1d20;
+  --mc-surface-2: #232327;
+  --mc-border: rgba(255, 255, 255, 0.08);
+  --mc-separator: rgba(255, 255, 255, 0.07);
+  --mc-text: #ffffff;
+  --mc-text-2: rgba(235, 235, 245, 0.58);
+  --mc-accent: #9fd6fd;
+  --mc-accent-soft: rgba(159, 214, 253, 0.14);
+  --mc-glow: 0 0 18px rgba(159, 214, 253, 0.35);
+  --mc-good: #32d74b;
+  --mc-lime: #b7e34a;
+  --mc-warn: #ffd60a;
+  --mc-weak: #ff9f0a;
+  --mc-bad: #ff453a;
+  --mc-shadow: none;
   --mc-radius: 18px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --mc-bg: #000000;
-    --mc-surface: #141416;
-    --mc-surface-top: #1d1d20;
-    --mc-surface-2: #232327;
-    --mc-border: rgba(255, 255, 255, 0.08);
-    --mc-separator: rgba(255, 255, 255, 0.07);
-    --mc-text: #ffffff;
-    --mc-text-2: rgba(235, 235, 245, 0.58);
-    --mc-accent: #9fd6fd;
-    --mc-accent-soft: rgba(159, 214, 253, 0.14);
-    --mc-glow: 0 0 18px rgba(159, 214, 253, 0.35);
-    --mc-good: #32d74b;
-    --mc-lime: #b7e34a;
-    --mc-weak: #ff9f0a;
-    --mc-warn: #ffd60a;
-    --mc-bad: #ff453a;
-    --mc-shadow: none;
-  }
 }
 
 /* page + toolbar */
