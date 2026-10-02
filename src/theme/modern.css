@@ -263,6 +263,7 @@ ion-toolbar.mc-toolbar {
   font-weight: 650;
   color: var(--mc-text);
   font-variant-numeric: tabular-nums;
+  min-height: 1.5em;
 }
 
 .mc-stat-label {
