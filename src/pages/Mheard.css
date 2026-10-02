@@ -1,26 +1,45 @@
-ion-card {
-    --background: #404544;
-    --color: #fff;
-  }
-  
-  ion-card-title {
-    --color: #9fd6fd;
-  }
-.mhcont{
-  display: flex;
-  flex-wrap: wrap;
-  align-content: space-between;
+.mh-call {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--mc-accent);
+  text-shadow: var(--mc-glow);
 }
-.rowcont{
-    display: flex;
-    flex-wrap: wrap;
-    align-content: space-between;
-    align-items: center;
-    font-size: 1.1em;
+
+.mh-when {
+  font-size: 0.82rem;
+  color: var(--mc-text-2);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }
-.value{
-    padding-left: 5px;
+
+.mh-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 8px 0 6px;
 }
-.value_r{
-  padding-left: 15px;
+
+.mh-stat {
+  background: var(--mc-surface-2);
+  border-radius: 14px;
+  padding: 10px 6px;
+  text-align: center;
 }
+
+.mh-stat-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--mc-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.mh-stat-value small {
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-left: 2px;
+  color: var(--mc-text-2);
+}
+
+.mh-stat-value.is-good { color: var(--mc-good); }
+.mh-stat-value.is-warn { color: var(--mc-warn); }
+.mh-stat-value.is-bad { color: var(--mc-bad); }
