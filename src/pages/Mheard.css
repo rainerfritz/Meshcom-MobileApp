@@ -40,6 +40,8 @@
   color: var(--mc-text-2);
 }
 
-.mh-stat-value.is-good { color: var(--mc-good); }
-.mh-stat-value.is-warn { color: var(--mc-warn); }
+.mh-stat-value.is-great { color: var(--mc-good); }
+.mh-stat-value.is-good { color: var(--mc-lime); }
+.mh-stat-value.is-ok { color: var(--mc-warn); }
+.mh-stat-value.is-weak { color: var(--mc-weak); }
 .mh-stat-value.is-bad { color: var(--mc-bad); }

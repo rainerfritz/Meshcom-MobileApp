@@ -10,9 +10,11 @@ import { useStoreState } from 'pullstate';
 
 
 // LoRa signal quality, used to colour the RSSI/SNR values. RSSI in dBm, SNR in dB.
-type Quality = 'good' | 'warn' | 'bad';
-const rssiQuality = (rssi:number):Quality => rssi >= -90 ? 'good' : rssi >= -110 ? 'warn' : 'bad';
-const snrQuality = (snr:number):Quality => snr >= 0 ? 'good' : snr >= -10 ? 'warn' : 'bad';
+// RSSI: >= -80 good, >= -90 ok, >= -115 weak, below that bad
+// SNR:  >= -5 very good, >= -10 good, >= -15 ok, below that bad
+type Quality = 'great' | 'good' | 'ok' | 'weak' | 'bad';
+const rssiQuality = (rssi:number):Quality => rssi >= -80 ? 'good' : rssi >= -90 ? 'ok' : rssi >= -115 ? 'weak' : 'bad';
+const snrQuality = (snr:number):Quality => snr >= -5 ? 'great' : snr >= -10 ? 'good' : snr >= -15 ? 'ok' : 'bad';
 
 
 const Mheard = () => {
