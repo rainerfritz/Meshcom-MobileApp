@@ -42,10 +42,10 @@
 
 .settings_btns ion-button {
   --border-radius: 12px;
-  --padding-start: 6px;
-  --padding-end: 6px;
-  margin: 4px 0;
-  font-size: 0.8rem;
+  --padding-start: 8px;
+  --padding-end: 8px;
+  margin: 5px 0;
+  font-size: 0.9rem;
   white-space: nowrap;
 }
 
