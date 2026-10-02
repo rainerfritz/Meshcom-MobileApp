@@ -1,29 +1,53 @@
 /*
  * Modern grouped-card design for the Settings, Info and Heard Nodes tabs.
  * All classes carry the mc- prefix because plain class names and ids in the page css files are global.
- * The app is always dark, independent of the system theme.
+ * Light is the default, dark follows the system theme. In light the page is a tinted grey and the cards are
+ * white with a border and shadow, so they stand out from the background.
  */
 
 :root {
-  --mc-bg: #000000;
-  --mc-surface: #141416;
-  --mc-surface-top: #1d1d20;
-  --mc-surface-2: #232327;
-  --mc-popup: #2e2e33;
-  --mc-border: rgba(255, 255, 255, 0.08);
-  --mc-separator: rgba(255, 255, 255, 0.07);
-  --mc-text: #ffffff;
-  --mc-text-2: rgba(235, 235, 245, 0.74);
-  --mc-accent: #9fd6fd;
-  --mc-accent-soft: rgba(159, 214, 253, 0.14);
-  --mc-glow: 0 0 18px rgba(159, 214, 253, 0.35);
-  --mc-good: #32d74b;
-  --mc-lime: #b7e34a;
-  --mc-warn: #ffd60a;
-  --mc-weak: #ff9f0a;
-  --mc-bad: #ff453a;
-  --mc-shadow: none;
+  --mc-bg: #e6eaf1;
+  --mc-surface: #ffffff;
+  --mc-surface-top: #ffffff;
+  --mc-surface-2: #eef1f6;
+  --mc-popup: #ffffff;
+  --mc-border: rgba(30, 45, 70, 0.14);
+  --mc-separator: rgba(30, 45, 70, 0.1);
+  --mc-text: #0b1220;
+  --mc-text-2: rgba(25, 35, 55, 0.68);
+  --mc-accent: #0a6ec2;
+  --mc-accent-soft: rgba(10, 110, 194, 0.12);
+  --mc-glow: none;
+  --mc-good: #1f9d4c;
+  --mc-lime: #6a9a14;
+  --mc-warn: #b7791f;
+  --mc-weak: #d9730d;
+  --mc-bad: #d62c3b;
+  --mc-shadow: 0 1px 2px rgba(20, 30, 50, 0.08), 0 6px 16px rgba(20, 30, 50, 0.07);
   --mc-radius: 18px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mc-bg: #000000;
+    --mc-surface: #141416;
+    --mc-surface-top: #1d1d20;
+    --mc-surface-2: #232327;
+    --mc-popup: #2e2e33;
+    --mc-border: rgba(255, 255, 255, 0.08);
+    --mc-separator: rgba(255, 255, 255, 0.07);
+    --mc-text: #ffffff;
+    --mc-text-2: rgba(235, 235, 245, 0.74);
+    --mc-accent: #9fd6fd;
+    --mc-accent-soft: rgba(159, 214, 253, 0.14);
+    --mc-glow: 0 0 18px rgba(159, 214, 253, 0.35);
+    --mc-good: #32d74b;
+    --mc-lime: #b7e34a;
+    --mc-warn: #ffd60a;
+    --mc-weak: #ff9f0a;
+    --mc-bad: #ff453a;
+    --mc-shadow: none;
+  }
 }
 
 /* alerts, loading overlays, toasts and the sync dialog sit a bit lighter than the cards */
