@@ -1484,13 +1484,13 @@ const Tab1: React.FC = () => {
                   </div>
 
                   <div className="cn-actions">
-                    <IonButton className="cn-connect" expand="block" size="large"
+                    <IonButton className="cn-connect" expand="block" size="default"
                       color={isTarget && connFlag ? 'danger' : 'primary'}
                       disabled={connecting}
                       onClick={() => handleBtn(dev.dev_id_)}>
                       {isTarget && connecting ? <><IonSpinner name="crescent" slot="start" /> Connecting</> : isTarget && connFlag ? "Disconnect" : "Connect"}
                     </IonButton>
-                    <IonButton className="cn-key" size="large" fill="outline" color="medium" aria-label="BLE PIN" onClick={() => openPinModal(dev)}>
+                    <IonButton className="cn-key" size="default" fill="outline" color="medium" aria-label="BLE PIN" onClick={() => openPinModal(dev)}>
                       <IonIcon slot="icon-only" icon={keyOutline}></IonIcon>
                     </IonButton>
                   </div>
