@@ -2,7 +2,7 @@ import { IonButton, IonContent, IonHeader, IonPage, IonTitle, IonToolbar,
   IonAlert, useIonViewDidEnter, isPlatform, IonLoading, IonModal,
 IonButtons, IonList, IonItem, IonLabel, IonInput, IonIcon, IonText,
 IonToggle, IonSpinner} from '@ionic/react';
-import { keyOutline, trashOutline, checkmarkCircle, radioOutline, bluetoothOutline } from 'ionicons/icons';
+import { keyOutline, trashOutline, checkmarkCircle, closeCircle, radioOutline, bluetoothOutline } from 'ionicons/icons';
 
 import './Connect.css';
 
@@ -23,6 +23,7 @@ import ConfigStore from '../store/ConfStore';
 import { ConfType, MheardType } from '../utils/AppInterfaces';
 import { AlertCard } from '../components/AlertCard';
 import { SignalBars } from '../components/SignalBars';
+import { compareBleNodes, bleNodeCallsign } from '../utils/Callsign';
 import AppActiveState  from '../store/AppActive';
 import ConfigSyncWatchdog, { SyncProgress } from '../utils/ConfigSyncWatchdog';
 import { ConfigSyncRetry } from '../components/ConfigSyncRetry';
@@ -445,7 +446,8 @@ const Tab1: React.FC = () => {
     });
 
     const all: ScanRes[] = Array.from(scan_map.current.values()).map((e) => ({ ...e.res, rssi_: Math.round(e.rssi).toString() }));
-    all.sort((a, b) => (a.devName > b.devName) ? 1 : -1);
+    // sorted by callsign, so OE1KFR-1 and OE1KFR-2 stand together although the node id in front differs
+    all.sort((a, b) => compareBleNodes(a.devName, b.devName));
     ble_scan_devices.current = all;
 
     // filter if we want to see only MC devices
@@ -1440,7 +1442,7 @@ const Tab1: React.FC = () => {
             duration={3000}  // Duration in milliseconds, adjust as needed
           />
 
-          <div className="mc-stack">
+          <div className="mc-stack cn-stack">
 
             <div className="mc-card">
               <div className="mc-card-head mc-split cn-status">
@@ -1449,7 +1451,7 @@ const Tab1: React.FC = () => {
                   <div>
                     <div className="mc-card-title">Nearby Nodes</div>
                     <div className="cn-state">
-                      {connFlag ? "Connected" : connecting ? "Connecting..." : isScanning ? <><span className="cn-pulse"></span>Scanning</> : "Scan paused"}
+                      {connFlag ? "Tap the node to disconnect" : connecting ? "Connecting..." : isScanning ? <><span className="cn-pulse"></span>Scanning, tap to connect</> : "Scan paused"}
                     </div>
                   </div>
                 </div>
@@ -1461,36 +1463,46 @@ const Tab1: React.FC = () => {
               <IonButton expand='block' size="large" fill='solid' color='danger' onClick={() => handleReconActive(false)}>Cancel Reconnecting</IonButton>
             }
 
-            {/* while connecting or connected only the node in use is shown */}
+            {/* while connecting or connected only the node in use is shown. A tap on the card connects or disconnects */}
             {scanDevices.filter((dev) => !(connFlag || connecting) || dev.dev_id_ === devID_s).map((dev) => {
               const isTarget = dev.dev_id_ === devID_s && (connFlag || connecting);
+              const isConnected = isTarget && connFlag;
               const rssi = parseInt(dev.rssi_);
+              // the part of the BLE name in front of the callsign, e.g. "MC-1c24"
+              const nodeId = bleNodeCallsign(dev.devName) !== dev.devName
+                ? dev.devName.slice(0, dev.devName.length - bleNodeCallsign(dev.devName).length - 1) : "";
 
               return (
-                <div className="mc-card cn-card" key={dev.dev_id_}>
-                  <div className="mc-card-head mc-split">
-                    <div className="mc-title">
-                      <span className="mc-icon"><IonIcon icon={radioOutline} /></span>
-                      <div className="mc-card-title cn-name">{dev.devName}</div>
+                <div className={"mc-card cn-card cn-tap " + (isConnected ? "is-connected" : "")} key={dev.dev_id_}
+                  role="button" tabIndex={0}
+                  aria-label={(isConnected ? "Connected, tap to disconnect " : "Disconnected, tap to connect ") + dev.devName}
+                  onClick={() => { if (!connecting) handleBtn(dev.dev_id_); }}
+                  onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !connecting) handleBtn(dev.dev_id_); }}>
+                  <div className="cn-row">
+                    {/* the icon shows the connection state: green check connected, red cross disconnected, spinner connecting */}
+                    <span className={"cn-state-icon " + (isConnected ? "is-on" : isTarget ? "is-busy" : "is-off")}>
+                      {isTarget && !connFlag ? <IonSpinner name="crescent" /> : <IonIcon icon={isConnected ? checkmarkCircle : closeCircle} />}
+                    </span>
+
+                    {/* node id small on the left, the callsign big and bold behind it in the same line */}
+                    <div className="cn-namebox">
+                      <div className="cn-line1">
+                        {nodeId && <span className="cn-nodeid">{nodeId}</span>}
+                        <span className="mc-card-title cn-name">{bleNodeCallsign(dev.devName)}</span>
+                      </div>
                     </div>
+
                     {isTarget ?
-                      <span className={"mc-badge " + (connFlag ? "is-good" : "is-warn")}>{connFlag ? "Connected" : "Connecting"}</span>
+                      <div className={"cn-statetext " + (isConnected ? "is-on" : "is-busy")}>{isConnected ? "Connected" : "Connecting"}</div>
                     :
                       <div className="cn-signal">
                         <span className="cn-rssi">{dev.rssi_} dBm</span>
                         <SignalBars rssi={rssi} />
                       </div>
                     }
-                  </div>
 
-                  <div className="cn-actions">
-                    <IonButton className="cn-connect" expand="block" size="default"
-                      color={isTarget && connFlag ? 'danger' : 'primary'}
-                      disabled={connecting}
-                      onClick={() => handleBtn(dev.dev_id_)}>
-                      {isTarget && connecting ? <><IonSpinner name="crescent" slot="start" /> Connecting</> : isTarget && connFlag ? "Disconnect" : "Connect"}
-                    </IonButton>
-                    <IonButton className="cn-key" size="default" fill="outline" color="medium" aria-label="BLE PIN" onClick={() => openPinModal(dev)}>
+                    <IonButton className="cn-key" fill="outline" color="medium" aria-label="BLE PIN"
+                      onClick={(e) => { e.stopPropagation(); openPinModal(dev); }}>
                       <IonIcon slot="icon-only" icon={keyOutline}></IonIcon>
                     </IonButton>
                   </div>

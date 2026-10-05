@@ -1,5 +1,13 @@
 .cn-status {
   margin-bottom: 0;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+/* on narrow screens the toggle moves to its own line instead of overlapping the title */
+.cn-status > .mc-title {
+  flex: 1 1 150px;
+  min-width: 0;
 }
 
 .cn-status ion-toggle {
@@ -22,6 +30,7 @@
 
 /* pulsing dot while the scan runs */
 .cn-pulse {
+  flex: 0 0 8px;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -34,47 +43,141 @@
   50% { opacity: 1; transform: scale(1.1); }
 }
 
+/* one compact row per node: state icon, callsign, signal, PIN key */
+.cn-stack {
+  gap: 10px;
+}
+
+/* a little less inner space above and below than a normal card (the selector must beat .mc-card) */
+.mc-card.cn-card {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.cn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cn-state-icon {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+.cn-state-icon ion-spinner {
+  width: 20px;
+  height: 20px;
+}
+
+.cn-state-icon.is-on {
+  color: var(--mc-good);
+  background: color-mix(in srgb, var(--mc-good) 16%, transparent);
+}
+
+.cn-state-icon.is-off {
+  color: var(--mc-bad);
+  background: color-mix(in srgb, var(--mc-bad) 14%, transparent);
+}
+
+.cn-state-icon.is-busy {
+  color: var(--mc-warn);
+  background: color-mix(in srgb, var(--mc-warn) 15%, transparent);
+}
+
+.cn-namebox {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* node id small on the left, callsign big and bold behind it in the same line, RSSI above the four bars on the right */
+.cn-line1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+  min-width: 0;
+}
+
 .cn-name {
+  flex: 0 0 auto;
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
   color: var(--mc-accent);
-  text-shadow: var(--mc-glow);
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+}
+
+.cn-nodeid {
+  font-size: 0.76rem;
+  line-height: 1.25;
+  color: var(--mc-text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .cn-signal {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 
 .cn-rssi {
-  font-size: 0.95rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: var(--mc-text-2);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.cn-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
+.cn-signal .mc-signal {
+  height: 16px;
 }
 
-.cn-connect {
-  flex: 1;
-  margin: 0;
-  --border-radius: 14px;
+.cn-statetext {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
   font-weight: 650;
-  letter-spacing: 0.02em;
 }
+
+.cn-statetext.is-on { color: var(--mc-good); }
+.cn-statetext.is-busy { color: var(--mc-warn); }
 
 .cn-key {
   flex: 0 0 auto;
   margin: 0;
-  --border-radius: 14px;
+  min-width: 48px;
+  height: 38px;
+  --border-radius: 12px;
+}
+
+/* the card itself is the connect / disconnect button */
+.cn-tap {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease, border-color 0.2s ease;
+  outline: none;
+}
+
+.cn-tap:active {
+  transform: scale(0.985);
+}
+
+.cn-tap:focus-visible {
+  border-color: var(--mc-accent);
+}
+
+.cn-tap.is-connected {
+  border-color: color-mix(in srgb, var(--mc-good) 55%, transparent);
 }
 
 .cn-hint {
