@@ -232,6 +232,18 @@ class DatabaseService {
                 await DatabaseService.loadTextFilterCache();
             }
 
+            // app wide key/value settings of the phone (auto reconnect flag, last connected device ...)
+            if (DatabaseService.db) {
+                await DatabaseService.db.execute(`
+                    CREATE TABLE IF NOT EXISTS AppSettings (
+                        key TEXT PRIMARY KEY NOT NULL,
+                        value TEXT NOT NULL
+                    )
+                `).catch((err) => {
+                    LogS.log(1, 'Error creating AppSettings table:' + err);
+                });
+            }
+
 
             // housekeeping
             if (DatabaseService.db) {
@@ -580,27 +592,39 @@ class DatabaseService {
         }
     }
 
-    // return reconStateVal
-    static async getReconState() {
-        console.log('SQLite Connection:', DatabaseService.connection);
-        console.log('SQLite DB:', DatabaseService.db);
-
-        if (DatabaseService.db) {
-            console.log('DB Getting reconState');
-            try {
-                const res = await DatabaseService.db.query('SELECT * FROM reconState WHERE id = 0;');
-                if (res.values) {
-                    console.log('reconStateVal:', res.values[0].reconStateVal);
-                    return res.values[0].reconStateVal;
+    // read one app setting, null if it was never stored. Opens the DB itself, it is closed on every BLE disconnect
+    static async getAppSetting(key: string): Promise<string | null> {
+        try {
+            await DatabaseService.checkDbConn();
+            if (DatabaseService.db) {
+                const res = await DatabaseService.db.query('SELECT value FROM AppSettings WHERE key = ?;', [key]);
+                if (res.values && res.values.length > 0) {
+                    return res.values[0].value as string;
                 }
-            } catch (error) {
-                console.error('Error getting reconState:', error);
+            } else {
+                LogS.log(1, 'Error getting app setting ' + key + '. Database not open.');
             }
-        } else {
-            console.error('Error getting reconState. Database not open.');
-            return -1;
+        } catch (error) {
+            LogS.log(1, 'Error getting app setting ' + key + ': ' + error);
         }
-        
+        return null;
+    }
+
+    // store one app setting (upsert). Opens the DB itself, it is closed on every BLE disconnect
+    static async setAppSetting(key: string, value: string): Promise<void> {
+        try {
+            await DatabaseService.checkDbConn();
+            if (DatabaseService.db) {
+                await DatabaseService.db.run(
+                    'INSERT INTO AppSettings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value;',
+                    [key, value]
+                );
+            } else {
+                LogS.log(1, 'Error storing app setting ' + key + '. Database not open.');
+            }
+        } catch (error) {
+            LogS.log(1, 'Error storing app setting ' + key + ': ' + error);
+        }
     }
 
     // get stored BLE PIN for a device (keyed by device name / callsign)
@@ -673,25 +697,6 @@ class DatabaseService {
             console.error('Error clearing all BLE PINs. Database not open.');
         }
     }   
-
-    // set reconStateVal
-    static async setReconState(val: number, devID_: string) {
-        if (DatabaseService.db) {
-            console.log('DB Setting reconState:', val + ' ' + devID_);
-            try {
-                await DatabaseService.db.execute(`UPDATE reconState SET reconStateVal = ${val}, devID = "${devID_}" WHERE id = 0;`);
-                // print the new reconStateVal
-                const res = await DatabaseService.db.query('SELECT * FROM reconState WHERE id = 0;');
-                if (res.values) {
-                    console.log('New reconStateVal:', res.values[0].reconStateVal);
-                }
-            } catch (error) {
-                console.error('Error setting reconState:', error);
-            }
-        } else {
-            console.error('Error setting reconState. Database not open.');
-        }
-    }
 
     // clear the TextMessages table
     static async clearTextMessages() {

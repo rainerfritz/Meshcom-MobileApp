@@ -1,22 +1,33 @@
 .cn-status {
   margin-bottom: 0;
-  flex-wrap: wrap;
-  row-gap: 8px;
+  align-items: center;
+  /* room for the two switches under each other with some air between them */
+  min-height: 84px;
 }
 
-/* on narrow screens the toggle moves to its own line instead of overlapping the title */
+/* title on the left, it takes the space that is left and its text wraps instead of pushing the switches */
 .cn-status > .mc-title {
-  flex: 1 1 150px;
+  flex: 1 1 0;
   min-width: 0;
 }
 
-.cn-status ion-toggle {
+/* the switches stand under each other on the right, their switch knobs on one line */
+.cn-toggles {
   flex: 0 0 auto;
-  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
 }
 
+.cn-toggles ion-toggle {
+  width: 100%;
+  font-size: 0.82rem;
+}
+
+/* on a narrow screen the title wraps instead of running under the switches */
 .cn-status .mc-card-title {
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .cn-state {
@@ -185,6 +196,7 @@
   margin-top: 6px;
   opacity: 0.85;
 }
+
 
 .pin-modal-btns {
   margin-top: 20px;

@@ -1,0 +1,47 @@
+/* banner of the auto reconnect cycle: floats above the page, below the Ionic overlays (alerts, modals) */
+.rec-banner {
+  position: fixed;
+  top: calc(var(--ion-safe-area-top, 0px) + 8px);
+  left: 12px;
+  right: 12px;
+  z-index: 9000;
+  pointer-events: none;
+}
+
+.rec-card {
+  pointer-events: auto;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--mc-border);
+  background: var(--ion-card-background, var(--ion-background-color));
+  color: var(--ion-text-color);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.rec-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.rec-text {
+  margin: 4px 0 10px;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.rec-weak {
+  --progress-background: var(--ion-color-warning);
+}
+
+.rec-cancel {
+  margin: 10px 0 0;
+  float: right;
+}
+
+.rec-card::after {
+  content: "";
+  display: block;
+  clear: both;
+}

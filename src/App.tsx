@@ -18,6 +18,7 @@ import Mheard from './pages/Mheard';
 import Info from './pages/Info';
 import Map from './pages/Map';
 import BleDiscoAlert from './components/BleDiscoAlert';
+import ReconnectBanner from './components/ReconnectBanner';
 
 /* Core CSS required for Ionic components to work properly */
 import '@ionic/react/css/core.css';
@@ -58,6 +59,9 @@ import { App } from '@capacitor/app';
 import DataBaseService from './DBservices/DataBaseService';
 import ChatUnseenStore from './store/ChatUnseenStore';
 import NodeInfoStore from './store/NodeInfoStore';
+import ReconnectStore from './store/ReconnectStore';
+import { APP_SETTING_AUTO_RECONNECT, APP_SETTING_LAST_DEVICE } from './utils/AppSettingKeys';
+import LogS from './utils/LogService';
 
 
 
@@ -80,6 +84,19 @@ const Appl: React.FC = () => {
     const initDB = async () => {
       console.log('Initializing Database');
       await DataBaseService.initializeDatabase();
+
+      // auto reconnect setting and the last node. Off, unless the user switched it on
+      try {
+        const autoRec = await DataBaseService.getAppSetting(APP_SETTING_AUTO_RECONNECT);
+        const lastDev = await DataBaseService.getAppSetting(APP_SETTING_LAST_DEVICE);
+        ReconnectStore.update(s => {
+          s.enabled = autoRec === '1';
+          s.lastDeviceId = lastDev ?? "";
+        });
+        LogS.log(0, "[RECONNECT] auto reconnect is " + (autoRec === '1' ? "on" : "off") + ", last node: " + (lastDev ?? "none"));
+      } catch (error) {
+        LogS.log(1, "[RECONNECT] could not load the auto reconnect setting: " + error);
+      }
     };
     // call init DB
     initDB();
@@ -101,6 +118,7 @@ const Appl: React.FC = () => {
     <IonApp>
     <IonReactRouter>
       <BleDiscoAlert />
+      <ReconnectBanner />
       <IonTabs>
         <IonRouterOutlet>
           <Route path="/connect" element={<Tab1 />} />

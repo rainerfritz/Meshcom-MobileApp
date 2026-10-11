@@ -96,11 +96,6 @@ export interface MheardType {
     mh_ncnt:number
 }
 
-// Reconnect flag for Background
-export interface ReconType {
-    recon_active:boolean
-}
-
 // gpsdata interface
 // DG{"TYP":"G","LAT":48.23804855,"LON":16.31670952,"ALT":244,"SAT":0,"SFIX":false,"HDOP":0,"RATE":1200,"NEXT":1195,"DIST":0,"DIRn":0,"DIRo":0,"DATE":"2024-01-27 12:10:22"}
 export interface GpsData {
