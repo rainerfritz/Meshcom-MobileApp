@@ -58,6 +58,7 @@ export class AutoReconnectManager {
     private wakeSleep: (() => void) | null = null;
     private autoConnectedAt: number | null = null;
     private flaps: number[] = [];
+    private expectedDisconnect = false;
 
     static getInstance() {
         if (!AutoReconnectManager.instance) {
@@ -79,6 +80,28 @@ export class AutoReconnectManager {
 
     isRunning() {
         return this.running;
+    }
+
+    /**
+     * The app itself makes the node drop the link (Deep Sleep, OTA mode). The next disconnect of a connected link is no loss:
+     * no reconnect cycle. The flag stays until that disconnect or the next connect, because the disconnect may reach
+     * the app much later (app in the background).
+     */
+    expectDisconnect() {
+        LogS.log(0, "[RECONNECT] disconnect expected (node goes to sleep or OTA mode), no reconnect after it");
+        this.expectedDisconnect = true;
+    }
+
+    /** returns true once if a disconnect was expected, and forgets it */
+    takeExpectedDisconnect(): boolean {
+        const expected = this.expectedDisconnect;
+        this.expectedDisconnect = false;
+        return expected;
+    }
+
+    /** a new connection is up: an old expectation does not apply any more */
+    clearExpectedDisconnect() {
+        this.expectedDisconnect = false;
     }
 
     /**

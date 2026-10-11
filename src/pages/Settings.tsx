@@ -22,6 +22,7 @@ import NodeInfoStore from '../store/NodeInfoStore';
 import WifiSettingsStore from '../store/WifiSettings';
 import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
+import AutoReconnectManager from '../utils/AutoReconnectManager';
 import MheardStaticStore from '../utils/MheardStaticStore';
 import AprsSettingsStore from '../store/AprSettingsStore';
 import { usePhoneGps } from '../utils/PhoneGps';
@@ -848,6 +849,8 @@ const Tab2: React.FC = () => {
       case "deepsleep": {
 
         cmd_ = "--deepsleep";
+        // the link drops because the node sleeps: no auto reconnect after it
+        AutoReconnectManager.getInstance().expectDisconnect();
         break;
       }
 
@@ -1060,6 +1063,8 @@ const Tab2: React.FC = () => {
       case "otaupdate": {
         if(nodeInfo_s.HWID !== 9 && nodeInfo_s.HWID !== 7 && nodeInfo_s.HWID !== 54){ // ESP32 only check
           cmd_ = "--ota-update";
+          // the OTA firmware has no BLE and the flashing takes long: no auto reconnect after the link drops
+          AutoReconnectManager.getInstance().expectDisconnect();
           setAlHeader("Booting into OTA Mode!");
           setAlMsg("On active Wifi connection access it after reboot via Web-Browser with " + nodeInfo_s.CALL + ".local or "+ wifiSettings_s.IP +" if in AP Mode: IP:192.168.4.1 or Meshcom-OTA.local");
           setShAlertCard(true);

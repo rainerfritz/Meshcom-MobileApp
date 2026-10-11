@@ -1070,6 +1070,7 @@ const Tab1: React.FC = () => {
         // we are connected: the loss of this connection starts a reconnect cycle (if enabled).
         // Remember the node for it, in the store and in the DB (survives an app restart)
         wasConnected.current = true;
+        AutoReconnectManager.getInstance().clearExpectedDisconnect();
 
         // the node does not advertise while connected: forget what the scan heard before, so a reconnect after a drop
         // has to hear it again (the scan entries live longer than the connect takes)
@@ -1232,7 +1233,14 @@ const Tab1: React.FC = () => {
     // Auto reconnect: a connection we had fully set up was lost without user action. The cycle is started BEFORE
     // ble_connected flips below, so BleDiscoAlert sees it running and stays quiet while it searches for the node.
     // Failed connects (wasConnected false) and manual disconnects never start one.
-    const connectionLost = wasConnected.current && manual_ble_disco.current === false;
+    // A disconnect the app asked for (node sent to Deep Sleep or OTA mode) is no loss either: nothing to reconnect, the
+    // normal disconnect alert tells it.
+    const wasUp = wasConnected.current;
+    const disconnectExpected = wasUp && AutoReconnectManager.getInstance().takeExpectedDisconnect();
+    if (disconnectExpected) {
+      LogS.log(0, "[RECONNECT] the disconnect was expected, no reconnect");
+    }
+    const connectionLost = wasUp && manual_ble_disco.current === false && !disconnectExpected;
     wasConnected.current = false;
     if (connectionLost) {
       const rec = ReconnectStore.getRawState();

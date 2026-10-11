@@ -294,3 +294,22 @@ describe("advert hit rate", () => {
     expect(advertHits(times, 1000 + REC_HIT_WINDOW_MS + 1)).toBe(0);
   });
 });
+
+describe("expected disconnect (node sent to sleep)", () => {
+  it("is reported once and then forgotten", () => {
+    const mgr = new AutoReconnectManager();
+    expect(mgr.takeExpectedDisconnect()).toBe(false);
+
+    mgr.expectDisconnect();
+    expect(mgr.takeExpectedDisconnect()).toBe(true);
+    expect(mgr.takeExpectedDisconnect()).toBe(false);
+  });
+
+  it("is dropped when a new connection comes up", () => {
+    const mgr = new AutoReconnectManager();
+    mgr.expectDisconnect();
+    mgr.clearExpectedDisconnect();
+    expect(mgr.takeExpectedDisconnect()).toBe(false);
+  });
+});
+
