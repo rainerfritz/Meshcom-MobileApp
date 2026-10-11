@@ -99,6 +99,33 @@ describe("AutoReconnectManager", () => {
     expect(st().lastResult).toBe('poorLink');
   });
 
+  it("ends with weakSignal when the RSSI flickers around the limit but is mostly below it", async () => {
+    // one value at the limit must not turn "signal too weak" into "heard too rarely"
+    let rssi = REC_MIN_RSSI;
+    const { mgr, connectFn } = setup(() => heard(rssi));
+    mgr.start(DEV);
+    await advance(1500);   // too short for a connect (dwell time), the value is fine
+
+    rssi = REC_MIN_RSSI - 2;
+    await advance(REC_SEARCH_WINDOW_MS);
+
+    expect(connectFn).not.toHaveBeenCalled();
+    expect(st().lastResult).toBe('weakSignal');
+  });
+
+  it("ends with poorLink when the signal was weak first and the node is then heard too rarely", async () => {
+    let probe = heard(REC_MIN_RSSI - 3);
+    const { mgr, connectFn } = setup(() => probe);
+    mgr.start(DEV);
+    await advance(3000);
+
+    probe = heard(-62, REC_MIN_HITS - 1);
+    await advance(REC_SEARCH_WINDOW_MS);
+
+    expect(connectFn).not.toHaveBeenCalled();
+    expect(st().lastResult).toBe('poorLink');
+  });
+
   it("connects when the hit rate gets good enough", async () => {
     let hits = 1;
     const { mgr, connectFn } = setup(() => heard(-62, hits));

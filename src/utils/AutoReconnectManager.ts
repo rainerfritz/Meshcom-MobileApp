@@ -240,7 +240,7 @@ export class AutoReconnectManager {
         let windowStart = Date.now();
         let attempts = 0;
         let everHeard = false;
-        let everRssiOk = false;   // heard at least once with a signal that is no problem by itself
+        let lastWeak: 'rssi' | 'hits' | null = null;   // why the last heard probe was no reason to connect
         let lastRssi: number | null = null;
         let goodProbes = 0;
         let firstGoodAt: number | null = null;
@@ -256,9 +256,10 @@ export class AutoReconnectManager {
         while (this.cycleId === id) {
             if (Date.now() - windowStart >= REC_SEARCH_WINDOW_MS) {
                 // nothing connected within the time window: tell the user why
-                // heard with a fine signal but too rarely (poorLink), or only with a weak signal (weakSignal)
+                // the last reason counts: the RSSI flickers around the limit, a single good value must not
+                // turn "signal too weak" into "heard too rarely" (poorLink)
                 const reason: ReconnectResult = attempts > 0 ? 'failed'
-                    : everHeard ? (everRssiOk ? 'poorLink' : 'weakSignal')
+                    : everHeard ? (lastWeak === 'rssi' ? 'weakSignal' : 'poorLink')
                     : 'notFound';
                 LogS.log(0, "[RECONNECT] time window over, result: " + reason + ", last rssi: " + (lastRssi !== null ? lastRssi.toFixed(1) : "none"));
                 this.finish(id, reason);
@@ -295,7 +296,8 @@ export class AutoReconnectManager {
                 // hears a node at -65 dBm only now and then, and then the connect request is lost as well
                 const tooWeak = probe!.rssi < REC_MIN_RSSI;
                 const tooFewHits = probe!.hits < REC_MIN_HITS;
-                if (!tooWeak) everRssiOk = true;
+                if (tooWeak) lastWeak = 'rssi';
+                else if (tooFewHits) lastWeak = 'hits';
 
                 if (tooWeak || tooFewHits) {
                     // heard, but the link would probably drop (or not even come up) while it is set up
