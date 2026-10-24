@@ -93,8 +93,17 @@ export interface MheardType {
     mh_distance:number,
     mh_pl: number,
     mh_mesh: number,
-    mh_ncnt:number
+    mh_ncnt:number,
+    mh_hm:number,       // SNR in dB with which the station heard us, MH_NA if the node did not send it
+    mh_gw:number,       // 1 = station is a gateway
+    mh_role:string,     // 'S' super node, 'N' needed, 'R' redundant, "" = unknown
+    mh_ex:number,
+    mh_nb:number
 }
+
+// "not available" marker for numeric Mheard values the node did not send (RSSI, SNR, HM).
+// 0 is a valid dBm / dB value, so it can not be the default.
+export const MH_NA = -999;
 
 // gpsdata interface
 // DG{"TYP":"G","LAT":48.23804855,"LON":16.31670952,"ALT":244,"SAT":0,"SFIX":false,"HDOP":0,"RATE":1200,"NEXT":1195,"DIST":0,"DIRn":0,"DIRo":0,"DATE":"2024-01-27 12:10:22"}
@@ -396,21 +405,31 @@ export interface AprsSettings {
 }
 
 // Mheard interface
-// {"TYP":"MH","CALL":"OE1MOJ-1","DATE":"2026-04-28","TIME":"19:47:06","PLT":58,"HW":3,"MOD":136,"RSSI":-91,"SNR":-1,"DIST":1.8,"PL":3,"MESH":1,"NCNT":7}
+// {"TYP":"MH","CALL":"OE1MOJ-1","DATE":"2026-04-28","TIME":"19:47:06","PLT":58,"HW":3,"MOD":136,"RSSI":-91,"SNR":-1,"DIST":1.8,"PL":3,"MESH":1,"NCNT":7,
+//  "AGE":2,"HM":-3,"ROLE":"N","EX":1,"NB":4,"GW":0,"VIA":0}
+// Newer firmware omits what it does not know: PLT, MOD, RSSI, PL, MESH (direct station without detail slot),
+// SNR and HM (unknown), ROLE (not direct). Older firmware sends none of the last 7 fields.
 export interface Mheard {
     TYP: string,
     CALL: string,
     DATE: string,
     TIME: string,
-    PLT: number,
+    PLT?: number,
     HW: number,
-    MOD: number,
-    RSSI: number,
-    SNR: number,
-    DIST: number,
-    PL: number,
-    MESH: number,
-    NCNT: number
+    MOD?: number,
+    RSSI?: number,
+    SNR?: number,
+    DIST?: number,
+    PL?: number,
+    MESH?: number,
+    NCNT?: number,
+    AGE?: number,
+    HM?: number,
+    ROLE?: string,
+    EX?: number,
+    NB?: number,
+    GW?: number,
+    VIA?: number
 }
 
 // Config sent from Node Finish message

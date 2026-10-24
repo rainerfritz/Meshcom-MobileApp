@@ -3,17 +3,17 @@ import { radioOutline, cellularOutline } from 'ionicons/icons';
 import MhStore from '../store/MheardStore';
 import ConfigStore from '../store/ConfStore';
 import { getMheards, getConfigStore } from '../store/Selectors';
-import {ConfType, MheardType} from '../utils/AppInterfaces';
+import {ConfType, MheardType, MH_NA} from '../utils/AppInterfaces';
 import './Mheard.css';
 import { useEffect } from 'react';
 import { useStoreState } from 'pullstate';
 
 
 // LoRa signal quality, used to colour the RSSI/SNR values. RSSI in dBm, SNR in dB.
-// RSSI: >= -80 good, >= -90 ok, >= -115 weak, below that bad
+// RSSI: >= -90 good, >= -100 ok, >= -115 weak, below that bad
 // SNR:  >= -5 very good, >= -10 good, >= -15 ok, below that bad
 type Quality = 'great' | 'good' | 'ok' | 'weak' | 'bad';
-const rssiQuality = (rssi:number):Quality => rssi >= -80 ? 'good' : rssi >= -90 ? 'ok' : rssi >= -115 ? 'weak' : 'bad';
+const rssiQuality = (rssi:number):Quality => rssi >= -90 ? 'good' : rssi >= -100 ? 'ok' : rssi >= -115 ? 'weak' : 'bad';
 const snrQuality = (snr:number):Quality => snr >= -5 ? 'great' : snr >= -10 ? 'good' : snr >= -15 ? 'ok' : 'bad';
 
 
@@ -59,29 +59,37 @@ const Mheard = () => {
                                 </div>
 
                                 <div className="mh-stats">
-                                    <div className="mh-stat">
+                                    {mhs.mh_rssi !== MH_NA && <div className="mh-stat">
                                         <div className={"mh-stat-value is-" + rssiQuality(mhs.mh_rssi)}>{mhs.mh_rssi}<small>dBm</small></div>
                                         <div className="mc-stat-label">RSSI</div>
-                                    </div>
-                                    <div className="mh-stat">
+                                    </div>}
+                                    {mhs.mh_snr !== MH_NA && <div className="mh-stat">
                                         <div className={"mh-stat-value is-" + snrQuality(mhs.mh_snr)}>{mhs.mh_snr}<small>dB</small></div>
                                         <div className="mc-stat-label">SNR</div>
-                                    </div>
-                                    <div className="mh-stat">
+                                    </div>}
+                                    {mhs.mh_distance >= 0 && <div className="mh-stat">
                                         <div className="mh-stat-value">{mhs.mh_distance}<small>km</small></div>
                                         <div className="mc-stat-label">Dist</div>
-                                    </div>
+                                    </div>}
                                 </div>
 
-                                <div className="mc-rows">
-                                    <div className="mc-row">
-                                        <div className="mc-label">Hardware</div>
-                                        <div className="mc-value">{mhs.mh_hw}</div>
+                                <div className="mh-pairs">
+                                    <div className="mh-pair">
+                                        <span className="mc-label">Hardware</span>
+                                        <span className="mc-value">{mhs.mh_hw}</span>
                                     </div>
-                                    <div className="mc-row">
-                                        <div className="mc-label">Neighbours</div>
-                                        <div className="mc-value">{mhs.mh_ncnt}</div>
+                                    <div className="mh-pair">
+                                        <span className="mc-label">Neighbours</span>
+                                        <span className="mc-value">{mhs.mh_ncnt}</span>
                                     </div>
+                                    {mhs.mh_hm !== MH_NA && <div className="mh-pair">
+                                        <span className="mc-label">Hears me</span>
+                                        <span className="mc-value">{mhs.mh_hm} dB</span>
+                                    </div>}
+                                    {mhs.mh_gw === 1 && <div className="mh-pair">
+                                        <span className="mc-label">Gateway</span>
+                                        <span className="mc-value">Yes</span>
+                                    </div>}
                                 </div>
                             </div>
                         )) : (

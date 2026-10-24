@@ -1,5 +1,5 @@
 PODS:
-  - Capacitor (8.5.1):
+  - Capacitor (8.5.3):
     - CapacitorCordova
   - CapacitorApp (8.1.1):
     - Capacitor
@@ -11,7 +11,7 @@ PODS:
     - Capacitor
     - SQLCipher
     - ZIPFoundation
-  - CapacitorCordova (8.5.1)
+  - CapacitorCordova (8.5.3)
   - CapacitorGeolocation (8.2.2):
     - Capacitor
     - IONGeolocationLib (= 2.1.0)
@@ -75,12 +75,12 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/status-bar"
 
 SPEC CHECKSUMS:
-  Capacitor: 8ca6676b3b1147b00f7f3a547ccf68defd658d55
+  Capacitor: 2f67eaeb8ed79909cd35b5e7439a5c2a9ca58e0f
   CapacitorApp: 305bd13c44f6f9d164e2ee66a4faa956ed8c0e06
   CapacitorClipboard: c75fdaa6e622111119f35e7914ecfc67b05efecb
   CapacitorCommunityBluetoothLe: f9c76baa5338d206b7418c48d945d93d47800af3
   CapacitorCommunitySqlite: 785553c54e52da62d058238d4571db5692c022c4
-  CapacitorCordova: eb79411a3a0ed517eeb4c6dcf5933ce4bcbb5c9e
+  CapacitorCordova: 0b7326439c7a09fc5d20eced5e0dab986327a493
   CapacitorGeolocation: 327f18983c8f8a55e191fcf7dee80b9294f1ab78
   CapacitorHaptics: 296f771ecd89c7a1bd92a7b6826a7d268e2e70f5
   CapacitorKeyboard: b6b0744890cdb1d9a96e2cafcc9253fdcc55de3b

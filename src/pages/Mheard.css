@@ -14,9 +14,27 @@
 
 .mh-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 8px;
   margin: 8px 0 6px;
+}
+
+/* label / value pairs, two per line */
+.mh-pairs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  padding-top: 6px;
+  font-size: 0.95rem;
+}
+
+.mh-pair {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
 }
 
 .mh-stat {

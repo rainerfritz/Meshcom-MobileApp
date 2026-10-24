@@ -37,6 +37,7 @@ import { parsePositionPayload, readFrameTrailer, readMsgId, readNodeTimestampMs,
 import { isForeignDm } from "../utils/MsgFilter";
 import { stripPnSuffix } from "../utils/PnRetry";
 import GpsDataStore from '../store/GpsData';
+import { mapMheard } from '../utils/MheardMap';
 import WxDataStore from '../store/WxData';
 //import AprsCmtStore from '../store/AprsCmtStore';
 import ScanI2CStore from '../store/ScanI2CStore';
@@ -1284,25 +1285,8 @@ export function useMSG() {
                                     mheard.DIST = calced_dist;
                                 }*/
 
-                                // if NCNT is not provided, set it to 0
-                                if(mheard.NCNT === undefined || mheard.NCNT === null){
-                                    mheard.NCNT = 0;
-                                }
-
-                                const new_mheard:MheardType = {
-                                    mh_timestamp:now_timestamp,
-                                    mh_nodecall:node_call_ref.current,
-                                    mh_callSign:mheard.CALL,
-                                    mh_date:mheard.DATE,
-                                    mh_time:mheard.TIME,
-                                    mh_rssi:mheard.RSSI,
-                                    mh_snr:mheard.SNR,
-                                    mh_hw:hwName(mheard.HW),
-                                    mh_distance:+mheard.DIST.toFixed(2),
-                                    mh_pl:mheard.PL,
-                                    mh_mesh:mheard.MESH,
-                                    mh_ncnt:mheard.NCNT
-                                }
+                                // fields the node leaves out get their defaults in mapMheard
+                                const new_mheard:MheardType = mapMheard(mheard, node_call_ref.current, now_timestamp, hwName(mheard.HW));
 
                                 return (new_mheard);
                             }

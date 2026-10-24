@@ -6,7 +6,7 @@ import { useLocation } from 'react-router-dom';
 import { useStoreState } from 'pullstate';
 import { getConfigStore, getGpsData, getSensorSettings, getWxData, getDevID, getBLEconnStore, getAppActiveState } from '../store/Selectors';
 import ConfigStore from '../store/ConfStore';
-import { ConfType, GpsData, WxData, SensorSettings, SensorSettingsS1, InfoDataS1 } from '../utils/AppInterfaces';
+import { ConfType, GpsData, WxData, SensorSettings, SensorSettingsS1, InfoDataS1, NodeSettings } from '../utils/AppInterfaces';
 import {useBLE} from '../hooks/BleHandler';
 import AppActiveState  from '../store/AppActive';
 import { DevIDStore } from '../store';
@@ -17,6 +17,7 @@ import GpsDataStore from '../store/GpsData';
 import WxDataStore from '../store/WxData';
 import { useEffect, useRef, useState } from 'react';
 import SensorSettingsStore from '../store/SensorSettings';
+import NodeSettingsStore from '../store/NodeSettingsStore';
 import BLEconnStore from '../store/BLEconnected';
 import ConfigObject from '../utils/ConfigObject';
 import LogS from '../utils/LogService';
@@ -42,6 +43,9 @@ const Info: React.FC = () => {
   // get WxData from store
   const wx_s:WxData = useStoreState(WxDataStore, getWxData);
 
+  // node settings (GPS on/off)
+  const nodeSettings_s:NodeSettings = useStoreState(NodeSettingsStore, s => s.nodeSettings);
+
   // Sensor Settings
   const SensorSettings_s:SensorSettings = useStoreState(SensorSettingsStore, getSensorSettings);
 
@@ -62,7 +66,7 @@ const Info: React.FC = () => {
   const {sendTxtCmdNode, updateDevID, updateBLEConnected} = useBLE();
 
   // update info page with interval when page is active
-  const updateInterval = 5000; // ms
+  const updateInterval = 4000; // ms
   const updateTimerRef = useRef<number>(0);
 
   // update commands to the phone so we get the jsons etc
@@ -133,8 +137,13 @@ const Info: React.FC = () => {
   // handle log window and messages. The update timer pauses/resumes via the shLog dependency
   // of the timer effect above.
   const openLogWindow = () => {
+    // present the modal first and fill the list afterwards (onDidPresent), up to 550 entries
+    // block the UI long enough that the first tap looked like it did nothing
     setShLog(true);
-    // copy the array, LogS mutates its own array in place
+  }
+
+  // copy the array, LogS mutates its own array in place
+  const fillLogMsgs = () => {
     setLogMsgs([...LogS.logs]);
   }
 
@@ -165,6 +174,7 @@ const Info: React.FC = () => {
 
   const closeLogWindow = () => {
     setShLog(false);
+    setLogMsgs([]);
   }
 
 
@@ -181,6 +191,24 @@ const Info: React.FC = () => {
       <div className={"mc-value " + cls}>{value}</div>
     </div>
   );
+
+  // seconds until the next position beat as "5m 20s", below a minute just "42s"
+  const fmtNextPos = (sec:number) => {
+    const total = Math.max(0, Math.floor(sec));
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    return m > 0 ? m + "m " + s + "s" : s + "s";
+  }
+
+  // gps date arrives as "YYYY-MM-DD HH:MM:SS"
+  const [gpsDate, gpsTime] = (gps_s.DATE || "").split(" ");
+
+  // The node reports 0 for a sensor it does not have, so a value of 0 is only shown when an
+  // enabled sensor can really deliver it (temperature can be 0 °C)
+  const tempSensorOn = SensorSettings_s.BME || SensorSettings_s.BMP || SensorSettings_s.BMP3 || SensorSettings_s[680]
+                       || SensorSettings_s.AHT || SensorSettings_s.LPS33;
+  const showTemp = tempSensorOn || wx_s.TEMP !== 0;
+  const showTout = SensorSettings_s.OW || wx_s.TOUT !== 0;
 
   // sensor ON/OFF chip
   const chip = (label:string, on:boolean) => (
@@ -229,18 +257,21 @@ const Info: React.FC = () => {
               <div className="mc-icon"><IonIcon icon={locationOutline} /></div>
               <div className="mc-card-title">GPS</div>
               <div className="mc-card-actions">
-                <span className={"mc-badge " + (gps_s.SFIX ? "is-good" : "is-warn")}>{gps_s.SFIX ? 'Fix' : 'No Fix'}</span>
+                {nodeSettings_s.GPS
+                  ? <span className={"mc-badge " + (gps_s.SFIX ? "is-good" : "is-warn")}>{gps_s.SFIX ? 'Fix' : 'No Fix'}</span>
+                  : <span className="mc-badge">OFF</span>}
               </div>
             </div>
             <div className="mc-rows">
               {row("Latitude", gps_s.LAT.toFixed(4) + "°")}
               {row("Longitude", gps_s.LON.toFixed(4) + "°")}
               {row("Altitude", gps_s.ALT + " m")}
-              {row("Satellites", gps_s.SAT)}
-              {row("HDOP", gps_s.HDOP)}
-              {row("Next POS", gps_s.NEXT)}
+              {nodeSettings_s.GPS && row("Satellites", gps_s.SAT)}
+              {nodeSettings_s.GPS && row("HDOP", gps_s.HDOP)}
+              {row("Next POS", fmtNextPos(gps_s.NEXT))}
               {row("UTC Offset", config_s.node_utc_offset + " h")}
-              {row("Date", gps_s.DATE)}
+              {row("Date", gpsDate)}
+              {row("Time", gpsTime)}
             </div>
           </div>
 
@@ -250,14 +281,14 @@ const Info: React.FC = () => {
               <div className="mc-card-title">Sensors</div>
             </div>
             <div className="mc-rows">
-              {row("Temp", wx_s.TEMP.toFixed(1) + " °")}
-              {row("TOUT", wx_s.TOUT.toFixed(1) + " °")}
-              {row("Humidity", wx_s.HUM.toFixed(1) + " %")}
-              {row("Press", wx_s.PRES.toFixed(1) + " hPa")}
-              {row("QNH", wx_s.QNH.toFixed(1) + " hPa")}
-              {row("GasRes", wx_s.GAS.toFixed(1) + " kΩ")}
-              {row("eCO2", wx_s.CO2.toFixed(0) + " ppm")}
-              {row("Alt Press", wx_s.ALT.toFixed(0) + " m")}
+              {showTemp && row("Temp", wx_s.TEMP.toFixed(1) + " °")}
+              {showTout && row("TOUT", wx_s.TOUT.toFixed(1) + " °")}
+              {wx_s.HUM !== 0 && row("Humidity", wx_s.HUM.toFixed(1) + " %")}
+              {wx_s.PRES !== 0 && row("Press", wx_s.PRES.toFixed(1) + " hPa")}
+              {wx_s.QNH !== 0 && row("QNH", wx_s.QNH.toFixed(1) + " hPa")}
+              {wx_s.GAS !== 0 && row("GasRes", wx_s.GAS.toFixed(1) + " kΩ")}
+              {wx_s.CO2 !== 0 && row("eCO2", wx_s.CO2.toFixed(0) + " ppm")}
+              {wx_s.PRES !== 0 && row("Alt Press", wx_s.ALT.toFixed(0) + " m")}
               {sensorSettingsS1_s.INA226 && <>
                 {row("VBUS", wx_s.VBUS.toFixed(1) + " V")}
                 {row("VSHUNT", wx_s.VSHUNT.toFixed(1) + " V")}
@@ -288,18 +319,18 @@ const Info: React.FC = () => {
               <div className="mc-card-title">Firmware</div>
             </div>
             <div className="mc-rows">
-              {row("Node FW", config_s.fw_ver)}
-              {row("FW Build", infoDataS1_s.BDATE)}
+              {row("Version", config_s.fw_ver)}
+              {row("Build", infoDataS1_s.BDATE)}
               {row("App Version", "4.29")}
             </div>
           </div>
 
           <div id="LogBtn">
-            <IonButton className="mc-pill" size='small' fill='outline' slot='start' color='primary' onClick={() => openLogWindow()}>Log</IonButton>
+            <IonButton className="mc-pill" fill='outline' color='primary' onClick={() => openLogWindow()}>Log</IonButton>
           </div>
 
         </div>
-        <IonModal isOpen={shLog}>
+        <IonModal isOpen={shLog} onDidPresent={fillLogMsgs} onDidDismiss={closeLogWindow}>
           <IonHeader>
             <IonToolbar>
               <IonTitle>LOG</IonTitle>
@@ -316,7 +347,7 @@ const Info: React.FC = () => {
             <IonList>
               {logMsgs.map((log, i) => (
                 <IonItem key={i}>
-                  <IonLabel>{log}</IonLabel>
+                  <IonLabel className="ion-text-wrap">{log}</IonLabel>
                 </IonItem>
               ))}
             </IonList>

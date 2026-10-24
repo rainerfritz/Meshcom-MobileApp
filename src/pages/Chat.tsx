@@ -8,7 +8,7 @@ import { DevIDStore } from '../store';
 import { getConfigStore, getDevID, getMsgStore, getPlatformStore } from '../store/Selectors';
 import MsgStore from '../store/MsgStore';
 import ConfigStore from '../store/ConfStore';
-import { checkmark, cloudDoneOutline, cloudOutline, cloudOfflineOutline, caretForwardCircle, settings, mail, arrowBack, volumeHigh, volumeMute, chevronDownCircle, funnel, close as closeIcon, add as addIcon, createOutline } from 'ionicons/icons';
+import { checkmark, cloudDoneOutline, cloudOutline, cloudOfflineOutline, caretForwardCircle, settings, mail, arrowBack, volumeHigh, volumeMute, chevronDownCircle, funnel, close as closeIcon, add as addIcon, createOutline, star, starOutline } from 'ionicons/icons';
 import { LocalNotifications } from '@capacitor/local-notifications';
 import PlatformStore from '../store/PlatformStore';
 import { Keyboard } from '@capacitor/keyboard';
@@ -26,6 +26,7 @@ import DatabaseService, { TextFilter } from '../DBservices/DataBaseService';
 import AlertCard from '../components/AlertCard';
 import NodeInfoStore from '../store/NodeInfoStore';
 import ChatSettingsStore from '../store/ChatSettingsStore';
+import { APP_SETTING_CHAT_FAV_CALLS } from '../utils/AppSettingKeys';
 import ChatUnseenStore from '../store/ChatUnseenStore';
 import ChatPreviewStore from '../store/ChatPreviewStore';
 import { buildTestMsgs } from '../utils/TestMsgsPosis';
@@ -132,6 +133,11 @@ const Tab3: React.FC = () => {
   const dividerTimestampRef = useRef<number | null>(null);
   const setDividerTimestamp = (ts: number | null) => { dividerTimestampRef.current = ts; setDividerTimestampState(ts); };
 
+  // favourite callsigns for the To Callsign field, the modal to pick / edit them and the manual add input
+  const favCallsigns = ChatSettingsStore.useState(s => s.favCallsigns);
+  const [isOpenFavModal, setIsOpenFavModal] = useState<boolean>(false);
+  const [addFavText, setAddFavText] = useState<string>("");
+
   // audio alert flags per channel (true = enabled, default when missing)
   const audioFlags = ChatSettingsStore.useState(s => s.audioFlags);
   // blocked callsigns per channel key ("GLOBAL" | "ALL" | "DM" | group number)
@@ -203,6 +209,11 @@ const Tab3: React.FC = () => {
       });
       ConfigObject.clearInitChatSegmentMarkers();
     }
+
+    // load the favourite callsigns
+    DatabaseService.getAppSetting(APP_SETTING_CHAT_FAV_CALLS).then(val => {
+      ChatSettingsStore.update(s => { s.favCallsigns = val ? val.split(',').filter(c => c.length > 0) : []; });
+    });
 
     // load persisted audio + block-filter + text-filter settings
     DatabaseService.getChatSettings().then(({ audioFlags, blockedCallsigns, textFilters }) => {
@@ -734,6 +745,11 @@ const Tab3: React.FC = () => {
         }
       }
 
+      if (asActionDetail === "addFavourite") {
+        // the other party of the message, same as for the Direct Message action
+        addFavCallsign(selMsg[0].fromCall === config_s.callSign ? selMsg[0].toCall : selMsg[0].fromCall);
+      }
+
       if (asActionDetail === "sendDM") {
         console.log("DM pressed");
         let selCall = "";
@@ -902,6 +918,32 @@ const Tab3: React.FC = () => {
   }
 
 
+
+  // store the favourite list in the store and the DB
+  const saveFavCallsigns = (list:string[]) => {
+    ChatSettingsStore.update(s => { s.favCallsigns = list; });
+    DatabaseService.setAppSetting(APP_SETTING_CHAT_FAV_CALLS, list.join(','));
+  }
+
+  const addFavCallsign = (call:string) => {
+    const c = call.trim().toUpperCase();
+    if (c.length < MIN_CHAR_CALLSIGN || favCallsigns.includes(c)) return;
+    saveFavCallsigns([...favCallsigns, c].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
+  }
+
+  const removeFavCallsign = (call:string) => {
+    saveFavCallsigns(favCallsigns.filter(c => c !== call));
+  }
+
+  // pick a favourite for the To Callsign field
+  const selectFavCallsign = (call:string) => {
+    toCallsign_.current = call;
+    lastDMcallsign.current = call;
+    if (callsignInputRef.current) {
+      callsignInputRef.current.value = call;
+    }
+    setIsOpenFavModal(false);
+  }
 
   // handle dm to callsign input
   const handleInput = (ev:Event) =>{
@@ -1124,6 +1166,12 @@ const Tab3: React.FC = () => {
                 action: 'filterText',
               },
             },
+            ...(activeChatFilter === "DM" && msgArr_s.some(m => m.msgNr === msgNrAS && !favCallsigns.includes(m.fromCall === config_s.callSign ? m.toCall : m.fromCall)) ? [{
+              text: 'Add Favourite',
+              data: {
+                action: 'addFavourite',
+              },
+            }] : []),
             ...(msgArr_s.some(m => m.msgNr === msgNrAS && m.fromCall !== config_s.callSign) ? [{
               text: 'Block Callsign',
               data: {
@@ -1532,6 +1580,35 @@ const Tab3: React.FC = () => {
         </IonContent>
       </IonModal>
 
+      <IonModal isOpen={isOpenFavModal} onDidDismiss={() => { setIsOpenFavModal(false); setAddFavText(""); }}>
+        <IonHeader>
+          <IonToolbar>
+            <IonTitle>Favourites</IonTitle>
+            <IonButtons slot="end">
+              <IonButton onClick={() => setIsOpenFavModal(false)}>Close</IonButton>
+            </IonButtons>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent className="ion-padding">
+          <IonItem>
+            <IonInput placeholder="Add Callsign" maxlength={MAX_CHAR_CALLSIGN} value={addFavText} onIonInput={e => setAddFavText((e.detail.value ?? "").toString())}></IonInput>
+            <IonButton slot="end" onClick={() => { addFavCallsign(addFavText); setAddFavText(""); }}>Add</IonButton>
+          </IonItem>
+          <IonList>
+            {favCallsigns.map(call => (
+              <IonItem key={"fav-" + call} button onClick={() => selectFavCallsign(call)}>
+                <IonIcon icon={starOutline} slot="start" color="warning" />
+                <IonLabel>{call}</IonLabel>
+                <IonButton slot="end" fill="clear" onClick={e => { e.stopPropagation(); removeFavCallsign(call); }}>
+                  <IonIcon icon={closeIcon} color="danger" />
+                </IonButton>
+              </IonItem>
+            ))}
+            {favCallsigns.length === 0 && <IonItem><IonLabel color="medium">No favourites yet</IonLabel></IonItem>}
+          </IonList>
+        </IonContent>
+      </IonModal>
+
       {activeChatFilter !== null && (
       <IonFooter>
         <div className="send-text">
@@ -1550,6 +1627,9 @@ const Tab3: React.FC = () => {
                     disabled={!ble_connected}
                     value={toCallsign_.current}>
                   </IonInput>
+                  <IonButton slot="end" fill="clear" disabled={!ble_connected} onClick={() => setIsOpenFavModal(true)}>
+                    <IonIcon icon={star} color="warning" />
+                  </IonButton>
                 </IonItem>
               </div>}
 

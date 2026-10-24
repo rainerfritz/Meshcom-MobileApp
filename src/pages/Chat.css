@@ -106,11 +106,14 @@ ion-textarea.customTextAreaInput{
     height: 5%;
 }
 
+/* time and via flow as inline text, so a long via string starts behind the time and only its rest wraps */
 .msg-meta-line {
-    display: flex;
-    align-items: baseline;
-    flex-wrap: wrap;
-    gap: 2px;
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.msg-meta-line ion-text {
+    display: inline;
 }
 
 .msg-time {

@@ -2316,7 +2316,7 @@ const Tab2: React.FC = () => {
             <div className="mc-rows">
               <div className="mc-row"><div className="mc-label">Symbol ID</div><div className="mc-value">{aprs_settings_s.SYMID}</div></div>
               <div className="mc-row"><div className="mc-label">Symbol</div><div className="mc-value">{aprs_settings_s.SYMCD}</div></div>
-              <div className="mc-row"><div className="mc-label">Comment</div><div className="mc-value">{aprs_settings_s.ATXT}</div></div>
+              {aprs_settings_s.ATXT.trim().length > 0 && <div className="mc-row"><div className="mc-label">Comment</div><div className="mc-value">{aprs_settings_s.ATXT}</div></div>}
               {aprs_settings_s.NAME.length > 0 && <div className="mc-row"><div className="mc-label">Name</div><div className="mc-value">{aprs_settings_s.NAME}</div></div>}
             </div>
           </div>
