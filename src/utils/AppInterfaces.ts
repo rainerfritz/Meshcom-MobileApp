@@ -378,14 +378,22 @@ export interface NodeSettings {
     nsetdoc1["VIACALL"] = meshcom_settings.node_via;
     nsetdoc1["WSPWD"] = meshcom_settings.node_webpwd;
     nsetdoc1["ASYM"] = bGPSAutosymbol;
- * WSPWD and ASYM moved from SN to SN1, missing with older firmware
+ * nsetdoc1["TZ"] = meshcom_settings.node_tz;
+ * nsetdoc1["MHOP"], ["MTU"], ["VOLT"], ["NCON"], ["KISS"] (newer firmware)
+ * WSPWD and ASYM moved from SN to SN1, missing with older firmware. TZ only with newer firmware (--settz)
  */
 export interface NodeSettingsS1 {
     TYP: string,
     VIA: boolean,
     VIACALL: string,
     WSPWD?: string,
-    ASYM?: boolean
+    ASYM?: boolean,
+    TZ?: string,    // POSIX time zone rule, "" = no rule (fixed UTC offset), missing = firmware without time zone support
+    MHOP?: number,  // text hop limit (--maxhop)
+    MTU?: number,   // network MTU (--mtu)
+    VOLT?: boolean, // true = display shows the battery voltage, false = percent
+    NCON?: boolean, // net console on, missing = not in the firmware build
+    KISS?: number   // KISS/TCP bit mask: 1 on, 2 TX, 4 RxMeta, 8 Auth, missing = not in the firmware build
 }
 
 // APRS Settings interface 

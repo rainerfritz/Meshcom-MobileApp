@@ -10,7 +10,7 @@ import { getDevID, getBLEconnStore, getConfigStore, getScanResult } from '../sto
 import ConfigStore from '../store/ConfStore';
 import { ConfType, InfoData, SensorSettings,WifiSettings, NodeSettings, SensorSettingsS1, WifiSettings2, NodeSettingsS1 } from '../utils/AppInterfaces';
 import { iosTransitionAnimation, RangeValue } from '@ionic/core';
-import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle, idCardOutline, wifiOutline, mapOutline, chatboxOutline, pricetagOutline, bluetoothOutline, timeOutline, locationOutline, globeOutline, peopleOutline, toggleOutline, flashOutline, serverOutline, hardwareChipOutline, thermometerOutline, gitNetworkOutline, swapHorizontalOutline, gitBranchOutline, keyOutline, constructOutline, listOutline } from 'ionicons/icons';
+import { chevronDown, chevronForward, eyeOutline, eyeOffOutline, checkmarkCircle, idCardOutline, wifiOutline, mapOutline, chatboxOutline, pricetagOutline, bluetoothOutline, timeOutline, locationOutline, globeOutline, peopleOutline, toggleOutline, flashOutline, serverOutline, hardwareChipOutline, thermometerOutline, gitNetworkOutline, swapHorizontalOutline, gitBranchOutline, keyOutline, terminalOutline, constructOutline, listOutline } from 'ionicons/icons';
 import {aprs_char_table, aprs_pri_symbols} from '../store/AprsSymbols';
 import AlertCard from '../components/AlertCard';
 import { useNavigate } from "react-router-dom";
@@ -28,6 +28,9 @@ import MheardStaticStore from '../utils/MheardStaticStore';
 import AprsSettingsStore from '../store/AprSettingsStore';
 import { usePhoneGps } from '../utils/PhoneGps';
 import { normalizeCallsignSsid } from '../utils/Callsign';
+import { checkMaxVoltage, isSingleCellMaxV, MAXV_MIN, MAXV_MAX } from '../utils/MaxVoltage';
+import { checkManualCommand, MAX_MANUAL_CMD_BYTES } from '../utils/ManualCommand';
+import { TZ_PRESETS, MAX_TZ_CHARS, checkTzRule, findTzPreset } from '../utils/TimeZone';
 import WxDataStore from '../store/WxData';
 import SensorSettingsS1Store from '../store/SensorSettingsS1';
 import WifiSettingsStore2 from '../store/WiFiSettings2';
@@ -169,7 +172,17 @@ const Tab2: React.FC = () => {
 
   // Node UTC Time-Offset setting
   const node_utc_offset = useRef<number>(0);
-  const node_utc_offset_ref = useRef<HTMLIonInputElement>(null);
+
+  // Node time zone (POSIX rule) setting
+  // The inputs are state driven: the Ionic React wrapper writes the value prop to the element on every
+  // render, a value put there via ref would be overwritten again by the next render.
+  const tz_cmd_str = useRef<string>("");
+  const [tzText, setTzText] = useState<string>("");
+  const [shTimeZone, setShTimeZone] = useState<boolean>(false);
+  const [utcText, setUtcText] = useState<string>("");
+  // node sends TZ in SN1 only with firmware that knows --settz
+  const tzSupported = nodeSettingsS1_s.TZ !== undefined;
+  const tzActive = (nodeSettingsS1_s.TZ ?? "") !== "";
 
   // custom BLE Pairing Ping
   const ble_pairing_pin = useRef<string>("000000");
@@ -212,7 +225,7 @@ const Tab2: React.FC = () => {
       s.infoData.CTRY = ctry_ev;
     });
   }
-  const ctry_list = ["EU8", "UK", "LA", "UK8", "PL", "US", "VR2", "868", "906"];
+  const ctry_list = ["EU8", "EA", "UK", "LA", "UK8", "PL", "US", "VR2", "868", "915"];
   const ctry_list_translated: {[key: string]: string} = 
   {"EU8":"EU8 | 433.175MHz",
   "UK":"UK | 439.9125MHz",
@@ -221,7 +234,8 @@ const Tab2: React.FC = () => {
   "US":"US | 433.175MHz", 
   "VR2":"VR2 | 435.775MHz", 
   "868":"868 | 869.525MHz", 
-  "906":"906 | 906.875MHz",
+  "915":"915 | 906.875MHz",
+  "EA":"EA | 433.175MHz",
   "LA":"LA | 433.925MHz"};
   // set the ctry setting changed string to value when recived from node
   useEffect(()=>{
@@ -300,6 +314,41 @@ const Tab2: React.FC = () => {
   const [shWebPwdSect, setShWebPwdSect] = useState<boolean>(false);
   const [shWebPwd, setShWebPwd] = useState<boolean>(false);
   const webpwd_ref = useRef<HTMLIonInputElement>(null);
+
+  // Max Hop, Max Voltage, battery display and MTU. The node reports them in SN1, absent with older firmware.
+  const [shMaxHop, setShMaxHop] = useState<boolean>(false);
+  const [maxHopSel, setMaxHopSel] = useState<number>(4);
+  const [shMaxV, setShMaxV] = useState<boolean>(false);
+  const [maxVText, setMaxVText] = useState<string>("");
+  const [shBattDisp, setShBattDisp] = useState<boolean>(false);
+  const [battDispSel, setBattDispSel] = useState<string>("volt");
+  const [shMtu, setShMtu] = useState<boolean>(false);
+  const [mtuSel, setMtuSel] = useState<number>(1280);
+  const net_cmd_str = useRef<string>("");
+  // hop values of the firmware web page, plus the current one if it was set outside of them with --maxhop
+  const maxHopOptions = [4, 3, 2].concat(nodeSettingsS1_s.MHOP !== undefined && ![4, 3, 2].includes(nodeSettingsS1_s.MHOP) ? [nodeSettingsS1_s.MHOP] : []).sort((a, b) => a - b);
+  const mtuOptions = [{ v: 1280, t: "1280 (HAMNET / VPN, default)" }, { v: 1400, t: "1400" }, { v: 1500, t: "1500 (plain LAN)" }]
+    .concat(nodeSettingsS1_s.MTU !== undefined && ![1280, 1400, 1500].includes(nodeSettingsS1_s.MTU) ? [{ v: nodeSettingsS1_s.MTU, t: String(nodeSettingsS1_s.MTU) }] : [])
+    .sort((a, b) => a.v - b.v);
+
+  useEffect(() => {
+    if (nodeSettingsS1_s.MHOP !== undefined) setMaxHopSel(nodeSettingsS1_s.MHOP);
+  }, [nodeSettingsS1_s.MHOP]);
+  useEffect(() => {
+    if (nodeSettingsS1_s.MTU !== undefined) setMtuSel(nodeSettingsS1_s.MTU);
+  }, [nodeSettingsS1_s.MTU]);
+  useEffect(() => {
+    if (nodeSettingsS1_s.VOLT !== undefined) setBattDispSel(nodeSettingsS1_s.VOLT ? "volt" : "proz");
+  }, [nodeSettingsS1_s.VOLT]);
+  useEffect(() => {
+    if (nodeInfo_s.MAXV > 0) setMaxVText(String(nodeInfo_s.MAXV));
+  }, [nodeInfo_s.MAXV]);
+
+  // Manual Command section
+  const [shManualCmdSect, setShManualCmdSect] = useState<boolean>(false);
+  const [manualCmdText, setManualCmdText] = useState<string>("");
+  const manual_cmd_str = useRef<string>("");
+  const maxv_cmd_val = useRef<number>(0);
   const webpwd_str = useRef<string>("");
 
   // Manual Position Settings Input Refs
@@ -316,7 +365,10 @@ const Tab2: React.FC = () => {
   const gw_srv_table : {[key: string]: string} = {
     "OE": "Austria-OE",
     "DL": "Germany-DL",
-    "IT": "Italy-IT"};
+    "IT": "Italy-IT",
+    "HC": "Germany Hamnet-HC",
+    "HB": "Switzerland-HB",
+    "SP": "Poland-SP"};
   const gw_srv_list = Object.keys(gw_srv_table);
   const setGwServerNode = (gw_ev:string) => {
     console.log("Setting Gateway Server: " + gw_ev);
@@ -391,6 +443,17 @@ const Tab2: React.FC = () => {
     node_utc_offset.current = nodeSettings.UTCOF;
 
   },[nodeSettings]);
+
+
+  // show the rule of the node in the text field
+  useEffect(() => {
+    setTzText(nodeSettingsS1_s.TZ ?? "");
+  }, [nodeSettingsS1_s.TZ]);
+
+  // Fixed offset field: with a rule set the node derives the offset itself, so there is no fixed value then
+  useEffect(() => {
+    setUtcText(tzActive ? "" : String(nodeSettings.UTCOF));
+  }, [nodeSettings.UTCOF, tzActive]);
 
 
 
@@ -971,6 +1034,18 @@ const Tab2: React.FC = () => {
         break;
       }
 
+      // time zone rule for the automatic summer / winter time change
+      case "settz": {
+        cmd_ = "--settz " + tz_cmd_str.current;
+        break;
+      }
+
+      // fixed UTC offset to 0. The node has no "none" for it. Like any --utcoff it also removes the time zone rule
+      case "RST_UTCOFF": {
+        cmd_ = "--utcoff 0";
+        break;
+      }
+
       // UTC Offset
       case "utcoffset": {
         console.log("UTC Offset: " + node_utc_offset.current);
@@ -1222,6 +1297,39 @@ const Tab2: React.FC = () => {
         break;
       }
 
+      case "maxhop": {
+        cmd_ = "--maxhop " + maxHopSel;
+        break;
+      }
+
+      case "maxv": {
+        cmd_ = "--maxv " + maxv_cmd_val.current.toFixed(3);
+        break;
+      }
+
+      // battery display: voltage or percent
+      case "battDisp": {
+        cmd_ = battDispSel === "volt" ? "--volt on" : "--proz on";
+        break;
+      }
+
+      case "mtu": {
+        cmd_ = "--mtu " + mtuSel;
+        break;
+      }
+
+      // net console / KISS toggles, command built by the caller
+      case "netCmd": {
+        cmd_ = net_cmd_str.current;
+        break;
+      }
+
+      // command typed by hand, already checked by checkManualCommand
+      case "manualCmd": {
+        cmd_ = manual_cmd_str.current;
+        break;
+      }
+
       // web ui password
       case "webPwd": {
         cmd_ = webpwd_str.current;
@@ -1394,13 +1502,64 @@ const Tab2: React.FC = () => {
   }
   
     
+  // Rule and fixed offset exclude each other on the node (a rule owns the offset, --utcoff removes the rule),
+  // so filling one field empties the other.
+  // preset picked: put its rule into the text field (still editable), it is only sent with the set button
+  const tzPresetChanged = (id: string | undefined) => {
+    const preset = TZ_PRESETS.find(p => p.id === id);
+    if (preset) tzTextChanged(preset.tz);
+  }
+
+  const tzTextChanged = (val: string) => {
+    setTzText(val);
+    if (val.trim() !== "") setUtcText("");
+  }
+
+  const utcTextChanged = (val: string) => {
+    setUtcText(val);
+    if (val.trim() !== "") setTzText("");
+  }
+
+  // set the time zone rule. The node drops a fixed UTC offset when it takes a rule
+  const setTimeZone = () => {
+    const tz = tzText.trim();
+    const err = checkTzRule(tz);
+    if (err !== "") {
+      setAlHeader("Time zone not set!");
+      setAlMsg(err);
+      setShAlertCard(true);
+      return;
+    }
+    tz_cmd_str.current = tz;
+    sendTxtCmd("settz");
+    setAlHeader("Time zone sent!");
+    setAlMsg("The node changes summer and winter time automatically. A rule the node does not accept is ignored.");
+    setShAlertCard(true);
+  }
+
+  // the one set button: the rule if there is one, else the fixed offset
+  const setTime = () => {
+    if (tzText.trim() !== "") {
+      setTimeZone();
+    } else {
+      setUTCOffset();
+    }
+  }
+
+  // the one RST button: no rule, fixed offset 0. The node has no "unset" for the offset, --utcoff 0 is its reset
+  const resetTime = () => {
+    sendTxtCmd("RST_UTCOFF");
+    setAlHeader("Time reset!");
+    setAlMsg(tzSupported ? "Time zone rule removed, fixed offset is 0. Automatic time change is disabled." : "Fixed offset is 0 now.");
+    setShAlertCard(true);
+  }
+
   // set the UTC Time Offset
   const setUTCOffset = () => {
 
-    if (node_utc_offset_ref.current!.value !== undefined && node_utc_offset_ref.current!.value !== null) {
+    if (utcText.trim() !== "" && !isNaN(+utcText)) {
 
-      const offset_str = node_utc_offset_ref.current!.value.toString();
-      const offset_nr = +offset_str;
+      const offset_nr = +utcText;
 
       // check if the offset is +/-14 max or > 28 and fire alert card if needed
       if (offset_nr >= -15 && offset_nr <= 28) {
@@ -1408,7 +1567,7 @@ const Tab2: React.FC = () => {
           console.log("Setting UTC Offset: " + node_utc_offset.current);
           sendTxtCmd("utcoffset");
           setAlHeader("UTC Offset set!");
-          setAlMsg("Setting saved to node!");
+          setAlMsg(tzSupported ? "Setting saved to node! Automatic time change is disabled." : "Setting saved to node!");
           setShAlertCard(true);
       } else {
         console.log("UTC Offset not set!");
@@ -1416,6 +1575,10 @@ const Tab2: React.FC = () => {
         setAlMsg("Please enter a valid UTC Offset!");
         setShAlertCard(true);
       }
+    } else {
+      setAlHeader("UTC Offset not set!");
+      setAlMsg("Please enter a valid UTC Offset!");
+      setShAlertCard(true);
     }
   }
 
@@ -1722,6 +1885,42 @@ const Tab2: React.FC = () => {
   }
 
   // Web UI Password Settings ///////
+  // set the max voltage of the battery
+  const setMaxVoltage = () => {
+    const check = checkMaxVoltage(maxVText);
+    if (!check.ok) {
+      setAlHeader("Max. voltage not set!");
+      setAlMsg(check.error);
+      setShAlertCard(true);
+      return;
+    }
+    maxv_cmd_val.current = check.value;
+    sendTxtCmd("maxv");
+    setAlHeader("Max. voltage set!");
+    setAlMsg("Setting saved to node!");
+    setShAlertCard(true);
+  }
+
+  // switch a net console / KISS setting. The node answers with its settings, the button follows them
+  const sendNetToggle = (name: string, currentlyOn: boolean) => {
+    net_cmd_str.current = "--" + name + (currentlyOn ? " off" : " on");
+    sendTxtCmd("netCmd");
+  }
+
+  // send the command of the Manual Command field, only if it starts with two hyphens
+  const sendManualCommand = () => {
+    const check = checkManualCommand(manualCmdText);
+    if (!check.ok) {
+      setAlHeader("Command not sent!");
+      setAlMsg(check.error);
+      setShAlertCard(true);
+      return;
+    }
+    manual_cmd_str.current = check.cmd;
+    sendTxtCmd("manualCmd");
+    setManualCmdText("");
+  }
+
   const setWebPwd = () => {
     const web_pwd = (webpwd_ref.current?.value ?? "").toString().trim();
 
@@ -2494,22 +2693,55 @@ const Tab2: React.FC = () => {
             </IonItem>
           </div>
 
-          <div className='mc-card'>
-            <div className="mc-card-head mc-split">
-              <div className="mc-title"><span className="mc-icon"><IonIcon icon={timeOutline} /></span><span className="mc-card-title">Node UTC-Time-Offset</span></div>
-              <div>
-                <IonButton size="small" fill="outline" color='success' onClick={() => setUTCOffset()}>
-                  <IonIcon icon={checkmarkCircle} ></IonIcon>
-                </IonButton>
-              </div>
-            </div>
-            <IonItem>
-              <IonInput value={node_utc_offset.current} ref={node_utc_offset_ref} label='Set UTC Offset' labelPlacement="floating" type='text' maxlength={3}></IonInput>
-            </IonItem>
-          </div>
-
           <div>
             <IonButton className="mc-action" expand="block" fill='outline' slot='start' onClick={() => setCurrentPosGPS()}>Set Location - Phone GPS</IonButton>
+          </div>
+
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShTimeZone(!shTimeZone)}>
+              <div className="mc-icon"><IonIcon icon={timeOutline} /></div>
+              <div className="mc-card-title">Node Time Zone</div>
+              <IonIcon className="mc-fold-chev" icon={shTimeZone ? chevronDown : chevronForward} />
+            </div>
+            {shTimeZone &&
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">{tzSupported ? "Rule or fixed offset" : "Fixed UTC offset"}</span></div>
+                  <div className='rst-set-btns'>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => resetTime()}>RST</IonButton>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setTime()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+
+                {tzSupported && <>
+                  <div className="mc-field-label">Time Zone Preset:</div>
+                  <IonItem>
+                    <IonSelect value={findTzPreset(tzText)?.id} interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="Time Zone" onIonChange={(ev) => tzPresetChanged(ev.detail.value)}>
+                      {TZ_PRESETS.map((p) => (
+                        <IonSelectOption key={p.id} value={p.id}>
+                          {p.label}
+                        </IonSelectOption>
+                      ))}
+                    </IonSelect>
+                  </IonItem>
+                  <div className="mc-field-label">Time Zone Rule (POSIX), changes summer / winter time automatically:</div>
+                  <IonItem>
+                    <IonInput value={tzText} onIonInput={(ev) => tzTextChanged((ev.detail.value ?? "").toString())} label='Set Time Zone' labelPlacement="floating" placeholder="CET-1CEST,M3.5.0,M10.5.0/3" type='text' maxlength={MAX_TZ_CHARS}></IonInput>
+                  </IonItem>
+                  <div className="mc-field-label">or a fixed UTC offset, this disables the automatic time change:</div>
+                </>}
+                <IonItem>
+                  <IonInput value={utcText} onIonInput={(ev) => utcTextChanged((ev.detail.value ?? "").toString())} label='Set UTC Offset' labelPlacement="floating" type='text' maxlength={5}></IonInput>
+                </IonItem>
+                {tzSupported && tzActive && <div className="mc-field-label">
+                  Automatic time change active, the offset comes from the time zone rule.
+                </div>}
+                {tzSupported && !tzActive && nodeSettings.UTCOF !== 0 && <div className="mc-field-label">
+                  Fixed offset, no automatic time change.
+                </div>}
+              </div>}
           </div>
 
             {/*Manual Position Settings*/}
@@ -2730,6 +2962,37 @@ const Tab2: React.FC = () => {
                 </div>
 
               </div>
+
+              {nodeSettingsS1_s.NCON !== undefined && <div className='settings_btns'>
+                <div className='settings_btns_l'>
+                  <div>
+                    <IonButton expand="block" fill={nodeSettingsS1_s.NCON ? 'solid' : 'outline'} slot='start' onClick={() => sendNetToggle("netconsole", !!nodeSettingsS1_s.NCON)}>Netconsole</IonButton>
+                  </div>
+                </div>
+                <div className='settings_btns_r'></div>
+              </div>}
+
+              {nodeSettingsS1_s.KISS !== undefined && <>
+                <div className="mc-section-title">KISS Interface</div>
+                <div className='settings_btns'>
+                  <div className='settings_btns_l'>
+                    <div>
+                      <IonButton expand="block" fill={(nodeSettingsS1_s.KISS & 1) ? 'solid' : 'outline'} slot='start' onClick={() => sendNetToggle("kiss", !!(nodeSettingsS1_s.KISS! & 1))}>KISS</IonButton>
+                    </div>
+                    <div>
+                      <IonButton expand="block" fill={(nodeSettingsS1_s.KISS & 2) ? 'solid' : 'outline'} slot='start' onClick={() => sendNetToggle("kiss tx", !!(nodeSettingsS1_s.KISS! & 2))}>TX</IonButton>
+                    </div>
+                  </div>
+                  <div className='settings_btns_r'>
+                    <div>
+                      <IonButton expand="block" fill={(nodeSettingsS1_s.KISS & 4) ? 'solid' : 'outline'} slot='start' onClick={() => sendNetToggle("kiss meta", !!(nodeSettingsS1_s.KISS! & 4))}>RxMeta</IonButton>
+                    </div>
+                    <div>
+                      <IonButton expand="block" fill={(nodeSettingsS1_s.KISS & 8) ? 'solid' : 'outline'} slot='start' onClick={() => sendNetToggle("kiss auth", !!(nodeSettingsS1_s.KISS! & 8))}>Auth</IonButton>
+                    </div>
+                  </div>
+                </div>
+              </>}
             </> : <></>}
           </div>
 
@@ -2773,6 +3036,33 @@ const Tab2: React.FC = () => {
             </IonItem>
             }
           </div>
+
+
+          {nodeSettingsS1_s.MHOP !== undefined && <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShMaxHop(!shMaxHop)}>
+              <div className="mc-icon"><IonIcon icon={gitBranchOutline} /></div>
+              <div className="mc-card-title">Max Hop</div>
+              <IonIcon className="mc-fold-chev" icon={shMaxHop ? chevronDown : chevronForward} />
+            </div>
+            {shMaxHop &&
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">Hop limit for text messages</span></div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("maxhop")}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonSelect value={maxHopSel} interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="Max Hop" onIonChange={(ev) => setMaxHopSel(+ev.detail.value)}>
+                    {maxHopOptions.map((h) => (
+                      <IonSelectOption key={h} value={h}>{h}</IonSelectOption>
+                    ))}
+                  </IonSelect>
+                </IonItem>
+              </div>}
+          </div>}
 
 
           <div className='mc-fold'>
@@ -2839,6 +3129,29 @@ const Tab2: React.FC = () => {
           </div>
 
 
+          {isSingleCellMaxV(nodeInfo_s.MAXV) && <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShMaxV(!shMaxV)}>
+              <div className="mc-icon"><IonIcon icon={flashOutline} /></div>
+              <div className="mc-card-title">Max. Battery Voltage</div>
+              <IonIcon className="mc-fold-chev" icon={shMaxV ? chevronDown : chevronForward} />
+            </div>
+            {shMaxV &&
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">Full charge voltage ({MAXV_MIN} - {MAXV_MAX} V)</span></div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setMaxVoltage()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={maxVText} onIonInput={(ev) => setMaxVText((ev.detail.value ?? "").toString())} label='Set Max. Voltage' labelPlacement="floating" type='text' maxlength={5} inputmode="decimal"></IonInput>
+                </IonItem>
+              </div>}
+          </div>}
+
+
           <div className='mc-fold'>
             <div className='mc-fold-head' onClick={() => setShFixedIPSet(!shFixedIPSet)}>
               <div className="mc-icon"><IonIcon icon={gitNetworkOutline} /></div>
@@ -2884,6 +3197,33 @@ const Tab2: React.FC = () => {
           </div>
 
           {/*ext. UDP Settings with one toggle to switch on/off and a text input for the ip address*/}
+          {nodeSettingsS1_s.MTU !== undefined && <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShMtu(!shMtu)}>
+              <div className="mc-icon"><IonIcon icon={gitNetworkOutline} /></div>
+              <div className="mc-card-title">MTU</div>
+              <IonIcon className="mc-fold-chev" icon={shMtu ? chevronDown : chevronForward} />
+            </div>
+            {shMtu &&
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">Network MTU</span></div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("mtu")}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonSelect value={mtuSel} interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="MTU" onIonChange={(ev) => setMtuSel(+ev.detail.value)}>
+                    {mtuOptions.map((m) => (
+                      <IonSelectOption key={m.v} value={m.v}>{m.t}</IonSelectOption>
+                    ))}
+                  </IonSelect>
+                </IonItem>
+              </div>}
+          </div>}
+
+
           <div className='mc-fold'>
             <div className='mc-fold-head' onClick={() => setShExtUdp(!shExtUdp)}>
               <div className="mc-icon"><IonIcon icon={swapHorizontalOutline} /></div>
@@ -2977,6 +3317,56 @@ const Tab2: React.FC = () => {
               </div>
             </>}
           </div>
+
+
+          {/*Manual Command: any node command, must start with two hyphens*/}
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShManualCmdSect(!shManualCmdSect)}>
+              <div className="mc-icon"><IonIcon icon={terminalOutline} /></div>
+              <div className="mc-card-title">Manual Command</div>
+              <IonIcon className="mc-fold-chev" icon={shManualCmdSect ? chevronDown : chevronForward} />
+            </div>
+            {shManualCmdSect &&
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">Command</span></div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => sendManualCommand()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={manualCmdText} onIonInput={(ev) => setManualCmdText((ev.detail.value ?? "").toString())} label='Command' labelPlacement="floating" placeholder='--info' type='text' autocapitalize='off' autocorrect={false} spellcheck={false} maxlength={MAX_MANUAL_CMD_BYTES}></IonInput>
+                </IonItem>
+              </div>}
+          </div>
+
+
+          {nodeSettingsS1_s.VOLT !== undefined && <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShBattDisp(!shBattDisp)}>
+              <div className="mc-icon"><IonIcon icon={flashOutline} /></div>
+              <div className="mc-card-title">Battery Display</div>
+              <IonIcon className="mc-fold-chev" icon={shBattDisp ? chevronDown : chevronForward} />
+            </div>
+            {shBattDisp &&
+              <div className='mc-card'>
+                <div className="mc-card-head mc-split">
+                  <div className="mc-title"><span className="mc-card-title">Show on the node display</span></div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("battDisp")}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonSelect value={battDispSel} interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="Battery Display" onIonChange={(ev) => setBattDispSel(ev.detail.value)}>
+                    <IonSelectOption value="volt">Voltage</IonSelectOption>
+                    <IonSelectOption value="proz">Percent</IonSelectOption>
+                  </IonSelect>
+                </IonItem>
+              </div>}
+          </div>}
 
 
           <div className='mc-fold'>

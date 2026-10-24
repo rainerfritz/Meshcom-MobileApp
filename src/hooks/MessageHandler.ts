@@ -1169,7 +1169,7 @@ export function useMSG() {
                             }
 
                             case "SN1": {
-                                //{"TYP":"SN1","VIA":true,"VIACALL":"OE1KFR-12"}
+                                //{"TYP":"SN1","VIA":true,"VIACALL":"OE1KFR-12","WSPWD":"","ASYM":false,"TZ":"CET-1CEST,M3.5.0,M10.5.0/3"}
                                 LogS.log(0, "Node Settings S1 received!");
 
                                 const node_settings_s1:NodeSettingsS1 = json_data;

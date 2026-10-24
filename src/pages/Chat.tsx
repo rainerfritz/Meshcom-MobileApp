@@ -458,6 +458,32 @@ const Tab3: React.FC = () => {
   }, []);
 
 
+  // Keep the auto grow of the message input in sync with the native textarea. Ionic sizes the box from
+  // its own copy of the value (data-replicated-value), which on iOS can lag behind the native text,
+  // e.g. after an autocorrect or dictation edit. The box then stays one line high and clips the text.
+  // The native textarea is the source of truth, so we copy its value over on every kind of edit.
+  useEffect(() => {
+    if (activeChatFilter === null) return;
+    const ionTa = textAreaInputRef.current;
+    if (!ionTa) return;
+
+    let nativeTa: HTMLTextAreaElement | null = null;
+    const syncGrow = () => {
+      const wrapper = nativeTa?.closest('.native-wrapper') as HTMLElement | null;
+      if (nativeTa && wrapper) wrapper.dataset.replicatedValue = nativeTa.value;
+    };
+    const events = ['input', 'keyup', 'compositionend', 'change', 'focus'];
+
+    ionTa.getInputElement().then(el => {
+      nativeTa = el;
+      events.forEach(e => el.addEventListener(e, syncGrow));
+      syncGrow();
+    });
+
+    return () => {
+      if (nativeTa) events.forEach(e => nativeTa!.removeEventListener(e, syncGrow));
+    };
+  }, [activeChatFilter]);
 
 
   // check if we have permission for notifications
