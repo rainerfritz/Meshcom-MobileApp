@@ -19,6 +19,8 @@ export interface ReconnectState {
     maxAttempts: number;
     // set when a cycle ended without connection, null otherwise
     lastResult: ReconnectResult | null;
+    // the app was started cold while a connection was up: the Connect tab starts one reconnect cycle and clears this
+    coldStartPending: boolean;
 }
 
 export const defaultReconnectState: ReconnectState = {
@@ -30,6 +32,7 @@ export const defaultReconnectState: ReconnectState = {
     attempt: 0,
     maxAttempts: 0,
     lastResult: null,
+    coldStartPending: false,
 };
 
 const ReconnectStore = new Store<ReconnectState>({ ...defaultReconnectState });

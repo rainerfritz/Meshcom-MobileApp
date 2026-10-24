@@ -23,6 +23,7 @@ import WifiSettingsStore from '../store/WifiSettings';
 import NodeSettingsStore from '../store/NodeSettingsStore';
 import LogS from '../utils/LogService';
 import AutoReconnectManager from '../utils/AutoReconnectManager';
+import { markConnected } from '../utils/ReconnectPersist';
 import MheardStaticStore from '../utils/MheardStaticStore';
 import AprsSettingsStore from '../store/AprSettingsStore';
 import { usePhoneGps } from '../utils/PhoneGps';
@@ -851,6 +852,7 @@ const Tab2: React.FC = () => {
         cmd_ = "--deepsleep";
         // the link drops because the node sleeps: no auto reconnect after it
         AutoReconnectManager.getInstance().expectDisconnect();
+        markConnected(false);   // the app can end before the disconnect arrives: no cold start reconnect either
         break;
       }
 
@@ -1065,6 +1067,7 @@ const Tab2: React.FC = () => {
           cmd_ = "--ota-update";
           // the OTA firmware has no BLE and the flashing takes long: no auto reconnect after the link drops
           AutoReconnectManager.getInstance().expectDisconnect();
+          markConnected(false);   // the app can end before the disconnect arrives: no cold start reconnect either
           setAlHeader("Booting into OTA Mode!");
           setAlMsg("On active Wifi connection access it after reboot via Web-Browser with " + nodeInfo_s.CALL + ".local or "+ wifiSettings_s.IP +" if in AP Mode: IP:192.168.4.1 or Meshcom-OTA.local");
           setShAlertCard(true);

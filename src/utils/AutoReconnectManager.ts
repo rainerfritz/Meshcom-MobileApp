@@ -44,6 +44,14 @@ export function trimAdvertTimes(times: number[], now: number): void {
     while (times.length > 0 && now - times[0] > REC_HIT_WINDOW_MS) times.shift();
 }
 
+/**
+ * Does a reconnect cycle have to start after a cold start? Yes if the setting is on, the last node is known and a
+ * connection was up that the user did not disconnect (marker stored in the DB, '1').
+ */
+export function coldStartDue(enabled: boolean, lastDeviceId: string, wasConnected: string | null): boolean {
+    return enabled && lastDeviceId !== "" && wasConnected === '1';
+}
+
 export interface ReconnectDeps {
     probeFn: (deviceId: string) => ReconnectProbe | null;
     connectFn: (deviceId: string) => Promise<boolean>;

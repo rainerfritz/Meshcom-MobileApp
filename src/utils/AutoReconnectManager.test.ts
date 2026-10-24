@@ -4,6 +4,7 @@ import {
   REC_BACKOFF_MS,
   REC_HIT_WINDOW_MS,
   advertHits,
+  coldStartDue,
   trimAdvertTimes,
   REC_FLAP_WINDOW_MS,
   REC_MAX_CONNECT_ATTEMPTS,
@@ -340,3 +341,26 @@ describe("expected disconnect (node sent to sleep)", () => {
   });
 });
 
+
+describe("coldStartDue", () => {
+  it("is due only when the setting is on, the node is known and the connection was up", () => {
+    expect(coldStartDue(true, DEV, '1')).toBe(true);
+  });
+
+  it("is not due when the setting is off", () => {
+    expect(coldStartDue(false, DEV, '1')).toBe(false);
+  });
+
+  it("is not due without a known node", () => {
+    expect(coldStartDue(true, "", '1')).toBe(false);
+  });
+
+  it("is not due when the user disconnected, or the marker was never stored", () => {
+    expect(coldStartDue(true, DEV, '0')).toBe(false);
+    expect(coldStartDue(true, DEV, null)).toBe(false);
+  });
+
+  it("does not start a pending cold start by itself", () => {
+    expect(defaultReconnectState.coldStartPending).toBe(false);
+  });
+});

@@ -60,7 +60,8 @@ import DataBaseService from './DBservices/DataBaseService';
 import ChatUnseenStore from './store/ChatUnseenStore';
 import NodeInfoStore from './store/NodeInfoStore';
 import ReconnectStore from './store/ReconnectStore';
-import { APP_SETTING_AUTO_RECONNECT, APP_SETTING_LAST_DEVICE } from './utils/AppSettingKeys';
+import { APP_SETTING_AUTO_RECONNECT, APP_SETTING_LAST_DEVICE, APP_SETTING_WAS_CONNECTED } from './utils/AppSettingKeys';
+import { coldStartDue } from './utils/AutoReconnectManager';
 import LogS from './utils/LogService';
 
 
@@ -89,11 +90,18 @@ const Appl: React.FC = () => {
       try {
         const autoRec = await DataBaseService.getAppSetting(APP_SETTING_AUTO_RECONNECT);
         const lastDev = await DataBaseService.getAppSetting(APP_SETTING_LAST_DEVICE);
+        const wasConn = await DataBaseService.getAppSetting(APP_SETTING_WAS_CONNECTED);
+        const coldStart = coldStartDue(autoRec === '1', lastDev ?? "", wasConn);
         ReconnectStore.update(s => {
           s.enabled = autoRec === '1';
           s.lastDeviceId = lastDev ?? "";
+          s.coldStartPending = coldStart;
         });
-        LogS.log(0, "[RECONNECT] auto reconnect is " + (autoRec === '1' ? "on" : "off") + ", last node: " + (lastDev ?? "none"));
+        LogS.log(0, "[RECONNECT] auto reconnect is " + (autoRec === '1' ? "on" : "off") + ", last node: " + (lastDev ?? "none")
+          + ", connection was up at app end: " + (wasConn === '1'));
+        if (coldStart) {
+          LogS.log(0, "[RECONNECT] cold start: a connection was up when the app ended, the Connect tab starts the cycle");
+        }
       } catch (error) {
         LogS.log(1, "[RECONNECT] could not load the auto reconnect setting: " + error);
       }

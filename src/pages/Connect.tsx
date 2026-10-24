@@ -45,6 +45,7 @@ import LogS from '../utils/LogService';
 import TimeSyncManager from '../utils/TimeSyncService';
 import AutoReconnectManager, { ReconnectProbe, advertHits, trimAdvertTimes } from '../utils/AutoReconnectManager';
 import ReconnectStore from '../store/ReconnectStore';
+import { markConnected } from '../utils/ReconnectPersist';
 import { APP_SETTING_AUTO_RECONNECT, APP_SETTING_LAST_DEVICE } from '../utils/AppSettingKeys';
 
 
@@ -163,6 +164,8 @@ const Tab1: React.FC = () => {
   const reconnectConnectFn = useRef<(devID: string) => Promise<boolean>>(async () => false);
   const recState = ReconnectStore.useState(s => s.state);
   const recEnabled = ReconnectStore.useState(s => s.enabled);
+  const recColdStart = ReconnectStore.useState(s => s.coldStartPending);
+  const recResult = ReconnectStore.useState(s => s.lastResult);
 
 
   // send and parse message functions
@@ -320,6 +323,37 @@ const Tab1: React.FC = () => {
       AutoReconnectManager.getInstance().unregister();
     };
   }, []);
+
+
+  // A cycle ended without connection: the user got the alert and knows. The marker for the cold start reconnect is
+  // cleared, otherwise every app start would search for the node again. It stays set only while nobody saw the link
+  // end (the app was killed), or while the cycle still runs / waits for the app to come back.
+  useEffect(() => {
+    if (recResult !== null) {
+      LogS.log(0, "[RECONNECT] cycle ended without connection (" + recResult + "), no reconnect after a cold start");
+      markConnected(false);
+    }
+  }, [recResult]);
+
+
+  // Cold start: the app was ended while a connection was up (the DB marker says so, App.tsx sets coldStartPending).
+  // One reconnect cycle starts here. It does not scan by itself: the cycle only listens to the scan of this page, which the
+  // scan effect below starts and stops as always, so the two never overlap. The flag is consumed first, so a re-render
+  // or a second mount cannot start the cycle twice.
+  useEffect(() => {
+    if (!recColdStart || !isAppActive) return;
+
+    ReconnectStore.update(s => {
+      s.coldStartPending = false;
+    });
+    const rs = ReconnectStore.getRawState();
+    if (BLEconnStore.getRawState().ble_connected || connInProgress.current) {
+      LogS.log(0, "[RECONNECT] cold start: already connected or connecting, no cycle");
+      return;
+    }
+    LogS.log(0, "[RECONNECT] cold start: starting the cycle for " + rs.lastDeviceId);
+    AutoReconnectManager.getInstance().start(rs.lastDeviceId);
+  }, [recColdStart, isAppActive]);
 
 
   // remember the app did run. The scan itself is driven by the scan effect below
@@ -1083,6 +1117,8 @@ const Tab1: React.FC = () => {
         if (lastDevChanged) {
           await DatabaseService.setAppSetting(APP_SETTING_LAST_DEVICE, devID);
         }
+        // a connection is up that the user did not disconnect: if the app is ended in the background, the cold start reconnects
+        await markConnected(true);
 
         const newConnState = true;
         setConnFlag(newConnState);
@@ -1253,7 +1289,12 @@ const Tab1: React.FC = () => {
       } else if (rec.enabled) {
         LogS.log(0, "[RECONNECT] link lost, starting the cycle for " + deviceId);
         AutoReconnectManager.getInstance().start(deviceId);
+      } else {
+        await markConnected(false);
       }
+    } else if (wasUp) {
+      // the app saw this disconnect and starts nothing (user or expected disconnect): nothing to reconnect after a cold start
+      await markConnected(false);
     }
 
     const newConnState = false;
@@ -1332,6 +1373,9 @@ const Tab1: React.FC = () => {
 
     ConfigSyncWatchdog.getInstance().stop();
     manual_ble_disco.current = true;
+    // the user ends the connection: no reconnect after a cold start. Stored BEFORE the disconnect, because onDisconnect
+    // closes the database while the disconnect call is still running and a write after it can get lost
+    await markConnected(false);
     // broadcast the manual-disconnect intent so other pages (Chat, Settings) can suppress their own disco alert
     BLEconnStore.update(s => {
       s.manual_disconnect = true;
@@ -1479,6 +1523,8 @@ const Tab1: React.FC = () => {
       // a running cycle ends, nothing is waiting for the app to come back
       AutoReconnectManager.getInstance().stop();
       pendingReconnect.current = false;
+      // an old marker must not start a cycle after the setting is switched on again later
+      await markConnected(false);
     }
     await DatabaseService.setAppSetting(APP_SETTING_AUTO_RECONNECT, on ? '1' : '0');
   }

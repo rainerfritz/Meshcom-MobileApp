@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { IonButton, IonProgressBar } from '@ionic/react';
 import ReconnectStore from '../store/ReconnectStore';
 import AutoReconnectManager from '../utils/AutoReconnectManager';
@@ -8,6 +10,13 @@ import './ReconnectBanner.css';
 // with a button to cancel it. It does not block the page.
 const ReconnectBanner: React.FC = () => {
   const st = ReconnectStore.useState(s => s);
+  const navigate = useNavigate();
+
+  // Cold start with a connection that was up: the reconnect cycle lives on the Connect tab (scan and connect), whatever page
+  // the webview was reloaded on. Going there is a no-op if the Connect tab is open already.
+  useEffect(() => {
+    if (st.coldStartPending) navigate("/connect");
+  }, [st.coldStartPending]);
 
   if (st.state === 'idle') return null;
 
