@@ -53,5 +53,7 @@
         </array>
         <key>NSLocationWhenInUseUsageDescription</key>
         <string>Our app uses geolocation to set location on bluetooth connected microntrollers</string>
+        <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+        <string>Our app uses geolocation to set location on bluetooth connected microntrollers. The location is only read while the app is open.</string>
 </dict>
 </plist>
