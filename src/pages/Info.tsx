@@ -321,7 +321,7 @@ const Info: React.FC = () => {
             <div className="mc-rows">
               {row("Version", config_s.fw_ver)}
               {row("Build", infoDataS1_s.BDATE)}
-              {row("App Version", "4.29")}
+              {row("App Version", "4.30")}
             </div>
           </div>
 
