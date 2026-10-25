@@ -28,6 +28,8 @@ import MheardStaticStore from '../utils/MheardStaticStore';
 import AprsSettingsStore from '../store/AprSettingsStore';
 import { usePhoneGps } from '../utils/PhoneGps';
 import { normalizeCallsignSsid } from '../utils/Callsign';
+import { checkIna226, inaNumText, inaSampleLabel, INA_SAMPLES, INA_SHUNT_MIN, INA_SHUNT_MAX, INA_IMAX_MAX } from '../utils/Ina226';
+import { checkNetPassword, MAX_NET_PWD_CHARS } from '../utils/NetPassword';
 import { checkMaxVoltage, isSingleCellMaxV, MAXV_MIN, MAXV_MAX } from '../utils/MaxVoltage';
 import { checkManualCommand, MAX_MANUAL_CMD_BYTES } from '../utils/ManualCommand';
 import { TZ_PRESETS, MAX_TZ_CHARS, checkTzRule, findTzPreset } from '../utils/TimeZone';
@@ -191,6 +193,15 @@ const Tab2: React.FC = () => {
 
   // show hide user buttons
   const [shUserBtns, setShUserBtns] = useState<boolean>(false);
+  const [shSensorSet, setShSensorSet] = useState<boolean>(false);
+  // INA226 settings, the node sends them in S1
+  const [shIna, setShIna] = useState<boolean>(false);
+  const [inaShuntText, setInaShuntText] = useState<string>("");
+  const [inaImaxText, setInaImaxText] = useState<string>("");
+  const [inaSampSel, setInaSampSel] = useState<number>(0);
+  const ina_cmd_str = useRef<string>("");
+  // the node sends the INA226 keys in S1 only when its build has the INA226 (otherwise the commands do not exist)
+  const inaSupported = sensorSettingsS1_s.TYP === "S1" && Object.prototype.hasOwnProperty.call(sensorSettingsS1_s, "226F");
 
   // color setting for some buttons
   const [bme680_color, setBme680_color] = useState<string>("primary");
@@ -325,12 +336,21 @@ const Tab2: React.FC = () => {
   const [shMtu, setShMtu] = useState<boolean>(false);
   const [mtuSel, setMtuSel] = useState<number>(1280);
   const net_cmd_str = useRef<string>("");
+  // Remote Netconsole: on/off and the password, which KISS auth uses as well
+  const [shNetcon, setShNetcon] = useState<boolean>(false);
+  const [netPwdText, setNetPwdText] = useState<string>("");
+  const [shNetPwd, setShNetPwd] = useState<boolean>(false);
   // hop values of the firmware web page, plus the current one if it was set outside of them with --maxhop
   const maxHopOptions = [4, 3, 2].concat(nodeSettingsS1_s.MHOP !== undefined && ![4, 3, 2].includes(nodeSettingsS1_s.MHOP) ? [nodeSettingsS1_s.MHOP] : []).sort((a, b) => a - b);
   const mtuOptions = [{ v: 1280, t: "1280 (HAMNET / VPN, default)" }, { v: 1400, t: "1400" }, { v: 1500, t: "1500 (plain LAN)" }]
     .concat(nodeSettingsS1_s.MTU !== undefined && ![1280, 1400, 1500].includes(nodeSettingsS1_s.MTU) ? [{ v: nodeSettingsS1_s.MTU, t: String(nodeSettingsS1_s.MTU) }] : [])
     .sort((a, b) => a.v - b.v);
 
+  useEffect(() => {
+    setInaShuntText(inaNumText(sensorSettingsS1_s.SHUNT));
+    setInaImaxText(inaNumText(sensorSettingsS1_s.IMAX));
+    setInaSampSel(sensorSettingsS1_s.SAMP);
+  }, [sensorSettingsS1_s.SHUNT, sensorSettingsS1_s.IMAX, sensorSettingsS1_s.SAMP]);
   useEffect(() => {
     if (nodeSettingsS1_s.MHOP !== undefined) setMaxHopSel(nodeSettingsS1_s.MHOP);
   }, [nodeSettingsS1_s.MHOP]);
@@ -349,6 +369,7 @@ const Tab2: React.FC = () => {
   const [manualCmdText, setManualCmdText] = useState<string>("");
   const manual_cmd_str = useRef<string>("");
   const maxv_cmd_val = useRef<number>(0);
+  const net_pwd_cmd_val = useRef<string>("");
   const webpwd_str = useRef<string>("");
 
   // Manual Position Settings Input Refs
@@ -1318,6 +1339,18 @@ const Tab2: React.FC = () => {
         break;
       }
 
+      // INA226 command built by the caller (--ina226 on/off, --shunt, --imax, --isamp)
+      case "inaCmd": {
+        cmd_ = ina_cmd_str.current;
+        break;
+      }
+
+      // password of the net console and the KISS auth, only ever set or cleared, the node never sends it back
+      case "netPwd": {
+        cmd_ = "--passwd " + net_pwd_cmd_val.current;
+        break;
+      }
+
       // net console / KISS toggles, command built by the caller
       case "netCmd": {
         cmd_ = net_cmd_str.current;
@@ -1905,6 +1938,70 @@ const Tab2: React.FC = () => {
   const sendNetToggle = (name: string, currentlyOn: boolean) => {
     net_cmd_str.current = "--" + name + (currentlyOn ? " off" : " on");
     sendTxtCmd("netCmd");
+  }
+
+  // INA226: send one command, the node answers with its sensor settings (S1)
+  const sendInaCmd = (cmd: string) => {
+    ina_cmd_str.current = cmd;
+    sendTxtCmd("inaCmd");
+  }
+
+  // INA226: send the values that differ from the node, one command after the other so the node can handle each
+  const setIna226 = () => {
+    const check = checkIna226(inaShuntText, inaImaxText);
+    if (!check.ok) {
+      setAlHeader("INA226 not set!");
+      setAlMsg(check.error);
+      setShAlertCard(true);
+      return;
+    }
+    const cmds: string[] = [];
+    if (check.shunt !== +inaNumText(sensorSettingsS1_s.SHUNT)) cmds.push("--shunt " + check.shunt);
+    if (check.imax !== +inaNumText(sensorSettingsS1_s.IMAX)) cmds.push("--imax " + check.imax);
+    if (inaSampSel !== sensorSettingsS1_s.SAMP) cmds.push("--isamp " + inaSampSel);
+    if (cmds.length === 0) {
+      setAlHeader("INA226");
+      setAlMsg("No change to the values on the node.");
+      setShAlertCard(true);
+      return;
+    }
+    cmds.forEach((c, i) => window.setTimeout(() => sendInaCmd(c), i * 400));
+    setAlHeader("INA226 set!");
+    setAlMsg("Setting saved to node!");
+    setShAlertCard(true);
+  }
+
+  const setNetPassword = () => {
+    const check = checkNetPassword(netPwdText);
+    if (!check.ok) {
+      setAlHeader("Password not set!");
+      setAlMsg(check.error);
+      setShAlertCard(true);
+      return;
+    }
+    net_pwd_cmd_val.current = check.pwd;
+    sendTxtCmd("netPwd");
+    setNetPwdText("");
+    setAlHeader("Password set!");
+    setAlMsg("Setting saved to node! It is used by the remote netconsole and the KISS auth.");
+    setShAlertCard(true);
+  }
+
+  const resetNetPassword = () => {
+    net_pwd_cmd_val.current = "none";
+    sendTxtCmd("netPwd");
+    setNetPwdText("");
+    setAlHeader("Password reset!");
+    setAlMsg("The password is cleared, remote netconsole and KISS auth are open to everyone then.");
+    setShAlertCard(true);
+  }
+
+  // the KISS auth uses the password of the remote netconsole, tell the user and switch as usual
+  const kissAuthPressed = (currentlyOn: boolean) => {
+    setAlHeader("KISS Auth");
+    setAlMsg("The KISS auth uses the password of the Remote Netconsole setting. Set it there.");
+    setShAlertCard(true);
+    sendNetToggle("kiss auth", currentlyOn);
   }
 
   // send the command of the Manual Command field, only if it starts with two hyphens
@@ -2904,44 +3001,6 @@ const Tab2: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mc-section-title">Sensors</div>
-              <div className='settings_btns'>
-                <div className='settings_btns_l'>
-                  <div>
-                    <IonButton expand="block" fill={config_s.bme_on ? 'solid' : 'outline'} slot='start' color={bme280_color} onClick={() => sendTxtCmd("bme")}>BME280</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.bme680_on ? 'solid' : 'outline'} slot='start' color={bme680_color} onClick={() => sendTxtCmd("680")}>BME680</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={sensorSettings_s.AHT ? 'solid' : 'outline'} slot='start' color={aht20_color} onClick={() => sendTxtCmd("aht20")}>AHT-20</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.onewire_on ? 'solid' : 'outline'} slot='start' color={onewire_color} onClick={() => sendTxtCmd("owon")}>One Wire</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("wx")}>WX-Info</IonButton>
-                  </div>
-                </div>
-                <div className='settings_btns_r'>
-                  <div>
-                    <IonButton expand="block" fill={config_s.bmp_on ? 'solid' : 'outline'} slot='start' color={bmp280_color} onClick={() => sendTxtCmd("bmp")}>BMP280</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={sensorSettings_s.BMP3 ? 'solid' : 'outline'} slot='start' color={bmp3_color} onClick={() => sendTxtCmd("bmp3")}>BMP390</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.mcu811_on ? 'solid' : 'outline'} slot='start' color={s811_color} onClick={() => sendTxtCmd("mcu811")}>MCU-811</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={config_s.lps33_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("lps33")}>LPS33</IonButton>
-                  </div>
-                  <div>
-                    <IonButton expand="block" fill={sensorSettingsS1_s.SHT ? 'solid' : 'outline'} slot='start' color={sht21_color} onClick={() => sendTxtCmd("sht21")}>SHT21</IonButton>
-                  </div>
-                </div>
-              </div>
-
               <div className="mc-section-title">Utilities</div>
               <div className='settings_btns'>
                 <div className='settings_btns_l'>
@@ -2963,15 +3022,6 @@ const Tab2: React.FC = () => {
 
               </div>
 
-              {nodeSettingsS1_s.NCON !== undefined && <div className='settings_btns'>
-                <div className='settings_btns_l'>
-                  <div>
-                    <IonButton expand="block" fill={nodeSettingsS1_s.NCON ? 'solid' : 'outline'} slot='start' onClick={() => sendNetToggle("netconsole", !!nodeSettingsS1_s.NCON)}>Netconsole</IonButton>
-                  </div>
-                </div>
-                <div className='settings_btns_r'></div>
-              </div>}
-
               {nodeSettingsS1_s.KISS !== undefined && <>
                 <div className="mc-section-title">KISS Interface</div>
                 <div className='settings_btns'>
@@ -2988,7 +3038,7 @@ const Tab2: React.FC = () => {
                       <IonButton expand="block" fill={(nodeSettingsS1_s.KISS & 4) ? 'solid' : 'outline'} slot='start' onClick={() => sendNetToggle("kiss meta", !!(nodeSettingsS1_s.KISS! & 4))}>RxMeta</IonButton>
                     </div>
                     <div>
-                      <IonButton expand="block" fill={(nodeSettingsS1_s.KISS & 8) ? 'solid' : 'outline'} slot='start' onClick={() => sendNetToggle("kiss auth", !!(nodeSettingsS1_s.KISS! & 8))}>Auth</IonButton>
+                      <IonButton expand="block" fill={(nodeSettingsS1_s.KISS & 8) ? 'solid' : 'outline'} slot='start' onClick={() => kissAuthPressed(!!(nodeSettingsS1_s.KISS! & 8))}>Auth</IonButton>
                     </div>
                   </div>
                 </div>
@@ -3099,8 +3149,56 @@ const Tab2: React.FC = () => {
             }
           </div>
 
-            {/*Temperature Offset Settings*/}
+          {/*Sensor Settings: sensor buttons and the settings that belong to the sensors*/}
           <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShSensorSet(!shSensorSet)}>
+              <div className="mc-icon"><IonIcon icon={thermometerOutline} /></div>
+              <div className="mc-card-title">Sensor Settings</div>
+              <IonIcon className="mc-fold-chev" icon={shSensorSet ? chevronDown : chevronForward} />
+            </div>
+            {shSensorSet && <>
+              <div className='settings_btns'>
+                <div className='settings_btns_l'>
+                  <div>
+                    <IonButton expand="block" fill={config_s.bme_on ? 'solid' : 'outline'} slot='start' color={bme280_color} onClick={() => sendTxtCmd("bme")}>BME280</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={config_s.bme680_on ? 'solid' : 'outline'} slot='start' color={bme680_color} onClick={() => sendTxtCmd("680")}>BME680</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={sensorSettings_s.AHT ? 'solid' : 'outline'} slot='start' color={aht20_color} onClick={() => sendTxtCmd("aht20")}>AHT-20</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={config_s.onewire_on ? 'solid' : 'outline'} slot='start' color={onewire_color} onClick={() => sendTxtCmd("owon")}>One Wire</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("wx")}>Sensor Info</IonButton>
+                  </div>
+                </div>
+                <div className='settings_btns_r'>
+                  <div>
+                    <IonButton expand="block" fill={config_s.bmp_on ? 'solid' : 'outline'} slot='start' color={bmp280_color} onClick={() => sendTxtCmd("bmp")}>BMP280</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={sensorSettings_s.BMP3 ? 'solid' : 'outline'} slot='start' color={bmp3_color} onClick={() => sendTxtCmd("bmp3")}>BMP390</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={config_s.mcu811_on ? 'solid' : 'outline'} slot='start' color={s811_color} onClick={() => sendTxtCmd("mcu811")}>MCU-811</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={config_s.lps33_on ? 'solid' : 'outline'} slot='start' onClick={() => sendTxtCmd("lps33")}>LPS33</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill={sensorSettingsS1_s.SHT ? 'solid' : 'outline'} slot='start' color={sht21_color} onClick={() => sendTxtCmd("sht21")}>SHT21</IonButton>
+                  </div>
+                  <div>
+                    <IonButton expand="block" fill='outline' slot='start' onClick={() => sendTxtCmd("scani2c")}>Scan I2C</IonButton>
+                  </div>
+                </div>
+              </div>
+
+              {/*Temperature Offset Settings*/}
+          <div className='mc-fold' style={{ marginTop: 20 }}>
             <div className='mc-fold-head' onClick={() => setShTempOffset(!shTempOffset)}>
               <div className="mc-icon"><IonIcon icon={thermometerOutline} /></div>
               <div className="mc-card-title">Temperature Offset</div>
@@ -3126,6 +3224,46 @@ const Tab2: React.FC = () => {
               </div>
               
             }
+          </div>
+
+              {/*INA226 current sensor*/}
+          {inaSupported && <div className='mc-fold' style={{ marginTop: 20 }}>
+            <div className='mc-fold-head' onClick={() => setShIna(!shIna)}>
+              <div className="mc-icon"><IonIcon icon={flashOutline} /></div>
+              <div className="mc-card-title">INA226</div>
+              <IonIcon className="mc-fold-chev" icon={shIna ? chevronDown : chevronForward} />
+            </div>
+            {shIna &&
+              <div className='mc-card'>
+                <div className="mc-field-label">{sensorSettingsS1_s["226F"] ? "INA226 found on the I2C bus, it is active." : "No INA226 found on the I2C bus. The node detects it at start-up."}</div>
+
+                <div className="mc-card-head mc-split" style={{ marginTop: 20 }}>
+                  <div className="mc-title"><span className="mc-card-title">Measurement</span></div>
+                  <div>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setIna226()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <div className="mc-field-label">Shunt in Ohm ({INA_SHUNT_MIN} - {INA_SHUNT_MAX})</div>
+                <IonItem>
+                  <IonInput value={inaShuntText} onIonInput={(ev) => setInaShuntText((ev.detail.value ?? "").toString())} label='Set Shunt' labelPlacement="floating" type='text' maxlength={7} inputmode="decimal"></IonInput>
+                </IonItem>
+                <div className="mc-field-label">Max. current in A (0 - {INA_IMAX_MAX})</div>
+                <IonItem>
+                  <IonInput value={inaImaxText} onIonInput={(ev) => setInaImaxText((ev.detail.value ?? "").toString())} label='Set Max. Current' labelPlacement="floating" type='text' maxlength={5} inputmode="decimal"></IonInput>
+                </IonItem>
+                <div className="mc-field-label">Averaged samples</div>
+                <IonItem>
+                  <IonSelect value={inaSampSel} interface="action-sheet" interfaceOptions={customActionSheetOptions} placeholder="Samples" onIonChange={(ev) => setInaSampSel(+ev.detail.value)}>
+                    {INA_SAMPLES.map((v) => (
+                      <IonSelectOption key={v} value={v}>{inaSampleLabel(v)}</IonSelectOption>
+                    ))}
+                  </IonSelect>
+                </IonItem>
+              </div>}
+          </div>}
+            </>}
           </div>
 
 
@@ -3200,13 +3338,13 @@ const Tab2: React.FC = () => {
           {nodeSettingsS1_s.MTU !== undefined && <div className='mc-fold'>
             <div className='mc-fold-head' onClick={() => setShMtu(!shMtu)}>
               <div className="mc-icon"><IonIcon icon={gitNetworkOutline} /></div>
-              <div className="mc-card-title">MTU</div>
+              <div className="mc-card-title">IP MTU</div>
               <IonIcon className="mc-fold-chev" icon={shMtu ? chevronDown : chevronForward} />
             </div>
             {shMtu &&
               <div className='mc-card'>
                 <div className="mc-card-head mc-split">
-                  <div className="mc-title"><span className="mc-card-title">Network MTU</span></div>
+                  <div className="mc-title"><span className="mc-card-title">IP MTU</span></div>
                   <div>
                     <IonButton size="small" fill="outline" color='success' onClick={() => sendTxtCmd("mtu")}>
                       <IonIcon icon={checkmarkCircle} ></IonIcon>
@@ -3249,6 +3387,35 @@ const Tab2: React.FC = () => {
               </div>
             </>}
           </div>
+
+          {nodeSettingsS1_s.NCON !== undefined && <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShNetcon(!shNetcon)}>
+              <div className="mc-icon"><IonIcon icon={terminalOutline} /></div>
+              <div className="mc-card-title">Remote Netconsole</div>
+              <IonIcon className="mc-fold-chev" icon={shNetcon ? chevronDown : chevronForward} />
+            </div>
+            {shNetcon &&
+              <div className='mc-card'>
+                <div className="mc-field-label">The netconsole is reachable on port 2323 of the node.</div>
+                <IonItem>
+                  <IonToggle enableOnOffLabels={true} checked={!!nodeSettingsS1_s.NCON} onIonChange={(ev) => { if (ev.detail.checked !== !!nodeSettingsS1_s.NCON) sendNetToggle("netconsole", !ev.detail.checked); }}>Enable</IonToggle>
+                </IonItem>
+                <div className="mc-card-head mc-split" style={{ marginTop: 20 }}>
+                  <div className="mc-title"><span className="mc-card-title">Password</span></div>
+                  <div className='rst-set-btns'>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => resetNetPassword()}>RST</IonButton>
+                    <IonButton size="small" fill="outline" color='success' onClick={() => setNetPassword()}>
+                      <IonIcon icon={checkmarkCircle} ></IonIcon>
+                    </IonButton>
+                  </div>
+                </div>
+                <IonItem>
+                  <IonInput value={netPwdText} onIonInput={(ev) => setNetPwdText((ev.detail.value ?? "").toString())} label='Set Password' labelPlacement="floating" placeholder='PWD' type={shNetPwd ? 'text' : 'password'} maxlength={MAX_NET_PWD_CHARS}></IonInput>
+                  <IonIcon slot='end' icon={shNetPwd ? eyeOffOutline : eyeOutline} onClick={() => setShNetPwd(!shNetPwd)}></IonIcon>
+                </IonItem>
+                <div className="mc-field-label">The password is also used for the KISS auth. The node does not show it, you can only set or reset it.</div>
+              </div>}
+          </div>}
 
           {/*Manual Routing (via) Settings with a destination callsign input and a toggle to switch on/off*/}
           <div className='mc-fold'>
