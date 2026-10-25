@@ -37,7 +37,7 @@ import BleConfigFinish from '../store/BLEConfFin';
 import NodeSettingsStoreS1, { defaultNodeSettingsS1 } from '../store/NodeSettingsStoreS1';
 import NodeInfoStoreS1, { defaultInfoDataS1 } from '../store/NodeInfoStoreS1';
 import UpdateFW from '../store/UpdtFW';
-import { MIN_FW_VERSION, isFwOlderThan } from '../utils/FwVersion';
+import { RECOMMENDED_FW_VERSION, isFwOlderThan } from '../utils/FwVersion';
 import { usePhoneGps } from '../utils/PhoneGps';
 import DataBaseService from '../DBservices/DataBaseService';
 import NotifyMsgState from '../store/NotifyMsg';
@@ -1454,8 +1454,8 @@ const Tab1: React.FC = () => {
 
       // node runs a firmware older than the app expects - the chat page shows the update hint
       const node_fw = ConfigObject.getConf().FWVER;
-      if (isFwOlderThan(node_fw)) {
-        LogS.log(0, "Connect - Node firmware " + node_fw + " is older than " + MIN_FW_VERSION);
+      if (isFwOlderThan(node_fw, RECOMMENDED_FW_VERSION)) {
+        LogS.log(0, "Connect - Node firmware " + node_fw + " is older than " + RECOMMENDED_FW_VERSION);
         UpdateFW.update(s => {
           s.updatefw = true;
         });

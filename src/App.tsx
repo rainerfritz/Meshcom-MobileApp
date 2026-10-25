@@ -58,6 +58,8 @@ import { App } from '@capacitor/app';
 
 import DataBaseService from './DBservices/DataBaseService';
 import ChatUnseenStore from './store/ChatUnseenStore';
+import ChatViewStore from './store/ChatViewStore';
+import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core';
 import NodeInfoStore from './store/NodeInfoStore';
 import ReconnectStore from './store/ReconnectStore';
 import { APP_SETTING_AUTO_RECONNECT, APP_SETTING_LAST_DEVICE, APP_SETTING_WAS_CONNECTED } from './utils/AppSettingKeys';
@@ -77,6 +79,23 @@ const Appl: React.FC = () => {
     const nodeGroups = NodeInfoStore.useState(s => [s.infoData.GCB0, s.infoData.GCB1, s.infoData.GCB2, s.infoData.GCB3, s.infoData.GCB4, s.infoData.GCB5].join(','));
     const visibleChatKeys = ["ALL", "DM", ...nodeGroups.split(',').filter(g => g !== '0' && g !== '')];
     const hasUnseenChat = visibleChatKeys.some(k => unseenFlags[k]);
+
+    // a chat is open on the Chat tab: no router swipe back, the swipe goes back to the chat list
+    const inChatView = ChatViewStore.useState(s => s.inChatView);
+
+  // Android: colour of the status bar and navigation bar icons follows the theme the app really shows
+  // (the CSS colour scheme), not the device setting. Otherwise the icons can be white on the light theme.
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android') return;
+    const scheme = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyBarStyle = () => {
+      SystemBars.setStyle({ style: scheme.matches ? SystemBarsStyle.Dark : SystemBarsStyle.Light })
+        .catch(err => console.log('SystemBars style not set: ' + err));
+    };
+    applyBarStyle();
+    scheme.addEventListener('change', applyBarStyle);
+    return () => scheme.removeEventListener('change', applyBarStyle);
+  }, []);
 
   // set initial app is axctive state and add event listener
   useEffect(() => {
@@ -128,7 +147,7 @@ const Appl: React.FC = () => {
       <BleDiscoAlert />
       <ReconnectBanner />
       <IonTabs>
-        <IonRouterOutlet>
+        <IonRouterOutlet swipeGesture={Capacitor.getPlatform() === 'ios' && !inChatView}>
           <Route path="/connect" element={<Tab1 />} />
           <Route path="/settings" element={<Tab2 />} />
           <Route path="/chat" element={<Tab3 />} />

@@ -281,3 +281,33 @@ ion-textarea.customTextAreaInput{
     align-items: center;
     justify-content: space-between;
 }
+
+/* favourite callsigns: star next to To Callsign and the rows of the favourites window */
+.fav-star {
+    font-size: 30px;
+}
+
+.fav-item {
+    --min-height: 64px;
+}
+
+.fav-item ion-label {
+    font-size: 1.25em;
+}
+
+.fav-item-star {
+    font-size: 26px;
+}
+
+.fav-item-del {
+    font-size: 26px;
+}
+
+/* manual input of a favourite callsign */
+.fav-add {
+    --min-height: 64px;
+}
+
+.fav-add ion-input {
+    font-size: 1.25em;
+}

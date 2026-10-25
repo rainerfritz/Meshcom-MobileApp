@@ -15,7 +15,8 @@
   padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid var(--mc-border);
-  background: var(--ion-card-background, var(--ion-background-color));
+  /* opaque on purpose: the page header must not shine through. Same colour as the alerts */
+  background: var(--mc-popup, #ffffff);
   color: var(--ion-text-color);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
 }

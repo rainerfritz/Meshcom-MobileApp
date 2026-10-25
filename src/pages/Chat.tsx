@@ -26,12 +26,15 @@ import DatabaseService, { TextFilter } from '../DBservices/DataBaseService';
 import AlertCard from '../components/AlertCard';
 import NodeInfoStore from '../store/NodeInfoStore';
 import ChatSettingsStore from '../store/ChatSettingsStore';
+import ChatViewStore from '../store/ChatViewStore';
+import { useLocation } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import { APP_SETTING_CHAT_FAV_CALLS } from '../utils/AppSettingKeys';
 import ChatUnseenStore from '../store/ChatUnseenStore';
 import ChatPreviewStore from '../store/ChatPreviewStore';
 import { buildTestMsgs } from '../utils/TestMsgsPosis';
 import UpdateFW from '../store/UpdtFW';
-import { MIN_FW_VERSION } from '../utils/FwVersion';
+import { RECOMMENDED_FW_VERSION } from '../utils/FwVersion';
 import { PN_CONFIRM_TIMEOUT_MS, displayAckState, isOwnPn } from '../utils/PnRetry';
 
 
@@ -1006,13 +1009,13 @@ const Tab3: React.FC = () => {
 
 
 
-  // node firmware is older than MIN_FW_VERSION (set by the connect page once the node config is loaded)
+  // node firmware is older than RECOMMENDED_FW_VERSION (set by the connect page once the node config is loaded)
   const updtFW = UpdateFW.useState(s => s.updatefw);
 
   useEffect(() => {
     if (updtFW) {
       setAlHeader("Firmware update recommended");
-      setAlMsg(`This node runs firmware ${nodeInfo_s.FWVER}. Please update it to ${MIN_FW_VERSION} or newer. With older firmware some functions may not work as expected.`);
+      setAlMsg(`This node runs firmware ${nodeInfo_s.FWVER}. Please update it to ${RECOMMENDED_FW_VERSION} or newer. With older firmware some functions may not work as expected.`);
       setShAlertCard(true);
 
       UpdateFW.update(s => {
@@ -1103,6 +1106,58 @@ const Tab3: React.FC = () => {
     setSendDMGrpFlag(false);
     setDividerTimestamp(null);
   }
+
+  // Chat tab shown (derived from the route, Ionic view events do not fire in this tab setup)
+  const location = useLocation();
+  const chatTabActive = location.pathname.replace(/\/+$/, "") === "/chat";
+
+  // tell the app that a chat is open: it switches the router swipe back off (iOS), see ChatViewStore
+  useEffect(() => {
+    const inChat = chatTabActive && activeChatFilter !== null;
+    ChatViewStore.update(s => { s.inChatView = inChat; });
+    return () => { ChatViewStore.update(s => { s.inChatView = false; }); };
+  }, [chatTabActive, activeChatFilter]);
+
+  // iOS: swipe from the left edge to the right inside a chat leads back to the chat list
+  // (the router swipe would jump to the tab that was open before)
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "ios" || !chatTabActive || activeChatFilter === null) return;
+
+    const EDGE = 30, MIN_DX = 70, MAX_DY = 60;
+    let startX = -1, startY = 0;
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      startX = t.clientX < EDGE ? t.clientX : -1;
+      startY = t.clientY;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (startX < 0) return;
+      const t = e.changedTouches[0];
+      if (t.clientX - startX > MIN_DX && Math.abs(t.clientY - startY) < MAX_DY) goBackToList();
+      startX = -1;
+    };
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchend", onEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchend", onEnd);
+    };
+  }, [chatTabActive, activeChatFilter]);
+
+  // Android: the hardware back button inside a chat leads back to the chat list. Without this the router takes it
+  // and jumps to the tab that was open before. Priority 5: open overlays (100, e.g. a modal) still close first,
+  // the router's own handler (0) is not reached while a chat is open.
+  useEffect(() => {
+    if (!chatTabActive || activeChatFilter === null) return;
+
+    const onIonBackButton = (ev: Event) => {
+      (ev as CustomEvent).detail.register(5, () => {
+        goBackToList();
+      });
+    };
+    document.addEventListener("ionBackButton", onIonBackButton);
+    return () => document.removeEventListener("ionBackButton", onIonBackButton);
+  }, [chatTabActive, activeChatFilter]);
 
   const toggleAudio = (channel: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1616,17 +1671,17 @@ const Tab3: React.FC = () => {
           </IonToolbar>
         </IonHeader>
         <IonContent className="ion-padding">
-          <IonItem>
+          <IonItem className="fav-add">
             <IonInput placeholder="Add Callsign" maxlength={MAX_CHAR_CALLSIGN} value={addFavText} onIonInput={e => setAddFavText((e.detail.value ?? "").toString())}></IonInput>
             <IonButton slot="end" onClick={() => { addFavCallsign(addFavText); setAddFavText(""); }}>Add</IonButton>
           </IonItem>
           <IonList>
             {favCallsigns.map(call => (
-              <IonItem key={"fav-" + call} button onClick={() => selectFavCallsign(call)}>
-                <IonIcon icon={starOutline} slot="start" color="warning" />
+              <IonItem className="fav-item" key={"fav-" + call} button onClick={() => selectFavCallsign(call)}>
+                <IonIcon className="fav-item-star" icon={starOutline} slot="start" color="warning" />
                 <IonLabel>{call}</IonLabel>
                 <IonButton slot="end" fill="clear" onClick={e => { e.stopPropagation(); removeFavCallsign(call); }}>
-                  <IonIcon icon={closeIcon} color="danger" />
+                  <IonIcon className="fav-item-del" icon={closeIcon} color="danger" />
                 </IonButton>
               </IonItem>
             ))}
@@ -1654,7 +1709,7 @@ const Tab3: React.FC = () => {
                     value={toCallsign_.current}>
                   </IonInput>
                   <IonButton slot="end" fill="clear" disabled={!ble_connected} onClick={() => setIsOpenFavModal(true)}>
-                    <IonIcon icon={star} color="warning" />
+                    <IonIcon className="fav-star" icon={star} color="warning" />
                   </IonButton>
                 </IonItem>
               </div>}

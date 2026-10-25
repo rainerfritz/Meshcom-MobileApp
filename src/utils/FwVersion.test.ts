@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isFwOlderThan, parseFwVersion } from "./FwVersion";
+import { isFwOlderThan, parseFwVersion, RECOMMENDED_FW_VERSION } from "./FwVersion";
 
 describe("parseFwVersion", () => {
   it("parses the node info format", () => {
@@ -39,5 +39,19 @@ describe("isFwOlderThan (min 4.35 v)", () => {
     expect(isFwOlderThan("0.0.0")).toBe(false);
     expect(isFwOlderThan("")).toBe(false);
     expect(isFwOlderThan(undefined)).toBe(false);
+  });
+});
+
+describe("isFwOlderThan (recommended 4.40 a)", () => {
+  it("flags everything up to 4.39 z", () => {
+    expect(isFwOlderThan("4.39 z", RECOMMENDED_FW_VERSION)).toBe(true);
+    expect(isFwOlderThan("4.35 v", RECOMMENDED_FW_VERSION)).toBe(true);
+    expect(isFwOlderThan("4.39", RECOMMENDED_FW_VERSION)).toBe(true);
+  });
+
+  it("does not flag 4.40 a and newer", () => {
+    expect(isFwOlderThan("4.40 a", RECOMMENDED_FW_VERSION)).toBe(false);
+    expect(isFwOlderThan("4.40 b", RECOMMENDED_FW_VERSION)).toBe(false);
+    expect(isFwOlderThan("4.41 a", RECOMMENDED_FW_VERSION)).toBe(false);
   });
 });

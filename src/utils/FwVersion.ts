@@ -5,6 +5,10 @@
 // oldest firmware the app fully works with: PN retry with complete ACK handling (4.35 v)
 export const MIN_FW_VERSION = "4.35 v";
 
+// firmware the app recommends: older nodes (everything up to 4.39 z) get the update hint after the connect.
+// Not the same as MIN_FW_VERSION, which is the limit of the config sync watchdog.
+export const RECOMMENDED_FW_VERSION = "4.40 a";
+
 export interface FwVersion {
   major: number;
   minor: number;

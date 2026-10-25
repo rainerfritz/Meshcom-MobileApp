@@ -194,6 +194,7 @@ const Tab2: React.FC = () => {
   // show hide user buttons
   const [shUserBtns, setShUserBtns] = useState<boolean>(false);
   const [shSensorSet, setShSensorSet] = useState<boolean>(false);
+  const [shAprsSet, setShAprsSet] = useState<boolean>(false);
   // INA226 settings, the node sends them in S1
   const [shIna, setShIna] = useState<boolean>(false);
   const [inaShuntText, setInaShuntText] = useState<string>("");
@@ -2694,6 +2695,14 @@ const Tab2: React.FC = () => {
           </div>
 
 
+          {/*APRS Settings: symbol, comment and name*/}
+          <div className='mc-fold'>
+            <div className='mc-fold-head' onClick={() => setShAprsSet(!shAprsSet)}>
+              <div className="mc-icon"><IonIcon icon={mapOutline} /></div>
+              <div className="mc-card-title">APRS Settings</div>
+              <IonIcon className="mc-fold-chev" icon={shAprsSet ? chevronDown : chevronForward} />
+            </div>
+            {shAprsSet && <>
           <div className='mc-card'>
             <div className="mc-card-head mc-split">
               <div className="mc-title"><span className="mc-icon"><IonIcon icon={mapOutline} /></span><span className="mc-card-title">APRS Symbol</span></div>
@@ -2726,7 +2735,7 @@ const Tab2: React.FC = () => {
             </div>
 
 
-          <div className='mc-card'>
+          <div className='mc-card' style={{ marginTop: 20 }}>
             <div className="mc-card-head mc-split">
               <div className="mc-title"><span className="mc-icon"><IonIcon icon={chatboxOutline} /></span><span className="mc-card-title">APRS Comment</span></div>
               <div className='rst-set-btns'>
@@ -2746,7 +2755,7 @@ const Tab2: React.FC = () => {
           </div>
 
 
-          <div className='mc-card'>
+          <div className='mc-card' style={{ marginTop: 20 }}>
             <div className="mc-card-head mc-split">
               <div className="mc-title"><span className="mc-icon"><IonIcon icon={pricetagOutline} /></span><span className="mc-card-title">APRS Name</span></div>
               <div>
@@ -2772,6 +2781,8 @@ const Tab2: React.FC = () => {
                 maxlength={MAX_NAME_CHARS}
               ></IonInput>
             </IonItem>
+          </div>
+            </>}
           </div>
 
 
