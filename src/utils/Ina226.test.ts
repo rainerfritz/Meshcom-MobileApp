@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkIna226, inaNumText, inaSampleLabel } from "./Ina226";
+import { checkIna226, inaNumText, inaReadings, inaSampleLabel } from "./Ina226";
 
 describe("Ina226", () => {
   it("accepts shunt and imax in range, also with a decimal comma", () => {
@@ -26,5 +26,15 @@ describe("Ina226", () => {
   it("labels the samples", () => {
     expect(inaSampleLabel(0)).toBe("0 (1 samples)");
     expect(inaSampleLabel(7)).toBe("7 (1024 samples)");
+  });
+
+  // P-0391: the node sends VBUS in V, VSHUNT in mV, VAMP in mA and VPOW in mW (as the web UI shows them)
+  it("labels the readings with the units the node sends", () => {
+    expect(inaReadings({ VBUS: 12.214, VSHUNT: 4.1, VAMP: 4114, VPOW: 50225 })).toEqual([
+      ["VBUS", "12.21 V"],
+      ["VSHUNT", "4.10 mV"],
+      ["VAMP", "4114.0 mA"],
+      ["VPOW", "50225.0 mW"],
+    ]);
   });
 });

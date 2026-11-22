@@ -38,3 +38,19 @@ export const checkIna226 = (shuntText: string, imaxText: string): InaCheck => {
 // value from the node as text for an input, without float noise (0.100000001 -> 0.1)
 export const inaNumText = (v: number | undefined): string =>
   v === undefined || isNaN(v) ? "" : String(parseFloat(v.toPrecision(6)));
+
+// INA226 readings for the Info page, in the units the node sends (VBUS V, VSHUNT mV, VAMP mA,
+// VPOW mW) and with the decimals of the node's web UI
+export interface InaValues {
+  VBUS: number,
+  VSHUNT: number,
+  VAMP: number,
+  VPOW: number
+}
+
+export const inaReadings = (wx: InaValues): [string, string][] => [
+  ["VBUS", wx.VBUS.toFixed(2) + " V"],
+  ["VSHUNT", wx.VSHUNT.toFixed(2) + " mV"],
+  ["VAMP", wx.VAMP.toFixed(1) + " mA"],
+  ["VPOW", wx.VPOW.toFixed(1) + " mW"],
+];
