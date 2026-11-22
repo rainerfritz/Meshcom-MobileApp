@@ -15,7 +15,7 @@ import { DevIDStore } from '../store';
 import './Info.css';
 import GpsDataStore from '../store/GpsData';
 import WxDataStore from '../store/WxData';
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import SensorSettingsStore from '../store/SensorSettings';
 import NodeSettingsStore from '../store/NodeSettingsStore';
 import BLEconnStore from '../store/BLEconnected';
@@ -26,6 +26,7 @@ import NodeInfoStoreS1 from '../store/NodeInfoStoreS1';
 import { Clipboard } from '@capacitor/clipboard';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
+import { inaReadings } from '../utils/Ina226';
 
 
 
@@ -290,10 +291,7 @@ const Info: React.FC = () => {
               {wx_s.CO2 !== 0 && row("eCO2", wx_s.CO2.toFixed(0) + " ppm")}
               {wx_s.PRES !== 0 && row("Alt Press", wx_s.ALT.toFixed(0) + " m")}
               {sensorSettingsS1_s.INA226 && <>
-                {row("VBUS", wx_s.VBUS.toFixed(1) + " V")}
-                {row("VSHUNT", wx_s.VSHUNT.toFixed(1) + " V")}
-                {row("VAMP", wx_s.VAMP.toFixed(1) + " A")}
-                {row("VPOW", wx_s.VPOW.toFixed(1) + " W")}
+                {inaReadings(wx_s).map(([label, text]) => <Fragment key={label}>{row(label, text)}</Fragment>)}
               </>}
             </div>
             <div className="mc-section-title">Enabled sensors</div>
